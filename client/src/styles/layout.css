@@ -1,0 +1,209 @@
+/* ============================================================
+   LAYOUT — App grid, topbar, paneles laterales, escenario
+   ============================================================ */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--ink-900);
+  color: var(--bone-100);
+  font-family: var(--serif);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  height: 100%;
+}
+
+button { font-family: inherit; color: inherit; background: transparent; border: none; cursor: pointer; padding: 0; }
+input, textarea { font-family: inherit; color: inherit; }
+
+/* ── APP SHELL ─────────────────────────────────────────────── */
+
+.app-shell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 270px 1fr 310px;
+  grid-template-rows: 52px 1fr;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "left   stage  right";
+  background: radial-gradient(ellipse at center, var(--ink-850) 0%, var(--ink-900) 70%, #030305 100%);
+  transition: background 1.6s ease;
+}
+
+.app-shell.is-night {
+  background: radial-gradient(ellipse at center top, #101632 0%, #07091a 50%, #020206 100%);
+}
+.app-shell.is-day {
+  background: radial-gradient(ellipse at center top, #2a1f14 0%, #0f0a06 55%, #040302 100%);
+}
+
+@media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 52px auto 1fr auto;
+    grid-template-areas: "topbar" "left" "stage" "right";
+    overflow-y: auto;
+    position: static;
+    height: 100vh;
+  }
+}
+
+/* ── TOPBAR ────────────────────────────────────────────────── */
+
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: var(--hairline);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.65), rgba(0,0,0,0.2));
+  backdrop-filter: blur(12px);
+  z-index: 20;
+  gap: 12px;
+  overflow: hidden;
+}
+.topbar > * { min-width: 0; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.brand-mark {
+  width: 22px; height: 22px;
+  border: 1px solid var(--gold);
+  border-radius: 50%;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.brand-mark::before {
+  content: '';
+  width: 1px; height: 10px;
+  background: var(--gold);
+  position: absolute; top: 3px;
+  transform-origin: center 8px;
+}
+.brand-mark::after {
+  content: '';
+  width: 1px; height: 6px;
+  background: var(--gold-hot);
+  position: absolute; top: 5px;
+  transform-origin: center 6px;
+  transform: rotate(120deg);
+}
+
+.brand-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  letter-spacing: 0.3em;
+  color: var(--bone-50);
+  text-transform: uppercase;
+}
+
+.topbar-center {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+.phase-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: var(--hairline);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bone-100);
+  background: rgba(0,0,0,0.3);
+}
+.phase-badge .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold-hot);
+  box-shadow: 0 0 8px var(--gold-hot);
+}
+.is-night .phase-badge .dot { background: var(--moon); box-shadow: 0 0 10px var(--moon); }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  border: var(--hairline);
+  border-radius: 2px;
+  color: var(--bone-200);
+  font-size: 17px;
+  transition: all 0.2s;
+}
+.icon-btn:hover { border-color: var(--gold); color: var(--gold-hot); }
+
+/* ── LEFT PANEL ────────────────────────────────────────────── */
+
+.left-panel {
+  grid-area: left;
+  border-right: var(--hairline);
+  background: linear-gradient(to right, rgba(0,0,0,0.5), transparent);
+  padding: 18px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── STAGE ─────────────────────────────────────────────────── */
+
+.stage {
+  grid-area: stage;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* ── RIGHT PANEL ───────────────────────────────────────────── */
+
+.right-panel {
+  grid-area: right;
+  border-left: var(--hairline);
+  background: linear-gradient(to left, rgba(0,0,0,0.5), transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── SECTION LABELS ────────────────────────────────────────── */
+
+.panel-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+  padding-bottom: 8px;
+  border-bottom: var(--hairline);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.panel-label .count { color: var(--bone-400); font-size: 13px; }

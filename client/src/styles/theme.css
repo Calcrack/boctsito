@@ -1,0 +1,53 @@
+/* ============================================================
+   TEMA — Paleta y tokens de diseño
+   Basado en la estética gótica de "Los Campanarios"
+   ============================================================ */
+
+:root {
+  /* Fondo oscuro — noche profunda */
+  --ink-900: #07070a;
+  --ink-850: #0c0c11;
+  --ink-800: #111118;
+  --ink-700: #1a1a23;
+  --ink-600: #242430;
+  --ink-500: #35354a;
+  --ink-400: #4a4a62;
+
+  /* Pergamino / hueso */
+  --bone-50:  #f4efe4;
+  --bone-100: #e8e1d1;
+  --bone-200: #c9beaa;
+  --bone-300: #b0a690;
+  --bone-400: #8a8170;
+  --bone-500: #6d6455;
+
+  /* Acentos */
+  --gold:     #c9a24a;
+  --gold-dim: #8a6f33;
+  --gold-hot: #e8c270;
+  --blood:    #a83a2d;
+  --blood-hi: #d4483a;
+  --blood-dim:#6b241b;
+  --moon:     #cfd6e8;
+  --dusk:     #3d4a6b;
+
+  /* Semánticos */
+  --good:  #6d8cb8;
+  --evil:  #a83a2d;
+
+  /* Tipografía */
+  --serif:   'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  --display: 'Cormorant Garamond', Georgia, serif;
+  --mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  --sans:    'Inter', -apple-system, sans-serif;
+
+  /* Bordes */
+  --hairline:        1px solid rgba(201,162,74,0.22);
+  --hairline-strong: 1px solid rgba(201,162,74,0.5);
+  --hairline-bone:   1px solid rgba(232,225,209,0.12);
+
+  /* Sombras */
+  --shadow-deep:      0 30px 80px -20px rgba(0,0,0,0.9), 0 2px 0 rgba(201,162,74,0.08) inset;
+  --shadow-medallion: 0 8px 22px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,162,74,0.35) inset;
+  --shadow-card:      0 4px 20px rgba(0,0,0,0.6);
+}

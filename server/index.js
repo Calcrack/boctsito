@@ -1,0 +1,1161 @@
+const express = require('express');
+const { createServer } = require('http');
+const { WebSocketServer, WebSocket } = require('ws');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+const fs = require('fs');
+const {
+  createGame, getGame, addPlayer, removePlayer,
+  distributeRoles, nominate, vote, resolveVote, executeNominationWinner, slayerAction,
+  applyNightAction, advanceNightQueue,
+  startDay, startNight, openNominations,
+  mayorWin, killPlayer, revivePlayer, getPublicState,
+} = require('./gameLogic');
+const { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, setVoiceStateCallback } = require('./discordBot');
+const { ROLES, BASE_DISTRIBUTION, getRolesByType } = require('./roles');
+const { loadRankings, recordGameWin, deleteRankingEntry } = require('./rankings');
+
+const SAVE_PATH = path.join(__dirname, 'game-save.json');
+
+const app = express();
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+
+app.use(cors());
+app.use(express.json());
+
+// ── Single persistent game ─────────────────────────────────────────
+const MAIN_GAME_ID = 'main';
+const mainGame = createGame('narrator', MAIN_GAME_ID);
+
+// ── Session store ──────────────────────────────────────────────────
+const sessions = new Map();
+
+// ── Auto-mode timers ───────────────────────────────────────────────
+const autoTimers = new Map();
+const AUTO_DAY_MS = 5 * 60 * 1000;
+const AUTO_NOM_MS = 7 * 60 * 1000;
+
+function setAutoTimer(gameId, callback, ms) {
+  const existing = autoTimers.get(gameId);
+  if (existing) clearTimeout(existing);
+  const id = setTimeout(callback, ms);
+  autoTimers.set(gameId, id);
+  return id;
+}
+
+function shuffleLocal(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function autoSelectRoles(playerCount) {
+  const baseDist = BASE_DISTRIBUTION[playerCount];
+  if (!baseDist) throw new Error('Número de jugadores no soportado (5-15)');
+
+  const allRoles    = Object.values(ROLES);
+  const tfPool      = allRoles.filter(r => r.type === 'townfolk').map(r => r.id);
+  const outPool     = allRoles.filter(r => r.type === 'outsider').map(r => r.id);
+  const minionPool  = allRoles.filter(r => r.type === 'minion').map(r => r.id);
+
+  // 35% chance of including Baron when player count supports extra outsiders
+  const canBaron  = baseDist.outsiders < outPool.length;
+  const useBaron  = canBaron && Math.random() < 0.35;
+  const dist      = { ...baseDist };
+
+  if (useBaron) {
+    dist.outsiders = Math.min(dist.outsiders + 2, playerCount - dist.demons - dist.minions);
+    dist.townfolk  = playerCount - dist.outsiders - dist.minions - dist.demons;
+  }
+
+  const townfolk  = shuffleLocal(tfPool).slice(0, dist.townfolk);
+  const outsiders = shuffleLocal(outPool).slice(0, dist.outsiders);
+  let   minions;
+  if (useBaron) {
+    const rest = shuffleLocal(minionPool.filter(id => id !== 'BARON')).slice(0, dist.minions - 1);
+    minions = ['BARON', ...rest];
+  } else {
+    minions = shuffleLocal(minionPool).slice(0, dist.minions);
+  }
+
+  return [...townfolk, ...outsiders, ...minions, 'IMP'];
+}
+
+// ── WebSocket helpers ──────────────────────────────────────────────
+function sendTo(ws, type, payload) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type, payload }));
+  }
+}
+
+function broadcastGame() {
+  const game = getGame(MAIN_GAME_ID);
+  if (!game) return;
+  sessions.forEach((session) => {
+    if (!session.gameId) return;
+    const state = getPublicState(game, session.playerId, session.isNarrator);
+    sendTo(session.ws, 'GAME_STATE', state);
+  });
+}
+
+function broadcastToAll(type, payload) {
+  sessions.forEach(session => {
+    if (session.gameId) sendTo(session.ws, type, payload);
+  });
+}
+
+// ── WebSocket connection ───────────────────────────────────────────
+// ── WS keepalive ───────────────────────────────────────────────────
+setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) ws.ping();
+  });
+}, 30000);
+
+wss.on('connection', (ws) => {
+  const socketId = uuidv4();
+  sessions.set(socketId, { ws, socketId, gameId: null, playerId: null, isNarrator: false });
+  sendTo(ws, 'CONNECTED', { socketId });
+
+  ws.on('message', (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+    const { type, payload = {} } = msg;
+    const session = sessions.get(socketId);
+    if (!session) return;
+    try {
+      handleMessage(type, payload, session);
+    } catch (err) {
+      sendTo(ws, 'ERROR', { message: err.message });
+    }
+  });
+
+  ws.on('close', () => sessions.delete(socketId));
+});
+
+function handleMessage(type, payload, session) {
+  const { ws } = session;
+
+  switch (type) {
+
+    case 'NARRATOR_LOGIN': {
+      const { password } = payload;
+      if (password !== '0806') throw new Error('Contraseña incorrecta');
+      session.isNarrator = true;
+      session.gameId = MAIN_GAME_ID;
+      session.playerId = null;
+      sendTo(ws, 'NARRATOR_OK', { gameId: MAIN_GAME_ID });
+      broadcastGame();
+      break;
+    }
+
+    case 'GET_PLAYER_LIST': {
+      const game = getGame(MAIN_GAME_ID);
+      const joinedIds = new Set([...sessions.values()].filter(s => s.playerId).map(s => s.playerId));
+      const players = game
+        ? game.players.filter(p => !joinedIds.has(p.id)).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
+        : [];
+      sendTo(ws, 'PLAYER_LIST', { players });
+      break;
+    }
+
+    case 'PLAYER_JOIN': {
+      const { playerName } = payload;
+      const game = getGame(MAIN_GAME_ID);
+      if (!game) throw new Error('No hay partida activa');
+      const player = game.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+      if (!player) throw new Error('Jugador no encontrado. Pide al narrador que te agregue.');
+      // Kick any stale sessions for this player (handles page refresh / duplicate tab)
+      [...sessions.values()]
+        .filter(s => s.playerId === player.id && s.socketId !== session.socketId)
+        .forEach(s => {
+          sendTo(s.ws, 'KICKED_SESSION', { reason: 'duplicate_login' });
+          s.playerId = null; s.gameId = null;
+        });
+      session.gameId = MAIN_GAME_ID;
+      session.playerId = player.id;
+      session.isNarrator = false;
+      sendTo(ws, 'PLAYER_OK', { playerId: player.id, playerName: player.name });
+      broadcastGame();
+      const joinedIds = new Set([...sessions.values()].filter(s => s.playerId).map(s => s.playerId));
+      const available = game.players.filter(p => !joinedIds.has(p.id)).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }));
+      sessions.forEach(s => { if (!s.gameId) sendTo(s.ws, 'PLAYER_LIST', { players: available }); });
+      break;
+    }
+
+    case 'RESET_GAME': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      game.phase = 'lobby';
+      game.dayNumber = 0;
+      game.nightNumber = 0;
+      game.nominations = [];
+      game.activeNomination = null;
+      game.executedToday = null;
+      game.nightDeaths = [];
+      game.nightActions = {};
+      game.winner = null;
+      game.winReason = null;
+      game.recluseRegistersAs = null;
+      game.spyRegistersAs = null;
+      game.mayorKillTarget = null;
+      game.autoMode = false;
+      game.autoPhaseInfo = null;
+      game.pendingNightAfterNomination = false;
+      game.nightReadyPlayers = [];
+      game.autoVotes = { skipDay: [], skipNom: [], extend: [], skipNight: [] };
+      const t0 = autoTimers.get(MAIN_GAME_ID);
+      if (t0) { clearTimeout(t0); autoTimers.delete(MAIN_GAME_ID); }
+      game.players.forEach(p => {
+        p.role = null; p.alignment = null; p.type = null;
+        p.alive = true; p.poisoned = false; p.protected = false;
+        p.hasVotedDead = false; p.showRole = false; p.nightInfo = null;
+        p.accusation = null; p.slayerUsed = false; p.virginUsed = false;
+        p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
+      });
+      broadcastGame();
+      break;
+    }
+
+    case 'ADD_PLAYER': {
+      if (!session.isNarrator) throw new Error('Solo el narrador puede agregar jugadores');
+      const game = getGame(MAIN_GAME_ID);
+      const { name, discordId, discordTag, avatar } = payload;
+      const player = addPlayer(game, { name, discordId, discordTag, avatar });
+      broadcastGame();
+      sendTo(ws, 'PLAYER_ADDED', { player });
+      sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
+        players: game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
+      }));
+      break;
+    }
+
+    case 'REMOVE_PLAYER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      removePlayer(game, payload.playerId);
+      broadcastGame();
+      sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
+        players: game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
+      }));
+      break;
+    }
+
+    case 'UPDATE_PLAYER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const player = game.players.find(p => p.id === payload.playerId);
+      if (player) {
+        if (payload.discordId !== undefined) player.discordId = payload.discordId;
+        if (payload.discordTag !== undefined) player.discordTag = payload.discordTag;
+        if (payload.avatar !== undefined) player.avatar = payload.avatar;
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'DISTRIBUTE_ROLES': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const { selectedRoles } = payload;
+      distributeRoles(game, selectedRoles);
+      game.phase = 'role_reveal';
+      broadcastGame();
+      break;
+    }
+
+    case 'REVEAL_ROLE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const player = game.players.find(p => p.id === payload.playerId);
+      if (player) {
+        game.players.forEach(p => p.showRole = false);
+        player.showRole = true;
+        broadcastGame();
+      }
+      break;
+    }
+
+    case 'HIDE_ROLE': {
+      const game = getGame(MAIN_GAME_ID);
+      game.players.forEach(p => p.showRole = false);
+      broadcastGame();
+      break;
+    }
+
+    case 'ACKNOWLEDGE_ROLE': {
+      const game = getGame(MAIN_GAME_ID);
+      const player = game.players.find(p => p.id === session.playerId);
+      if (player) player.showRole = false;
+      broadcastGame();
+      break;
+    }
+
+    case 'START_NIGHT': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      // Auto Mayor win: 3 vivos, sin ejecución hoy, Alcalde vivo
+      const livingNow = game.players.filter(p => p.alive);
+      const mayorNow  = game.players.find(p => p.role === 'MAYOR' && p.alive && !p.poisoned);
+      if (mayorNow && livingNow.length === 3 && !game.executedToday) {
+        mayorWin(game);
+        broadcastGame();
+        broadcastToAll('BROADCAST_EVENT', { title: '🏛️ Victoria del Alcalde', message: 'Quedan 3 jugadores vivos sin ejecución. ¡El bien gana!', type: 'info' });
+        recordGameWin(game, 'good');
+        broadcastToAll('GAME_OVER', { winner: 'good' });
+        break;
+      }
+      startNight(game);
+      broadcastGame();
+      broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });
+      if (game.nightQueue.length === 0) {
+        setTimeout(() => triggerAutoDawn(game), 5000);
+      }
+      break;
+    }
+
+    case 'AUTO_MODE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const roles = autoSelectRoles(game.players.length);
+      distributeRoles(game, roles);
+      game.autoMode = true;
+      startNight(game);
+      broadcastGame();
+      broadcastToAll('NOTIFICATION', { message: '🤖 Modo automático activado — Primera Noche comenzando...', type: 'night' });
+      if (game.nightQueue.length === 0) {
+        setAutoTimer(MAIN_GAME_ID, () => triggerAutoDawn(game), 5000);
+      }
+      break;
+    }
+
+    case 'SET_AUTO_TIMINGS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      if (payload.dayMs !== undefined) game.autoDayMs = Math.max(60000, Math.min(1800000, payload.dayMs));
+      if (payload.nomMs !== undefined) game.autoNomMs = Math.max(60000, Math.min(1800000, payload.nomMs));
+      broadcastGame();
+      break;
+    }
+
+    case 'STOP_AUTO_MODE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      game.autoMode = false;
+      game.autoPhaseInfo = null;
+      const tStop = autoTimers.get(MAIN_GAME_ID);
+      if (tStop) { clearTimeout(tStop); autoTimers.delete(MAIN_GAME_ID); }
+      broadcastGame();
+      break;
+    }
+
+    case 'START_DAY': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      startDay(game);
+      broadcastGame();
+      const deaths = payload.nightDeaths || [];
+      const msg = deaths.length > 0
+        ? `☀️ Día ${game.dayNumber}. Murió: ${deaths.join(', ')}.`
+        : `☀️ Día ${game.dayNumber}. Nadie murió esta noche.`;
+      broadcastToAll('NOTIFICATION', { message: msg, type: 'day' });
+      break;
+    }
+
+    case 'OPEN_NOMINATIONS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      openNominations(game);
+      broadcastGame();
+      broadcastToAll('NOTIFICATION', { message: '⚖️ Las nominaciones están abiertas', type: 'info' });
+      break;
+    }
+
+    case 'MAYOR_WIN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      mayorWin(game);
+      broadcastGame();
+      break;
+    }
+
+    case 'NOMINATE': {
+      const game = requireGame(session);
+      const result = nominate(game, session.playerId, payload.nomineeId);
+      broadcastGame();
+      if (result.virginTrigger) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🛡️ ¡Virgen!',
+          message: `${result.executed.name} nominó a la Virgen y fue ejecutado/a inmediatamente.`,
+          type: 'execution',
+        });
+      } else {
+        const nom = result.nomination;
+        broadcastToAll('NOTIFICATION', { message: `⚖️ ${nom.nominatorName} nomina a ${nom.nomineeName}`, type: 'nomination' });
+      }
+      break;
+    }
+
+    case 'VOTE': {
+      const game = requireGame(session);
+      const nomination = vote(game, session.playerId, payload.nominationId, payload.inFavor);
+
+      const living = game.players.filter(p => p.alive);
+      const eligibleDead = game.players.filter(p => !p.alive && p.deadVoteNominationId === null);
+      const ghostDeclines = nomination.ghostDeclines || [];
+      const allVoted = [...living, ...eligibleDead].every(p =>
+        nomination.votes.includes(p.id) || nomination.against.includes(p.id) || ghostDeclines.includes(p.id)
+      );
+
+      const voter = game.players.find(p => p.id === session.playerId);
+      if (voter) {
+        const voteLabel = payload.inFavor ? '✅ a favor' : '❌ en contra';
+        broadcastToAll('NOTIFICATION', { message: `🗳️ ${voter.name} vota ${voteLabel} de ${nomination.nomineeName}`, type: 'vote' });
+      }
+
+      if (allVoted && !nomination.resolved) {
+        const result = resolveVote(game, nomination.id);
+        broadcastGame();
+        const msg = result.meetsThreshold
+          ? `🗳️ ${result.nomineeName}: ${result.tally} votos — ✓ alcanza el umbral`
+          : `🗳️ ${result.nomineeName}: ${result.tally} votos — ✗ no alcanza`;
+        broadcastToAll('NOTIFICATION', { message: msg, type: 'info' });
+        if (game.pendingNightAfterNomination && !game.activeNomination) {
+          game.pendingNightAfterNomination = false;
+          setTimeout(() => scheduleAutoNight(game), 1500);
+        }
+      } else {
+        broadcastGame();
+      }
+      break;
+    }
+
+    case 'RESOLVE_VOTE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const result = resolveVote(game, payload.nominationId);
+      broadcastGame();
+      const msg = result.meetsThreshold
+        ? `🗳️ ${result.nomineeName}: ${result.tally} votos — ✓ alcanza el umbral`
+        : `🗳️ ${result.nomineeName}: ${result.tally} votos — ✗ no alcanza`;
+      broadcastToAll('NOTIFICATION', { message: msg, type: 'info' });
+      if (game.pendingNightAfterNomination && !game.activeNomination) {
+        game.pendingNightAfterNomination = false;
+        setTimeout(() => scheduleAutoNight(game), 1500);
+      }
+      break;
+    }
+
+    case 'FINALIZE_NOMINATIONS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const result = executeNominationWinner(game);
+      broadcastGame();
+      if (result.tie) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '⚖️ Empate',
+          message: 'Hay un empate en votos. Nadie es ejecutado.',
+          type: 'warning',
+        });
+      } else if (result.executed) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '💀 Ejecución',
+          message: `${result.executed.name} fue ejecutado con ${game.nominations.find(n => n.executed)?.tally || '?'} votos.`,
+          type: 'execution',
+        });
+        if (result.gameOver) { recordGameWin(game, result.winner); broadcastToAll('GAME_OVER', { winner: result.winner }); }
+      } else {
+        broadcastToAll('NOTIFICATION', { message: '🌙 Nominaciones cerradas sin ejecución', type: 'info' });
+      }
+      break;
+    }
+
+    case 'NIGHT_ACTION': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      applyNightAction(game, payload.actionType, payload.actorId, payload.targetIds || []);
+      broadcastGame();
+      break;
+    }
+
+    case 'PLAYER_NIGHT_ACTION': {
+      const game = requireGame(session);
+      const player = game.players.find(p => p.id === session.playerId);
+      if (!player) throw new Error('Jugador no encontrado');
+      const { action, targetIds } = payload;
+
+      const allowed = ['BUTLER_MASTER', 'FORTUNE_TELLER', 'RAVENKEEPER_INFO', 'POISONER_ACTION', 'IMP_KILL', 'MONK_PROTECT', 'INFO_ACKNOWLEDGE'];
+      if (!allowed.includes(action)) throw new Error('Acción no permitida como jugador');
+
+      if (action === 'RAVENKEEPER_INFO') {
+        if (!player.pendingRavenkeeper) throw new Error('No tienes esta acción pendiente');
+        applyNightAction(game, 'RAVENKEEPER_INFO', session.playerId, targetIds || []);
+        if (game.nightWaitingForRavenkeeper) {
+          game.nightWaitingForRavenkeeper = false;
+        }
+        broadcastGame();
+        // Don't auto-dawn yet — wait for Ravenkeeper to acknowledge (NIGHT_READY)
+        break;
+      }
+
+      const result = advanceNightQueue(game, session.playerId, action, targetIds || []);
+      broadcastGame();
+
+      if (result.done) {
+        if (!tryAutoAdvanceDawn(game)) {
+          broadcastToAll('NOTIFICATION', { message: '✅ Todas las acciones nocturnas completadas', type: 'info' });
+        } else {
+          broadcastGame();
+        }
+      } else if (result.needsRavenkeeper) {
+        broadcastToAll('NOTIFICATION', { message: '🦅 Esperando al Criacuervos...', type: 'info' });
+      }
+      break;
+    }
+
+    case 'SLAYER_ACTION': {
+      const game = requireGame(session);
+      const slayer = game.players.find(p => p.id === session.playerId);
+      const targetName = game.players.find(p => p.id === payload.targetId)?.name || '?';
+      const result = slayerAction(game, session.playerId, payload.targetId);
+      broadcastGame();
+      if (result.poisoned) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🏹 Cazador disparó',
+          message: `${slayer?.name} disparó a ${targetName}... pero estaba envenenado/a. Sin efecto.`,
+          type: 'warning',
+        });
+      } else if (result.hit) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🏹 ¡Cazador acertó!',
+          message: `${slayer?.name} disparó a ${targetName}. ¡Era el Demonio! ${targetName} muere.`,
+          type: 'execution',
+        });
+        if (result.gameOver) { recordGameWin(game, 'good'); broadcastToAll('GAME_OVER', { winner: 'good' }); }
+      } else {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🏹 Cazador falló',
+          message: `${slayer?.name} disparó a ${targetName}. No era el Demonio.`,
+          type: 'warning',
+        });
+      }
+      break;
+    }
+
+    case 'SET_BLUFF_ROLE': {
+      const game = requireGame(session);
+      const player = game.players.find(p => p.id === session.playerId);
+      if (!player || player.alignment !== 'evil') throw new Error('Solo jugadores malvados pueden elegir rol de farol');
+      player.bluffRole = payload.roleId || null;
+      broadcastGame();
+      break;
+    }
+
+    case 'ACCUSE': {
+      const game = requireGame(session);
+      const target = game.players.find(p => p.id === payload.targetId);
+      const accuser = game.players.find(p => p.id === session.playerId);
+      if (target && accuser) {
+        target.accusation = { roleId: payload.accusedRole, accuserId: session.playerId, accuserName: accuser.name };
+        broadcastGame();
+      }
+      break;
+    }
+
+    case 'KILL_PLAYER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      killPlayer(game, payload.playerId, payload.reason || 'manual');
+      broadcastGame();
+      break;
+    }
+
+    case 'REVIVE_PLAYER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      revivePlayer(game, payload.playerId);
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_PHASE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      game.phase = payload.phase;
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_SMOKE_SCREEN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      game.smokeScreenPlayerId = payload.playerId || null;
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_RECLUSE_REGISTERS_AS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      game.recluseRegistersAs = payload.value || null;
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_SPY_REGISTERS_AS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      game.spyRegistersAs = payload.value || null;
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_MAYOR_KILL_TARGET': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      game.mayorKillTarget = payload.playerId || null;
+      broadcastGame();
+      break;
+    }
+
+    case 'MOVE_TO_CHANNEL': {
+      const game = requireGame(session);
+      const channelLimits = game.channelLimits || {};
+      if (session.isNarrator) {
+        if (payload.moveAll) {
+          game.players.forEach(p => {
+            p.discordChannel = payload.channel || null;
+            if (p.discordId) {
+              const dest = payload.channel || 'PLAZA';
+              moveUserToChannel(p.discordId, dest, channelLimits).catch(() => {});
+            }
+          });
+        } else if (payload.targetPlayerId) {
+          const target = game.players.find(p => p.id === payload.targetPlayerId);
+          if (!target) throw new Error('Jugador no encontrado');
+          target.discordChannel = payload.channel || null;
+          if (target.discordId) moveUserToChannel(target.discordId, payload.channel || 'PLAZA', channelLimits).catch(() => {});
+        }
+        broadcastGame();
+        break;
+      }
+      const player = game.players.find(p => p.id === session.playerId);
+      if (!player) throw new Error('Jugador no encontrado');
+      // Check channel capacity from game state
+      if (payload.channel) {
+        const limit = channelLimits[payload.channel];
+        if (limit) {
+          const count = game.players.filter(p => p.discordChannel === payload.channel && p.id !== player.id).length;
+          if (count >= limit) { sendTo(ws, 'CHANNEL_FULL', { channel: payload.channel, limit }); break; }
+        }
+      }
+      player.discordChannel = payload.channel || null;
+      broadcastGame();
+      if (player.discordId) {
+        moveUserToChannel(player.discordId, payload.channel || 'PLAZA', channelLimits).then(result => {
+          sendTo(ws, 'CHANNEL_MOVED', result);
+          if (!result.ok) {
+            // Revert game state if Discord move failed
+            player.discordChannel = null;
+            broadcastGame();
+          }
+        });
+      }
+      break;
+    }
+
+    case 'GET_DISCORD_MEMBERS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      getGuildMembers().then(members => sendTo(ws, 'DISCORD_MEMBERS', { members }));
+      break;
+    }
+
+    case 'REFRESH_DISCORD_MEMBERS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      getGuildMembers(true).then(members => sendTo(ws, 'DISCORD_MEMBERS', { members }));
+      break;
+    }
+
+    case 'PING':
+      sendTo(ws, 'PONG', {});
+      break;
+
+    case 'ASSIGN_ROLES_MANUAL': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const { assignments } = payload; // [{ playerId, roleId }]
+      assignments.forEach(({ playerId, roleId }) => {
+        const player = game.players.find(p => p.id === playerId);
+        const role = ROLES[roleId];
+        if (player && role) {
+          player.role = role.id;
+          player.alignment = role.alignment;
+          player.type = role.type;
+          player.alive = true;
+          player.poisoned = false;
+          player.protected = false;
+          if (role.id === 'DRUNK') {
+            const fakeTownfolk = getRolesByType('townfolk').filter(r => r.id !== 'DRUNK');
+            player.drunkAs = fakeTownfolk[Math.floor(Math.random() * fakeTownfolk.length)].id;
+          }
+        }
+      });
+      const rolesInPlay = new Set(game.players.map(p => p.role));
+      const allGoodRoles = [...getRolesByType('townfolk'), ...getRolesByType('outsider')];
+      game.rolesNotInPlay = allGoodRoles.filter(r => !rolesInPlay.has(r.id)).map(r => r.id);
+      game.phase = 'role_reveal';
+      broadcastGame();
+      break;
+    }
+
+    case 'REORDER_PLAYERS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const { playerIds } = payload;
+      const reordered = playerIds.map(id => game.players.find(p => p.id === id)).filter(Boolean);
+      const missing = game.players.filter(p => !playerIds.includes(p.id));
+      game.players = [...reordered, ...missing];
+      broadcastGame();
+      break;
+    }
+
+    case 'SAVE_GAME': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      fs.writeFileSync(SAVE_PATH, JSON.stringify(game), 'utf8');
+      sendTo(ws, 'SAVE_OK', { timestamp: Date.now() });
+      break;
+    }
+
+    case 'LOAD_GAME': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      if (!fs.existsSync(SAVE_PATH)) throw new Error('No hay partida guardada');
+      const saved = JSON.parse(fs.readFileSync(SAVE_PATH, 'utf8'));
+      const current = getGame(MAIN_GAME_ID);
+      Object.assign(current, saved);
+      broadcastGame();
+      sendTo(ws, 'LOAD_OK', { timestamp: saved.createdAt });
+      break;
+    }
+
+    case 'SET_CHANNEL_LIMIT': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const { channel, limit } = payload;
+      if (!game.channelLimits) game.channelLimits = {};
+      if (limit === null || limit === undefined || limit === 0) {
+        delete game.channelLimits[channel];
+      } else {
+        game.channelLimits[channel] = limit;
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_DRUNK_AS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      game.narratorDrunkAs = payload.roleId || null;
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_ROLES_FOR_IMP': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      game.narratorRolesForImp = payload.roleIds || [];
+      broadcastGame();
+      break;
+    }
+
+    case 'MOVE_TO_SECRET': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const { targetPlayerId } = payload;
+      const target = game.players.find(p => p.id === targetPlayerId);
+      if (!target) throw new Error('Jugador no encontrado');
+      if (target.discordId) {
+        moveUserToChannel(target.discordId, 'CONFESIONARIO').then(result => {
+          sendTo(ws, 'SECRET_MOVED', { playerId: targetPlayerId, name: target.name, ...result });
+        }).catch(() => {});
+      }
+      break;
+    }
+
+    case 'CAST_AUTO_VOTE': {
+      const game = requireGame(session);
+      const { voteType } = payload;
+      if (!['skipDay', 'skipNom', 'extend', 'skipNight'].includes(voteType)) break;
+      const voter = game.players.find(p => p.id === session.playerId);
+      if (!voter) throw new Error('Jugador no encontrado');
+      if (!game.autoVotes) game.autoVotes = { skipDay: [], skipNom: [], extend: [], skipNight: [] };
+      if (!game.autoVotes[voteType]) game.autoVotes[voteType] = [];
+      const arr = game.autoVotes[voteType];
+      const idx = arr.indexOf(session.playerId);
+      if (idx >= 0) arr.splice(idx, 1); else arr.push(session.playerId);
+      const total = game.players.length;
+      const threshold = Math.ceil(total * 0.8);
+      broadcastGame();
+      if (arr.length >= threshold) {
+        if (voteType === 'skipDay' && game.phase === 'day') {
+          game.autoVotes.skipDay = [];
+          const t = autoTimers.get(MAIN_GAME_ID);
+          if (t) { clearTimeout(t); autoTimers.delete(MAIN_GAME_ID); }
+          game.players.forEach(p => {
+            p.discordChannel = null;
+            if (p.discordId) moveUserToChannel(p.discordId, 'PLAZA', game.channelLimits || {}).catch(() => {});
+          });
+          openNominations(game);
+          const nomMin = Math.round((game.autoNomMs || AUTO_NOM_MS) / 60000);
+          broadcastToAll('NOTIFICATION', { message: `⚡ 80% de acuerdo — nominaciones abiertas (${nomMin} min)`, type: 'info' });
+          scheduleAutoNominations(game);
+          broadcastGame();
+        } else if (voteType === 'skipNom' && ['nominations', 'voting'].includes(game.phase)) {
+          game.autoVotes.skipNom = [];
+          const t = autoTimers.get(MAIN_GAME_ID);
+          if (t) { clearTimeout(t); autoTimers.delete(MAIN_GAME_ID); }
+          if (game.activeNomination) {
+            // Votación en curso — esperar a que termine antes de pasar a la noche
+            game.pendingNightAfterNomination = true;
+            broadcastToAll('NOTIFICATION', { message: '⚡ 80% de acuerdo — esperando fin de la votación para pasar a la noche', type: 'night' });
+            broadcastGame();
+          } else {
+            broadcastToAll('NOTIFICATION', { message: '⚡ 80% de acuerdo — pasando a la noche', type: 'night' });
+            scheduleAutoNight(game);
+            broadcastGame();
+          }
+        } else if (voteType === 'extend' && ['nominations', 'voting'].includes(game.phase)) {
+          game.autoVotes.extend = [];
+          const EXTEND_MS = 90 * 1000;
+          if (game.autoPhaseInfo) game.autoPhaseInfo.endsAt = (game.autoPhaseInfo.endsAt || Date.now()) + EXTEND_MS;
+          const t = autoTimers.get(MAIN_GAME_ID);
+          if (t) clearTimeout(t);
+          const remaining = game.autoPhaseInfo ? Math.max(EXTEND_MS, game.autoPhaseInfo.endsAt - Date.now()) : EXTEND_MS;
+          const newId = setTimeout(() => {
+            if (!game.autoMode) return;
+            if (game.activeNomination) { game.pendingNightAfterNomination = true; broadcastGame(); return; }
+            scheduleAutoNight(game);
+          }, remaining);
+          autoTimers.set(MAIN_GAME_ID, newId);
+          broadcastToAll('NOTIFICATION', { message: '⚡ 80% de acuerdo — +1:30 de nominaciones', type: 'info' });
+          broadcastGame();
+        } else if (voteType === 'skipNight' && ['first_night', 'night'].includes(game.phase)) {
+          game.autoVotes.skipNight = [];
+          broadcastToAll('NOTIFICATION', { message: '⚡ 80% de acuerdo — saltando al día', type: 'day' });
+          triggerAutoDawn(game);
+          broadcastGame();
+        }
+      }
+      break;
+    }
+
+    case 'IMP_DAY_SHOT': {
+      const game = requireGame(session);
+      const shooter = game.players.find(p => p.id === session.playerId);
+      const target  = game.players.find(p => p.id === payload.targetId);
+      if (!shooter || shooter.alignment !== 'evil') throw new Error('Solo jugadores malvados pueden usar esta acción');
+      if (!shooter.alive) throw new Error('Debes estar vivo');
+      if (shooter.impShotUsed) throw new Error('Ya usaste tu disparo esta partida');
+      if (!['day', 'nominations', 'voting'].includes(game.phase)) throw new Error('Solo se puede usar de día');
+      shooter.impShotUsed = true;
+      broadcastGame();
+      broadcastToAll('BROADCAST_EVENT', {
+        title: '🏹 Cazador disparó',
+        message: `${shooter.name} disparó a ${target?.name || '?'}. No era el Demonio.`,
+        type: 'warning',
+      });
+      break;
+    }
+
+    case 'NIGHT_READY': {
+      const game = getGame(MAIN_GAME_ID);
+      if (!game || !session.playerId) break;
+      if (!['first_night', 'night'].includes(game.phase)) break;
+      if (!game.nightReadyPlayers) game.nightReadyPlayers = [];
+      if (!game.nightReadyPlayers.includes(session.playerId))
+        game.nightReadyPlayers.push(session.playerId);
+      broadcastGame();
+      if (tryAutoAdvanceDawn(game)) broadcastGame();
+      break;
+    }
+
+    case 'GHOST_DECLINE_VOTE': {
+      const game = getGame(MAIN_GAME_ID);
+      if (!game || !session.playerId) break;
+      const { nominationId } = payload;
+      const nom = game.nominations.find(n => n.id === nominationId);
+      if (!nom || nom.resolved) break;
+      const player = game.players.find(p => p.id === session.playerId);
+      if (!player || player.alive) break;
+      if (!nom.ghostDeclines) nom.ghostDeclines = [];
+      if (!nom.ghostDeclines.includes(session.playerId))
+        nom.ghostDeclines.push(session.playerId);
+
+      // Auto-resolve if all eligible (living + eligible dead) have now voted or declined
+      if (!nom.resolved) {
+        const living2 = game.players.filter(p => p.alive);
+        const eligDead2 = game.players.filter(p => !p.alive && p.deadVoteNominationId === null);
+        const declines2 = nom.ghostDeclines || [];
+        const allDone = [...living2, ...eligDead2].every(p =>
+          nom.votes.includes(p.id) || nom.against.includes(p.id) || declines2.includes(p.id)
+        );
+        if (allDone) {
+          const result = resolveVote(game, nom.id);
+          broadcastGame();
+          const msg = result.meetsThreshold
+            ? `🗳️ ${result.nomineeName}: ${result.tally} votos — ✓ alcanza el umbral`
+            : `🗳️ ${result.nomineeName}: ${result.tally} votos — ✗ no alcanza`;
+          broadcastToAll('NOTIFICATION', { message: msg, type: 'info' });
+          break;
+        }
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'GET_RANKINGS': {
+      sendTo(ws, 'RANKINGS', loadRankings());
+      break;
+    }
+
+    case 'DELETE_RANKING': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const { key } = payload;
+      deleteRankingEntry(key);
+      sendTo(ws, 'RANKINGS', loadRankings());
+      break;
+    }
+
+    default:
+      sendTo(ws, 'ERROR', { message: `Tipo desconocido: ${type}` });
+  }
+}
+
+function tryAutoAdvanceDawn(game) {
+  if (!game.autoMode) return false;
+  if (!['first_night', 'night'].includes(game.phase)) return false;
+  if (game.nightWaitingForRavenkeeper) return false;
+  const alive = game.players.filter(p => p.alive);
+  if (alive.length === 0) return false;
+  const allReady = alive.every(p => (game.nightReadyPlayers || []).includes(p.id));
+  if (!allReady) return false;
+  triggerAutoDawn(game);
+  return true;
+}
+
+function triggerAutoDawn(game) {
+  if (!['first_night', 'night'].includes(game.phase)) return;
+  const deaths = game.nightDeaths.map(id => game.players.find(p => p.id === id)?.name).filter(Boolean);
+  startDay(game);
+  broadcastGame();
+  if (game.phase === 'game_over') {
+    recordGameWin(game, game.winner);
+    broadcastToAll('GAME_OVER', { winner: game.winner });
+    return;
+  }
+  const msg = deaths.length > 0
+    ? `☀️ Día ${game.dayNumber}. Murió: ${deaths.join(', ')}.`
+    : `☀️ Día ${game.dayNumber}. Nadie murió esta noche.`;
+  broadcastToAll('NOTIFICATION', { message: msg, type: 'day' });
+  if (game.autoMode) scheduleAutoDay(game);
+}
+
+function scheduleAutoDay(game) {
+  const dayMs = game.autoDayMs || AUTO_DAY_MS;
+  game.autoPhaseInfo = { phase: 'day_discussion', endsAt: Date.now() + dayMs };
+  broadcastGame();
+  setAutoTimer(MAIN_GAME_ID, () => {
+    if (!game.autoMode || game.phase !== 'day') return;
+    // Mover todos a la Plaza
+    game.players.forEach(p => {
+      p.discordChannel = null;
+      if (p.discordId) moveUserToChannel(p.discordId, 'PLAZA', game.channelLimits || {}).catch(() => {});
+    });
+    openNominations(game);
+    const nomMin = Math.round((game.autoNomMs || AUTO_NOM_MS) / 60000);
+    broadcastToAll('NOTIFICATION', { message: `🏛️ Todos a la Plaza — nominaciones abiertas (${nomMin} min)`, type: 'info' });
+    scheduleAutoNominations(game);
+    broadcastGame();
+  }, dayMs);
+}
+
+function scheduleAutoNominations(game) {
+  const nomMs = game.autoNomMs || AUTO_NOM_MS;
+  game.autoPhaseInfo = { phase: 'nominations', endsAt: Date.now() + nomMs };
+  broadcastGame();
+  setAutoTimer(MAIN_GAME_ID, () => {
+    if (!game.autoMode) return;
+    if (game.activeNomination) {
+      // Nominación activa — esperar a que termine antes de pasar de noche
+      game.pendingNightAfterNomination = true;
+      broadcastGame();
+      return;
+    }
+    scheduleAutoNight(game);
+  }, nomMs);
+}
+
+function scheduleAutoNight(game) {
+  game.autoPhaseInfo = null;
+
+  // Ejecutar ganador de nominaciones (si hay)
+  const result = executeNominationWinner(game);
+
+  if (result.tie) {
+    broadcastToAll('BROADCAST_EVENT', { title: '⚖️ Empate', message: 'Empate en votos. Nadie es ejecutado.', type: 'warning' });
+  } else if (result.executed) {
+    broadcastToAll('BROADCAST_EVENT', {
+      title: '💀 Ejecución',
+      message: `${result.executed.name} fue ejecutado.`,
+      type: 'execution',
+    });
+    if (result.gameOver) {
+      broadcastGame();
+      recordGameWin(game, result.winner);
+      broadcastToAll('GAME_OVER', { winner: result.winner });
+      return;
+    }
+  }
+
+  if (game.phase === 'game_over') { broadcastGame(); return; }
+
+  // Victoria del Alcalde: 3 vivos sin ejecución
+  const livingAuto = game.players.filter(p => p.alive);
+  const mayorAuto  = game.players.find(p => p.role === 'MAYOR' && p.alive && !p.poisoned);
+  if (mayorAuto && livingAuto.length === 3 && !game.executedToday) {
+    mayorWin(game);
+    broadcastGame();
+    broadcastToAll('BROADCAST_EVENT', { title: '🏛️ Victoria del Alcalde', message: 'Quedan 3 jugadores vivos sin ejecución. ¡El bien gana!', type: 'info' });
+    recordGameWin(game, 'good');
+    broadcastToAll('GAME_OVER', { winner: 'good' });
+    return;
+  }
+
+  broadcastGame();
+
+  setAutoTimer(MAIN_GAME_ID, () => {
+    if (!game.autoMode || game.phase === 'game_over') return;
+    startNight(game);
+    broadcastGame();
+    broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });
+    if (game.nightQueue.length === 0) {
+      setAutoTimer(MAIN_GAME_ID, () => triggerAutoDawn(game), 5000);
+    }
+  }, 3000);
+}
+
+function requireGame(session) {
+  if (!session.gameId) throw new Error('No estás en la partida');
+  const game = getGame(MAIN_GAME_ID);
+  if (!game) throw new Error('Partida no encontrada');
+  return game;
+}
+
+// ── REST API ───────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => res.json({ ok: true, discord: getBotStatus() }));
+app.get('/api/roles', (req, res) => res.json(ROLES));
+app.get('/api/rankings', (req, res) => res.json(loadRankings()));
+app.get('/api/players', (req, res) => {
+  const game = getGame(MAIN_GAME_ID);
+  res.json(game ? game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar })) : []);
+});
+
+// ── Serve frontend build (for tunnel / production) ─────────────────
+const clientDist = path.join(__dirname, '../client/dist');
+app.use(express.static(clientDist));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+// ── Start ──────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`[Server] http://localhost:${PORT}`);
+  console.log(`[Server] WebSocket: ws://localhost:${PORT}`);
+  initBot();
+
+  // Sync Discord voice state → game state
+  setVoiceStateCallback((discordUserId, channelKey) => {
+    const game = getGame(MAIN_GAME_ID);
+    if (!game) return;
+    const player = game.players.find(p => p.discordId === discordUserId);
+    if (!player) return;
+    const newChannel = (channelKey && channelKey !== 'PLAZA' && channelKey !== 'CONFESIONARIO') ? channelKey : null;
+    if (player.discordChannel !== newChannel) {
+      player.discordChannel = newChannel;
+      broadcastGame();
+    }
+  });
+
+  // Auto-tunnel when TUNNEL env var is set
+  if (process.env.TUNNEL) {
+    startTunnel(PORT);
+  }
+});
+
+async function startTunnel(port) {
+  const { spawn } = require('child_process');
+  const sep = '='.repeat(50);
+
+  // Try cloudflared first (best WebSocket support)
+  const cf = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${port}`], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let urlPrinted = false;
+  let fallbackStarted = false;
+  const printUrl = (data) => {
+    if (urlPrinted) return;
+    const text = data.toString();
+    const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    if (match) {
+      urlPrinted = true;
+      console.log('\n' + sep);
+      console.log('🌐 URL PÚBLICA PARA JUGADORES:');
+      console.log(`   ${match[0]}`);
+      console.log(sep);
+      console.log('Comparte esta URL con tus amigos.');
+      console.log('Expira cuando cierres el servidor.\n');
+    }
+  };
+
+  cf.stdout.on('data', printUrl);
+  cf.stderr.on('data', printUrl);
+
+  const useFallback = () => {
+    if (fallbackStarted) return;
+    fallbackStarted = true;
+    console.log('[Tunnel] cloudflared no encontrado, usando localtunnel...');
+    startLocaltunnel(port);
+  };
+
+  cf.on('error', useFallback);
+
+  cf.on('close', (code) => {
+    if (!urlPrinted) useFallback();
+    else console.log('[Tunnel] cloudflared cerrado');
+  });
+}
+
+async function startLocaltunnel(port) {
+  try {
+    const localtunnel = require('localtunnel');
+    const tunnel = await localtunnel({ port });
+    const sep = '='.repeat(50);
+    console.log('\n' + sep);
+    console.log('🌐 URL PÚBLICA PARA JUGADORES:');
+    console.log(`   ${tunnel.url}`);
+    console.log(sep);
+    console.log('Comparte esta URL con tus amigos.');
+    console.log('Expira cuando cierres el servidor.\n');
+    tunnel.on('close', () => console.log('[Tunnel] Cerrado'));
+    tunnel.on('error', err => console.error('[Tunnel] Error:', err.message));
+  } catch (err) {
+    console.error('[Tunnel] No se pudo iniciar el túnel:', err.message);
+  }
+}

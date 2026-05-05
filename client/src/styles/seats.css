@@ -1,0 +1,315 @@
+/* ============================================================
+   SEATS — Mesa circular, medallones de jugadores, celestiales
+   ============================================================ */
+
+/* ── TABLE CONTAINER ───────────────────────────────────────── */
+
+.table-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-disc {
+  position: absolute;
+  width: calc(var(--table-radius, 200px) * 2 - 60px);
+  height: calc(var(--table-radius, 200px) * 2 - 60px);
+  border-radius: 50%;
+  border: var(--hairline);
+  background: radial-gradient(circle, rgba(201,162,74,0.03) 0%, transparent 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.table-center {
+  text-align: center;
+  padding: 16px;
+  max-width: 160px;
+}
+
+.table-center-phase {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bone-400);
+  margin-bottom: 4px;
+}
+
+.table-center-day {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--bone-100);
+  line-height: 1.2;
+}
+
+.table-center-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--bone-400);
+  margin-top: 4px;
+}
+
+/* ── SEAT ──────────────────────────────────────────────────── */
+
+.seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: transform 0.2s;
+  z-index: 2;
+  --sz: var(--seat-size, 68px);
+}
+.seat:hover { transform: translate(-50%, -50%) scale(1.06); }
+.seat.selected { z-index: 5; }
+.seat.selected .medallion { box-shadow: 0 0 0 2px var(--gold), var(--shadow-medallion); }
+.seat.nominated .medallion { box-shadow: 0 0 0 2px var(--blood-hi), 0 0 20px rgba(168,58,45,0.4), var(--shadow-medallion); }
+.seat.dead { opacity: 0.42; filter: grayscale(0.6); }
+.seat.my-player .medallion { box-shadow: 0 0 0 2px var(--good), var(--shadow-medallion); }
+
+/* ── MEDALLION ─────────────────────────────────────────────── */
+
+.medallion {
+  width: var(--sz);
+  height: var(--sz);
+  border-radius: 50%;
+  border: 1px solid rgba(201,162,74,0.3);
+  box-shadow: var(--shadow-medallion);
+  position: relative;
+  overflow: hidden;
+  background: var(--ink-700);
+  transition: box-shadow 0.2s;
+}
+
+.medallion-inner {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.medallion-avatar {
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  font-size: calc(var(--sz) * 0.36);
+  color: var(--bone-100);
+  border-radius: 50%;
+  user-select: none;
+}
+
+/* Death shroud overlay */
+.death-shroud {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  opacity: 0.7;
+  z-index: 3;
+}
+
+/* ── ROLE TOKEN MINI ───────────────────────────────────────── */
+
+.role-token-mini {
+  width: calc(var(--sz) * 0.42);
+  height: calc(var(--sz) * 0.42);
+  border-radius: 50%;
+  border: 1px solid rgba(201,162,74,0.4);
+  overflow: hidden;
+  margin-top: -8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  background: var(--ink-800);
+  z-index: 4;
+  position: relative;
+}
+.role-token-mini img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.role-token-mini.evil { border-color: rgba(168,58,45,0.6); }
+.role-token-mini.good { border-color: rgba(109,140,184,0.6); }
+
+/* ── STATE CHIPS ───────────────────────────────────────────── */
+
+.seat-states {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 6;
+}
+
+.state-chip {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--ink-700);
+  border: 1px solid var(--gold);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+.state-chip.poisoned { border-color: #4ade80; }
+
+/* ── SEAT NAMEPLATE ────────────────────────────────────────── */
+
+.seat-nameplate {
+  text-align: center;
+  margin-top: 4px;
+  max-width: calc(var(--sz) + 24px);
+}
+
+.seat-name {
+  font-family: var(--serif);
+  font-size: 12px;
+  color: var(--bone-100);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.seat-role-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--bone-400);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── HAND RAISED / NIGHT MARK ─────────────────────────────── */
+
+.hand-raised {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  z-index: 7;
+}
+
+.night-mark {
+  position: absolute;
+  top: -10px;
+  right: -4px;
+  color: var(--blood-hi);
+  font-size: 13px;
+  z-index: 7;
+}
+
+/* ── NOMINATION LINE ───────────────────────────────────────── */
+
+.nomination-line {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── CELESTIALS ────────────────────────────────────────────── */
+
+.celestial {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.7;
+  transition: all 2s ease;
+}
+
+.celestial.sun {
+  width: 80px; height: 80px;
+  background: radial-gradient(circle, #f8d56a 0%, #e8a020 40%, transparent 70%);
+  top: 12%; right: 14%;
+  box-shadow: 0 0 60px 20px rgba(232,192,32,0.25);
+}
+
+.celestial.moon {
+  width: 68px; height: 68px;
+  background: radial-gradient(circle, #e8edf8 0%, #cfd6e8 50%, transparent 75%);
+  top: 10%; left: 13%;
+  box-shadow: 0 0 50px 15px rgba(207,214,232,0.18);
+}
+
+.crater {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(150,165,195,0.25);
+}
+.crater.c1 { width: 14px; height: 14px; top: 16px; left: 10px; }
+.crater.c2 { width: 9px;  height: 9px;  top: 30px; left: 36px; }
+.crater.c3 { width: 7px;  height: 7px;  top: 10px; left: 40px; }
+
+.stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: white;
+  animation: twinkle 3s infinite alternate;
+}
+
+@keyframes twinkle {
+  from { opacity: 0.2; }
+  to   { opacity: 0.9; }
+}
+
+/* ── TOKEN OVERLAY ─────────────────────────────────────────── */
+
+.token-overlay {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 8;
+}
+
+.token-overlay img {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--ink-600);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
+/* ── DEAD VOTE INDICATOR ───────────────────────────────────── */
+
+.dead-vote-token {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 16px; height: 16px;
+  z-index: 9;
+}
+
+.dead-vote-token img {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--good);
+  box-shadow: 0 0 6px rgba(109,140,184,0.5);
+}

@@ -1,0 +1,223 @@
+/* ============================================================
+   COMPONENTS — Botones, tarjetas, badges, modales, notificaciones
+   ============================================================ */
+
+/* ── BOTONES DE ACCIÓN ─────────────────────────────────────── */
+
+.btn-action {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  padding: 9px 22px;
+  border: var(--hairline);
+  border-radius: 2px;
+  color: var(--bone-100);
+  background: rgba(201,162,74,0.1);
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.btn-action:hover { background: rgba(201,162,74,0.22); border-color: var(--gold); color: var(--bone-50); }
+.btn-action.primary { background: rgba(201,162,74,0.25); border-color: var(--gold); color: var(--gold-hot); }
+.btn-action.danger  { border-color: var(--blood); color: var(--blood-hi); background: rgba(168,58,45,0.15); }
+.btn-action.danger:hover { background: rgba(168,58,45,0.3); }
+.btn-action:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-night {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  border: var(--hairline);
+  border-radius: 2px;
+  color: var(--moon);
+  background: rgba(63,74,107,0.2);
+  transition: all 0.2s;
+}
+.btn-night:hover { background: rgba(63,74,107,0.4); border-color: var(--moon); }
+
+/* ── PANEL CARDS ───────────────────────────────────────────── */
+
+.panel-card {
+  background: rgba(0,0,0,0.25);
+  border: var(--hairline-bone);
+  border-radius: 4px;
+  padding: 14px;
+}
+
+/* ── ROLE CHIPS ────────────────────────────────────────────── */
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.role-chip.good { background: rgba(109,140,184,0.15); color: var(--good); border: 1px solid rgba(109,140,184,0.3); }
+.role-chip.evil { background: rgba(168,58,45,0.15);  color: var(--blood-hi); border: 1px solid rgba(168,58,45,0.3); }
+
+/* ── NOTIFICATION STACK ────────────────────────────────────── */
+
+.notif-stack {
+  position: fixed;
+  top: 60px;
+  right: 14px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+  pointer-events: none;
+}
+
+.notif-item {
+  padding: 12px 16px;
+  border-radius: 3px;
+  border-left: 3px solid var(--gold);
+  background: rgba(7,7,10,0.92);
+  backdrop-filter: blur(8px);
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--bone-100);
+  box-shadow: var(--shadow-card);
+  animation: slideIn 0.2s ease;
+}
+.notif-item.night   { border-color: var(--moon); }
+.notif-item.day     { border-color: var(--gold-hot); }
+.notif-item.execution { border-color: var(--blood-hi); }
+.notif-item.nomination { border-color: var(--gold); }
+.notif-item.vote    { border-color: #9ca3af; }
+.notif-item.warning { border-color: #f59e0b; }
+.notif-item.gameover { border-color: #a855f7; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── BROADCAST OVERLAY ─────────────────────────────────────── */
+
+.broadcast-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+}
+
+.broadcast-card {
+  background: var(--ink-800);
+  border: var(--hairline-strong);
+  border-radius: 6px;
+  padding: 40px 48px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow-deep);
+}
+.broadcast-card.execution { border-color: var(--blood); }
+.broadcast-card.warning   { border-color: var(--gold); }
+
+.broadcast-card h2 {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--bone-50);
+  margin: 12px 0 8px;
+}
+
+.broadcast-card p {
+  font-family: var(--serif);
+  font-size: 20px;
+  color: var(--bone-200);
+  line-height: 1.6;
+}
+
+/* ── MODAL BASE ────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.modal-card {
+  background: var(--ink-800);
+  border: var(--hairline);
+  border-radius: 4px;
+  padding: 24px;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: var(--shadow-deep);
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px; right: 14px;
+  color: var(--bone-400);
+  font-size: 22px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.modal-close:hover { color: var(--bone-50); }
+
+/* ── VOTING BAR ────────────────────────────────────────────── */
+
+.vote-bar-track {
+  height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.vote-bar-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--gold-dim), var(--gold-hot));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ── LOG / EVENTS ──────────────────────────────────────────── */
+
+.log-entry {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: var(--hairline-bone);
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--bone-200);
+}
+.log-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--bone-400);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.log-killed { color: var(--blood-hi); }
+.log-neutral { color: var(--bone-300); }
+
+/* ── SCROLLBAR ─────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(201,162,74,0.25); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(201,162,74,0.5); }

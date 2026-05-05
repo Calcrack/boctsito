@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 
-const DISCORD_TOKEN = 'MTQ5NTg5MDM0NzMxNjg3MTQwMQ.Gm2Gke.j2yAr9-TPZNC8DQjtDPbLoqdMvgXoBYuWPXlBU';
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN';
 const GUILD_ID = '1462151561575928034';
 
 const CHANNELS = {

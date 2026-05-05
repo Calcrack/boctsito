@@ -1,6 +1,6 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN';
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = '1462151561575928034';
 
 const CHANNELS = {
@@ -127,6 +127,22 @@ async function moveUserToChannel(discordUserId, channelKey, channelLimits = {}) 
 }
 
 
+async function setPlazaChannelPermission(allow) {
+  if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
+  try {
+    const channel = guild.channels.cache.get(CHANNELS.PLAZA);
+    if (!channel) return { ok: false, error: 'Canal PLAZA no encontrado' };
+    const everyoneRole = guild.roles.everyone;
+    await channel.permissionOverwrites.edit(everyoneRole, {
+      [PermissionFlagsBits.Speak]: allow ? null : false,
+    });
+    return { ok: true };
+  } catch (err) {
+    console.error('[Discord] setPlazaChannelPermission error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 async function sendDM(discordUserId, message) {
   if (!isReady || !client) return false;
   try {
@@ -143,4 +159,4 @@ function getBotStatus() {
   return { connected: isReady, tag: client?.user?.tag || null };
 }
 
-module.exports = { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, CHANNELS, setVoiceStateCallback };
+module.exports = { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, CHANNELS, setVoiceStateCallback, setPlazaChannelPermission };

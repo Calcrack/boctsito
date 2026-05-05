@@ -12,7 +12,7 @@ const {
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, getPublicState,
 } = require('./gameLogic');
-const { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, setVoiceStateCallback } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType } = require('./roles');
 const { loadRankings, recordGameWin, deleteRankingEntry } = require('./rankings');
 
@@ -218,6 +218,7 @@ function handleMessage(type, payload, session) {
         p.accusation = null; p.slayerUsed = false; p.virginUsed = false;
         p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
       });
+      setPlazaChannelPermission(true).catch(() => {});
       broadcastGame();
       break;
     }
@@ -311,6 +312,7 @@ function handleMessage(type, payload, session) {
         break;
       }
       startNight(game);
+      setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
       broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });
       if (game.nightQueue.length === 0) {
@@ -326,6 +328,7 @@ function handleMessage(type, payload, session) {
       distributeRoles(game, roles);
       game.autoMode = true;
       startNight(game);
+      setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
       broadcastToAll('NOTIFICATION', { message: '🤖 Modo automático activado — Primera Noche comenzando...', type: 'night' });
       if (game.nightQueue.length === 0) {
@@ -358,6 +361,7 @@ function handleMessage(type, payload, session) {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
       startDay(game);
+      setPlazaChannelPermission(true).catch(() => {});
       broadcastGame();
       const deaths = payload.nightDeaths || [];
       const msg = deaths.length > 0
@@ -952,6 +956,7 @@ function triggerAutoDawn(game) {
   if (!['first_night', 'night'].includes(game.phase)) return;
   const deaths = game.nightDeaths.map(id => game.players.find(p => p.id === id)?.name).filter(Boolean);
   startDay(game);
+  setPlazaChannelPermission(true).catch(() => {});
   broadcastGame();
   if (game.phase === 'game_over') {
     recordGameWin(game, game.winner);
@@ -1041,6 +1046,7 @@ function scheduleAutoNight(game) {
   setAutoTimer(MAIN_GAME_ID, () => {
     if (!game.autoMode || game.phase === 'game_over') return;
     startNight(game);
+    setPlazaChannelPermission(false).catch(() => {});
     broadcastGame();
     broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });
     if (game.nightQueue.length === 0) {

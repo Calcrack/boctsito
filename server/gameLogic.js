@@ -132,9 +132,10 @@ function distributeRoles(game, selectedRoleIds) {
 }
 
 const NIGHT_QUEUE_FIRST  = ['POISONER', 'WASHERWOMAN', 'LIBRARIAN', 'INVESTIGATOR', 'COOK', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
-const NIGHT_QUEUE_SECOND = ['POISONER', 'MONK', 'IMP', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
+const NIGHT_QUEUE_SECOND = ['POISONER', 'MONK', 'IMP', 'UNDERTAKER', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
 
 const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
+const FIRST_NIGHT_ONLY_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH']);
 
 function getInteractiveRolesForPhase(phase) {
   return phase === 'first_night' ? NIGHT_QUEUE_FIRST : NIGHT_QUEUE_SECOND;
@@ -146,8 +147,11 @@ function generateNightInfo(game) {
 
   players.forEach(p => {
     p.poisoned = false;
-    p.nightInfo = null;
     p.pendingRavenkeeper = false;
+    const roleCheck = p.role === 'DRUNK' ? p.drunkAs : p.role;
+    if (isFirstNight || !FIRST_NIGHT_ONLY_ROLES.has(roleCheck)) {
+      p.nightInfo = null;
+    }
   });
   game.nightDeaths = [];
 
@@ -237,19 +241,21 @@ function generatePassiveNightInfo(game) {
     });
 
     players.filter(p => p.role === 'COOK' && p.alive).forEach(p => {
-      const real = countEvilNeighborPairs(living);
+      const real = countEvilNeighborPairs(players);
       p.nightInfo = p.poisoned
-        ? `🍳 Cocinero\nHay ${falsifyCount(real, 0, Math.min(3, Math.floor(living.length/2)))} pareja(s) de vecinos malvados.`
+        ? `🍳 Cocinero\nHay ${falsifyCount(real, 0, Math.min(3, Math.floor(players.length/2)))} pareja(s) de vecinos malvados.`
         : `🍳 Cocinero\nHay ${real} pareja(s) de vecinos malvados.`;
     });
   }
 
-  players.filter(p => p.role === 'EMPATH' && p.alive).forEach(p => {
-    const real = countEvilNeighbors(p, living);
-    p.nightInfo = p.poisoned
-      ? `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`
-      : `💞 Empático\nTienes ${real} vecino(s) malvado(s) vivos.`;
-  });
+  if (isFirstNight) {
+    players.filter(p => p.role === 'EMPATH' && p.alive).forEach(p => {
+      const real = countEvilNeighbors(p, players);
+      p.nightInfo = p.poisoned
+        ? `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`
+        : `💞 Empático\nTienes ${real} vecino(s) malvado(s) vivos.`;
+    });
+  }
 
   if (game.executedToday) {
     players.filter(p => p.role === 'UNDERTAKER' && p.alive).forEach(p => {
@@ -348,7 +354,8 @@ function generateSingleRoleInfo(game, playerId) {
       break;
     }
     case 'EMPATH': {
-      const real = countEvilNeighbors(player, living, game);
+      if (!isFirstNight) return;
+      const real = countEvilNeighbors(player, game.players, game);
       player.nightInfo = player.poisoned
         ? `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`
         : `💞 Empático\nTienes ${real} vecino(s) malvado(s) vivos.`;
@@ -356,9 +363,9 @@ function generateSingleRoleInfo(game, playerId) {
     }
     case 'COOK': {
       if (!isFirstNight) return;
-      const real = countEvilNeighborPairs(living, game);
+      const real = countEvilNeighborPairs(game.players, game);
       player.nightInfo = player.poisoned
-        ? `🍳 Cocinero\nHay ${falsifyCount(real, 0, Math.min(3, Math.floor(living.length / 2)))} pareja(s) de vecinos malvados.`
+        ? `🍳 Cocinero\nHay ${falsifyCount(real, 0, Math.min(3, Math.floor(game.players.length / 2)))} pareja(s) de vecinos malvados.`
         : `🍳 Cocinero\nHay ${real} pareja(s) de vecinos malvados.`;
       break;
     }
@@ -500,7 +507,7 @@ function generateDrunkInfo(p, living, rand, game) {
 
   switch (p.drunkAs) {
     case 'EMPATH': {
-      const real = countEvilNeighbors(p, living);
+      const real = countEvilNeighbors(p, game.players, game);
       return `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`;
     }
     case 'WASHERWOMAN': {
@@ -526,8 +533,8 @@ function generateDrunkInfo(p, living, rand, game) {
       return `🔍 Investigador\nEntre ${pair[0].name} y ${pair[1].name} hay un/una ${ROLES[fakeRole]?.name || fakeRole}.`;
     }
     case 'COOK': {
-      const real = countEvilNeighborPairs(living);
-      return `🍳 Cocinero\nHay ${falsifyCount(real, 0, Math.min(3, Math.floor(living.length / 2)))} pareja(s) de vecinos malvados.`;
+      const real = countEvilNeighborPairs(game.players, game);
+      return `🍳 Cocinero\nHay ${falsifyCount(real, 0, Math.min(3, Math.floor(game.players.length / 2)))} pareja(s) de vecinos malvados.`;
     }
     case 'FORTUNE_TELLER': {
       const [a, b] = pickTwo();
@@ -583,12 +590,18 @@ function isEvilForInfo(p, game) {
   return false;
 }
 
-function countEvilNeighbors(player, living, game = null) {
-  const idx = living.findIndex(p => p.id === player.id);
+function isEvilNeighbor(p) {
+  if (p.role === 'SPY') return false;    // Espía siempre registra como bueno
+  if (p.role === 'RECLUSE') return true; // Recluso siempre registra como malvado
+  return p.alignment === 'evil';
+}
+
+function countEvilNeighbors(player, allPlayers, game = null) {
+  const idx = allPlayers.findIndex(p => p.id === player.id);
   if (idx === -1) return 0;
-  const left  = living[(idx - 1 + living.length) % living.length];
-  const right = living[(idx + 1) % living.length];
-  return [left, right].filter(p => p && p.id !== player.id && isEvilForInfo(p, game)).length;
+  const left  = allPlayers[(idx - 1 + allPlayers.length) % allPlayers.length];
+  const right = allPlayers[(idx + 1) % allPlayers.length];
+  return [left, right].filter(p => p && p.id !== player.id && p.alive && isEvilNeighbor(p)).length;
 }
 
 function countEvilNeighborPairs(living, game = null) {
@@ -633,21 +646,27 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         // blocked
       } else if (target.protected) {
         // blocked
-      } else if (target.role === 'MAYOR' && !target.poisoned && game.mayorKillTarget) {
-        const redirectTarget = game.players.find(p => p.id === game.mayorKillTarget && p.alive);
-        if (redirectTarget) {
+      } else if (target.role === 'MAYOR' && !target.poisoned) {
+        const pool = game.players.filter(p => p.alive && p.id !== target.id && p.type !== 'demon');
+        if (pool.length > 0) {
+          const redirectTarget = pool[Math.floor(Math.random() * pool.length)];
           redirectTarget.alive = false;
           game.nightDeaths.push(redirectTarget.id);
-          if (redirectTarget.role === 'RAVENKEEPER' && !redirectTarget.poisoned) {
+          const isRealRaven = redirectTarget.role === 'RAVENKEEPER' && !redirectTarget.poisoned;
+          const isDrunkRaven = redirectTarget.role === 'DRUNK' && redirectTarget.drunkAs === 'RAVENKEEPER';
+          if (isRealRaven || isDrunkRaven) {
             redirectTarget.pendingRavenkeeper = true;
             redirectTarget.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
           }
           checkScarletWoman(game, actor);
         }
+        // pool vacío (solo Alcalde + Demonio vivos) → Alcalde sobrevive
       } else {
         target.alive = false;
         game.nightDeaths.push(target.id);
-        if (target.role === 'RAVENKEEPER' && !target.poisoned) {
+        const isRealRaven = target.role === 'RAVENKEEPER' && !target.poisoned;
+        const isDrunkRaven = target.role === 'DRUNK' && target.drunkAs === 'RAVENKEEPER';
+        if (isRealRaven || isDrunkRaven) {
           target.pendingRavenkeeper = true;
           target.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
         }
@@ -658,9 +677,10 @@ function applyNightAction(game, actionType, actorId, targetIds) {
 
     case 'RAVENKEEPER_INFO':
       if (actor && targets[0]) {
-        if (actor.poisoned) {
-          const fakeRK = ['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','FORTUNE_TELLER','MONK','VIRGIN','SLAYER','SOLDIER','MAYOR'];
-          const fakeRole = fakeRK[Math.floor(Math.random() * fakeRK.length)];
+        const fakeRK = ['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','FORTUNE_TELLER','MONK','VIRGIN','SLAYER','SOLDIER','MAYOR'];
+        const rand2 = arr => arr[Math.floor(Math.random() * arr.length)];
+        if (actor.role === 'DRUNK' || actor.poisoned) {
+          const fakeRole = rand2(fakeRK.filter(r => r !== targets[0].role));
           actor.nightInfo = `🦅 Criacuervos\nEl rol de ${targets[0].name} es: ${ROLES[fakeRole]?.name || fakeRole}.`;
         } else {
           actor.nightInfo = `🦅 Criacuervos\nEl rol de ${targets[0].name} es: ${ROLES[targets[0].role]?.name || targets[0].role}.`;
@@ -695,8 +715,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
 
     case 'EMPATH': {
       if (!actor) break;
-      const living = game.players.filter(p => p.alive);
-      const count = actor.poisoned ? Math.floor(Math.random() * 3) : countEvilNeighbors(actor, living, game);
+      const count = actor.poisoned ? Math.floor(Math.random() * 3) : countEvilNeighbors(actor, game.players, game);
       actor.nightInfo = `💞 Empático\nTienes ${count} vecino(s) malvado(s) vivos.`;
       break;
     }
@@ -890,6 +909,7 @@ function startDay(game) {
   game.pendingNightAfterNomination = false;
   game.autoVotes = { skipDay: [], skipNom: [], extend: [] };
   game.players.forEach(p => { p.discordChannel = null; });
+  game.players.filter(p => p.role === 'SLAYER' && p.alive).forEach(p => { p.slayerUsed = false; });
   checkWinCondition(game);
   return game;
 }
@@ -915,6 +935,13 @@ function startNight(game) {
   const _living = game.players.filter(p => p.alive);
   const _rand = arr => arr[Math.floor(Math.random() * arr.length)];
   game.players.filter(p => p.role === 'DRUNK' && p.alive && !drunkInQueue.has(p.id)).forEach(p => {
+    const isFirstNight = game.phase === 'first_night';
+    // Solo roles pasivos dan info automática; roles activos pasan por la cola
+    if (!PASSIVE_INFO_ROLES.has(p.drunkAs)) return;
+    // Roles de solo primera noche: no info en noches posteriores
+    if (!isFirstNight && FIRST_NIGHT_ONLY_ROLES.has(p.drunkAs)) return;
+    // Sepulturero solo cuando hubo ejecución
+    if (p.drunkAs === 'UNDERTAKER' && !game.executedToday) return;
     const info = generateDrunkInfo(p, _living, _rand, game);
     if (info) p.nightInfo = info;
   });

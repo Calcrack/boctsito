@@ -21,8 +21,8 @@ const ROLES = {
   },
   EMPATH: {
     id: 'EMPATH', name: 'Empática', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche: sabes cuántos de tus 2 vecinos vivos son malvados (0, 1 o 2).',
-    firstNight: true, otherNights: true,
+    ability: 'Primera noche: sabes cuántos de tus 2 vecinos vivos son malvados (0, 1 o 2).',
+    firstNight: true, otherNights: false,
   },
   FORTUNE_TELLER: {
     id: 'FORTUNE_TELLER', name: 'Adivina', alignment: 'good', type: 'townfolk',

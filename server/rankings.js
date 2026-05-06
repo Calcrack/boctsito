@@ -17,6 +17,21 @@ function loadRankings() {
   } catch { return {}; }
 }
 
+async function initRankings() {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  try {
+    const apiPath = `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+    const res = await _ghRequest('GET', apiPath, null);
+    if (res.status !== 200 || !res.body.content) return;
+    _sha = res.body.sha;
+    const data = JSON.parse(Buffer.from(res.body.content, 'base64').toString('utf8'));
+    fs.writeFileSync(RANKINGS_PATH, JSON.stringify(data, null, 2), 'utf8');
+    console.log('[GitHub] Rankings cargados desde GitHub');
+  } catch (err) {
+    console.error('[GitHub] initRankings error:', err.message);
+  }
+}
+
 function saveRankings(data) {
   try { fs.writeFileSync(RANKINGS_PATH, JSON.stringify(data, null, 2), 'utf8'); } catch {}
   _pushToGithub(data).catch(err => console.error('[GitHub] Push error:', err.message));
@@ -100,4 +115,15 @@ function deleteRankingEntry(key) {
   saveRankings(data);
 }
 
-module.exports = { loadRankings, recordGameWin, deleteRankingEntry };
+function updateRankingEntry(key, updates) {
+  const data = loadRankings();
+  if (!data[key]) return data;
+  const e = data[key];
+  if (updates.wins_as_good !== undefined) e.wins_as_good = Math.max(0, parseInt(updates.wins_as_good) || 0);
+  if (updates.wins_as_demon !== undefined) e.wins_as_demon = Math.max(0, parseInt(updates.wins_as_demon) || 0);
+  if (updates.total_games !== undefined) e.total_games = Math.max(0, parseInt(updates.total_games) || 0);
+  saveRankings(data);
+  return data;
+}
+
+module.exports = { loadRankings, initRankings, recordGameWin, deleteRankingEntry, updateRankingEntry };

@@ -980,13 +980,35 @@ function ChannelControl({ players, send }) {
 }
 
 function RankingsManager({ rankings, send }) {
+  const [editingKey, setEditingKey] = useState(null);
+  const [editVals, setEditVals] = useState({});
+
   const rows = rankings
     ? Object.entries(rankings).sort((a, b) => (b[1].wins_as_good + b[1].wins_as_demon) - (a[1].wins_as_good + a[1].wins_as_demon))
     : null;
 
-  const handleDelete = (key) => {
-    send('DELETE_RANKING', { key });
+  const startEdit = (key, r) => {
+    setEditingKey(key);
+    setEditVals({ wins_as_good: r.wins_as_good || 0, wins_as_demon: r.wins_as_demon || 0, total_games: r.total_games || 0 });
   };
+
+  const saveEdit = () => {
+    send('UPDATE_RANKING', { key: editingKey, updates: editVals });
+    setEditingKey(null);
+  };
+
+  const numInput = (field, color) => (
+    <input
+      type="number" min="0"
+      value={editVals[field]}
+      onChange={e => setEditVals(v => ({ ...v, [field]: e.target.value }))}
+      style={{
+        width: 44, background: 'var(--ink-700)', border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 2, padding: '2px 4px', fontFamily: 'var(--mono)', fontSize: 11,
+        color, textAlign: 'center',
+      }}
+    />
+  );
 
   return (
     <div>
@@ -997,10 +1019,18 @@ function RankingsManager({ rankings, send }) {
         <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-400)', fontStyle: 'italic' }}>Sin partidas registradas.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 8, padding: '0 10px 4px', alignItems: 'center' }}>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--good)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>ALDEA</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--blood-hi)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>DEMO</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>TOTAL</span>
+            <div style={{ width: 56 }} />
+          </div>
           {rows.map(([key, r]) => (
             <div key={key} style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(0,0,0,0.2)', border: 'var(--hairline-bone)',
+              background: editingKey === key ? 'rgba(201,162,74,0.06)' : 'rgba(0,0,0,0.2)',
+              border: editingKey === key ? '1px solid rgba(201,162,74,0.3)' : 'var(--hairline-bone)',
               borderRadius: 3, padding: '8px 10px',
             }}>
               <div style={{
@@ -1018,23 +1048,48 @@ function RankingsManager({ rankings, send }) {
               <span style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.name}
               </span>
-              <span title="Victorias aldeano" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--good)', minWidth: 20, textAlign: 'center' }}>{r.wins_as_good || 0}</span>
-              <span title="Victorias demonio" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--blood-hi)', minWidth: 20, textAlign: 'center' }}>{r.wins_as_demon || 0}</span>
-              <span title="Partidas" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-400)', minWidth: 20, textAlign: 'center' }}>{r.total_games || 0}</span>
-              <button
-                onClick={() => handleDelete(key)}
-                style={{ color: 'var(--blood-hi)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, opacity: 0.6, padding: '2px 4px' }}
-                title="Eliminar del ranking"
-                onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
-              >✕</button>
+
+              {editingKey === key ? (
+                <>
+                  {numInput('wins_as_good', 'var(--good)')}
+                  {numInput('wins_as_demon', 'var(--blood-hi)')}
+                  {numInput('total_games', 'var(--bone-300)')}
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={saveEdit}
+                      style={{ background: 'rgba(201,162,74,0.2)', border: '1px solid rgba(201,162,74,0.4)', borderRadius: 2, color: 'var(--gold)', fontFamily: 'var(--mono)', fontSize: 10, cursor: 'pointer', padding: '3px 7px' }}>
+                      ✓
+                    </button>
+                    <button onClick={() => setEditingKey(null)}
+                      style={{ background: 'none', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-400)', fontFamily: 'var(--mono)', fontSize: 10, cursor: 'pointer', padding: '3px 7px' }}>
+                      ✕
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span title="Victorias aldeano" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--good)', minWidth: 44, textAlign: 'center' }}>{r.wins_as_good || 0}</span>
+                  <span title="Victorias demonio" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--blood-hi)', minWidth: 44, textAlign: 'center' }}>{r.wins_as_demon || 0}</span>
+                  <span title="Partidas jugadas" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-400)', minWidth: 44, textAlign: 'center' }}>{r.total_games || 0}</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => startEdit(key, r)}
+                      style={{ background: 'none', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-400)', fontFamily: 'var(--mono)', fontSize: 10, cursor: 'pointer', padding: '3px 7px', opacity: 0.6 }}
+                      title="Editar estadísticas"
+                      onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                      onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
+                    >✎</button>
+                    <button onClick={() => send('DELETE_RANKING', { key })}
+                      style={{ color: 'var(--blood-hi)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, opacity: 0.6, padding: '2px 4px' }}
+                      title="Eliminar del ranking"
+                      onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                      onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
+                    >✕</button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
       )}
-      <p style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-600)', marginTop: 8 }}>
-        🟢 Aldeano · 🔴 Demonio · ⬛ Partidas
-      </p>
     </div>
   );
 }

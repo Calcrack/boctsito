@@ -14,7 +14,7 @@ const {
 } = require('./gameLogic');
 const { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType } = require('./roles');
-const { loadRankings, recordGameWin, deleteRankingEntry } = require('./rankings');
+const { loadRankings, initRankings, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 
 const SAVE_PATH = path.join(__dirname, 'game-save.json');
 
@@ -935,6 +935,14 @@ function handleMessage(type, payload, session) {
       break;
     }
 
+    case 'UPDATE_RANKING': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const { key: rKey, updates } = payload;
+      const updated = updateRankingEntry(rKey, updates);
+      sendTo(ws, 'RANKINGS', updated);
+      break;
+    }
+
     default:
       sendTo(ws, 'ERROR', { message: `Tipo desconocido: ${type}` });
   }
@@ -1083,6 +1091,7 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`[Server] http://localhost:${PORT}`);
   console.log(`[Server] WebSocket: ws://localhost:${PORT}`);
+  initRankings();
   initBot();
 
   // Sync Discord voice state → game state

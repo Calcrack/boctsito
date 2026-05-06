@@ -5,34 +5,57 @@ const https = require('https');
 const RANKINGS_PATH = path.join(__dirname, 'rankings.json');
 
 const GITHUB_TOKEN     = process.env.GITHUB_TOKEN;
-const GITHUB_REPO      = process.env.GITHUB_REPO;       // "owner/repo"
+const GITHUB_REPO      = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || 'server/rankings.json';
 
-let _sha = null;
+let _sha   = null;
+let _cache = null; // in-memory — survives within the process lifetime
 
 function loadRankings() {
+  if (_cache !== null) return _cache;
   try {
-    if (!fs.existsSync(RANKINGS_PATH)) return {};
-    return JSON.parse(fs.readFileSync(RANKINGS_PATH, 'utf8'));
-  } catch { return {}; }
+    if (!fs.existsSync(RANKINGS_PATH)) { _cache = {}; return _cache; }
+    const parsed = JSON.parse(fs.readFileSync(RANKINGS_PATH, 'utf8'));
+    // Treat an empty object from the repo checkout as "not yet loaded"
+    // only if GitHub sync is configured (real data might arrive from initRankings)
+    _cache = parsed;
+    return _cache;
+  } catch { _cache = {}; return _cache; }
 }
 
 async function initRankings() {
-  if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  if (!GITHUB_TOKEN || !GITHUB_REPO) {
+    console.log('[Rankings] Sin config GitHub — usando archivo local');
+    loadRankings(); // populate cache from disk
+    return;
+  }
   try {
     const apiPath = `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+    console.log(`[Rankings] Cargando desde GitHub: ${GITHUB_REPO}/${GITHUB_FILE_PATH}`);
     const res = await _ghRequest('GET', apiPath, null);
-    if (res.status !== 200 || !res.body.content) return;
+    if (res.status === 404) {
+      console.log('[Rankings] Archivo no encontrado en GitHub — empezando vacío');
+      _cache = {};
+      return;
+    }
+    if (res.status !== 200 || !res.body.content) {
+      console.error('[Rankings] GitHub GET falló:', res.status, JSON.stringify(res.body).slice(0, 200));
+      loadRankings(); // fall back to disk
+      return;
+    }
     _sha = res.body.sha;
     const data = JSON.parse(Buffer.from(res.body.content, 'base64').toString('utf8'));
+    _cache = data;
     fs.writeFileSync(RANKINGS_PATH, JSON.stringify(data, null, 2), 'utf8');
-    console.log('[GitHub] Rankings cargados desde GitHub');
+    console.log(`[Rankings] ${Object.keys(data).length} jugadores cargados desde GitHub`);
   } catch (err) {
-    console.error('[GitHub] initRankings error:', err.message);
+    console.error('[Rankings] initRankings error:', err.message);
+    loadRankings(); // fall back to disk
   }
 }
 
 function saveRankings(data) {
+  _cache = data; // update cache synchronously — immediately visible to all calls
   try { fs.writeFileSync(RANKINGS_PATH, JSON.stringify(data, null, 2), 'utf8'); } catch {}
   _pushToGithub(data).catch(err => console.error('[GitHub] Push error:', err.message));
 }
@@ -74,6 +97,10 @@ async function _pushToGithub(data) {
   if (!_sha) {
     const get = await _ghRequest('GET', apiPath, null);
     if (get.status === 200) _sha = get.body.sha;
+    else if (get.status !== 404) {
+      console.error('[GitHub] GET sha falló:', get.status);
+      return;
+    }
   }
 
   const body = { message: 'chore: update rankings', content };
@@ -82,10 +109,27 @@ async function _pushToGithub(data) {
   const put = await _ghRequest('PUT', apiPath, body);
   if (put.status === 200 || put.status === 201) {
     _sha = put.body.content?.sha;
-    console.log('[GitHub] Rankings sincronizados');
+    console.log(`[GitHub] Rankings sincronizados (${Object.keys(data).length} jugadores)`);
+  } else if (put.status === 409) {
+    // SHA conflict — refetch and retry once
+    console.warn('[GitHub] Conflicto SHA, reintentando...');
+    _sha = null;
+    const get2 = await _ghRequest('GET', apiPath, null);
+    if (get2.status === 200) {
+      _sha = get2.body.sha;
+      const body2 = { message: 'chore: update rankings', content, sha: _sha };
+      const put2 = await _ghRequest('PUT', apiPath, body2);
+      if (put2.status === 200 || put2.status === 201) {
+        _sha = put2.body.content?.sha;
+        console.log('[GitHub] Rankings sincronizados (reintento OK)');
+      } else {
+        console.error('[GitHub] Push falló en reintento:', put2.status, JSON.stringify(put2.body).slice(0, 300));
+        _sha = null;
+      }
+    }
   } else {
-    console.error('[GitHub] Push falló:', put.status, JSON.stringify(put.body).slice(0, 200));
-    _sha = null; // forzar re-fetch SHA la próxima vez
+    console.error('[GitHub] Push falló:', put.status, JSON.stringify(put.body).slice(0, 300));
+    _sha = null;
   }
 }
 

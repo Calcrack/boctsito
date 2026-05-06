@@ -7,55 +7,73 @@ const RANKINGS_PATH = path.join(__dirname, 'rankings.json');
 const GITHUB_TOKEN     = process.env.GITHUB_TOKEN;
 const GITHUB_REPO      = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || 'server/rankings.json';
+const GITHUB_BRANCH    = process.env.GITHUB_BRANCH    || 'rankings-data';
 
 let _sha   = null;
-let _cache = null; // in-memory — survives within the process lifetime
+let _cache = null;
 
 function loadRankings() {
   if (_cache !== null) return _cache;
   try {
     if (!fs.existsSync(RANKINGS_PATH)) { _cache = {}; return _cache; }
-    const parsed = JSON.parse(fs.readFileSync(RANKINGS_PATH, 'utf8'));
-    // Treat an empty object from the repo checkout as "not yet loaded"
-    // only if GitHub sync is configured (real data might arrive from initRankings)
-    _cache = parsed;
+    _cache = JSON.parse(fs.readFileSync(RANKINGS_PATH, 'utf8'));
     return _cache;
   } catch { _cache = {}; return _cache; }
+}
+
+async function _ensureBranch() {
+  const check = await _ghRequest('GET', `/repos/${GITHUB_REPO}/git/refs/heads/${GITHUB_BRANCH}`, null);
+  if (check.status === 200) return true;
+  if (check.status !== 404) return false;
+  // Branch doesn't exist — create from main
+  const main = await _ghRequest('GET', `/repos/${GITHUB_REPO}/git/refs/heads/main`, null);
+  if (main.status !== 200) return false;
+  const create = await _ghRequest('POST', `/repos/${GITHUB_REPO}/git/refs`, {
+    ref: `refs/heads/${GITHUB_BRANCH}`,
+    sha: main.body.object.sha,
+  });
+  if (create.status === 201) {
+    console.log(`[Rankings] Branch '${GITHUB_BRANCH}' creado`);
+    return true;
+  }
+  console.error('[Rankings] No se pudo crear branch:', create.status);
+  return false;
 }
 
 async function initRankings() {
   if (!GITHUB_TOKEN || !GITHUB_REPO) {
     console.log('[Rankings] Sin config GitHub — usando archivo local');
-    loadRankings(); // populate cache from disk
+    loadRankings();
     return;
   }
   try {
-    const apiPath = `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
-    console.log(`[Rankings] Cargando desde GitHub: ${GITHUB_REPO}/${GITHUB_FILE_PATH}`);
+    await _ensureBranch();
+    const apiPath = `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
+    console.log(`[Rankings] Cargando desde GitHub (branch: ${GITHUB_BRANCH})`);
     const res = await _ghRequest('GET', apiPath, null);
     if (res.status === 404) {
-      console.log('[Rankings] Archivo no encontrado en GitHub — empezando vacío');
+      console.log('[Rankings] Archivo no encontrado — empezando vacío');
       _cache = {};
       return;
     }
     if (res.status !== 200 || !res.body.content) {
       console.error('[Rankings] GitHub GET falló:', res.status, JSON.stringify(res.body).slice(0, 200));
-      loadRankings(); // fall back to disk
+      loadRankings();
       return;
     }
     _sha = res.body.sha;
     const data = JSON.parse(Buffer.from(res.body.content, 'base64').toString('utf8'));
     _cache = data;
     fs.writeFileSync(RANKINGS_PATH, JSON.stringify(data, null, 2), 'utf8');
-    console.log(`[Rankings] ${Object.keys(data).length} jugadores cargados desde GitHub`);
+    console.log(`[Rankings] ${Object.keys(data).length} jugadores cargados`);
   } catch (err) {
     console.error('[Rankings] initRankings error:', err.message);
-    loadRankings(); // fall back to disk
+    loadRankings();
   }
 }
 
 function saveRankings(data) {
-  _cache = data; // update cache synchronously — immediately visible to all calls
+  _cache = data;
   try { fs.writeFileSync(RANKINGS_PATH, JSON.stringify(data, null, 2), 'utf8'); } catch {}
   _pushToGithub(data).catch(err => console.error('[GitHub] Push error:', err.message));
 }
@@ -95,7 +113,7 @@ async function _pushToGithub(data) {
   const content = Buffer.from(JSON.stringify(data, null, 2), 'utf8').toString('base64');
 
   if (!_sha) {
-    const get = await _ghRequest('GET', apiPath, null);
+    const get = await _ghRequest('GET', `${apiPath}?ref=${GITHUB_BRANCH}`, null);
     if (get.status === 200) _sha = get.body.sha;
     else if (get.status !== 404) {
       console.error('[GitHub] GET sha falló:', get.status);
@@ -103,7 +121,7 @@ async function _pushToGithub(data) {
     }
   }
 
-  const body = { message: 'chore: update rankings', content };
+  const body = { message: 'chore: update rankings', content, branch: GITHUB_BRANCH };
   if (_sha) body.sha = _sha;
 
   const put = await _ghRequest('PUT', apiPath, body);
@@ -111,13 +129,12 @@ async function _pushToGithub(data) {
     _sha = put.body.content?.sha;
     console.log(`[GitHub] Rankings sincronizados (${Object.keys(data).length} jugadores)`);
   } else if (put.status === 409) {
-    // SHA conflict — refetch and retry once
     console.warn('[GitHub] Conflicto SHA, reintentando...');
     _sha = null;
-    const get2 = await _ghRequest('GET', apiPath, null);
+    const get2 = await _ghRequest('GET', `${apiPath}?ref=${GITHUB_BRANCH}`, null);
     if (get2.status === 200) {
       _sha = get2.body.sha;
-      const body2 = { message: 'chore: update rankings', content, sha: _sha };
+      const body2 = { message: 'chore: update rankings', content, sha: _sha, branch: GITHUB_BRANCH };
       const put2 = await _ghRequest('PUT', apiPath, body2);
       if (put2.status === 200 || put2.status === 201) {
         _sha = put2.body.content?.sha;

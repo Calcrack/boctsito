@@ -341,12 +341,12 @@ export default function PlayerPanel() {
 
       {/* ── Stage ── */}
       <main className="stage" style={{ position: 'relative' }}>
-        {game.autoPhaseInfo && <PhaseCountdown key={game.autoPhaseInfo.endsAt} autoPhaseInfo={game.autoPhaseInfo} pendingNight={game.pendingNightAfterNomination} />}
         <GameTable isNarrator={false} />
       </main>
 
       {/* ── Right panel ── */}
       <aside className="right-panel" style={{ padding: '18px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {game.autoPhaseInfo && <PhaseCountdown key={game.autoPhaseInfo.endsAt} autoPhaseInfo={game.autoPhaseInfo} pendingNight={game.pendingNightAfterNomination} />}
 
         {/* Active voting */}
         {isVoting && activeNom && (
@@ -407,12 +407,10 @@ function PhaseCountdown({ autoPhaseInfo, pendingNight }) {
   const urgent = remaining < 60, isNom = autoPhaseInfo.phase === 'nominations';
   return (
     <div style={{
-      position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
       background: isNom ? 'rgba(168,58,45,0.18)' : 'rgba(201,162,74,0.12)',
       border: `1px solid ${urgent ? 'var(--blood-hi)' : isNom ? 'rgba(168,58,45,0.5)' : 'rgba(201,162,74,0.4)'}`,
       borderRadius: 8, padding: '10px 24px', textAlign: 'center',
-      backdropFilter: 'blur(6px)', boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
-      pointerEvents: 'none', whiteSpace: 'nowrap',
+      boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
     }}>
       <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: isNom ? 'var(--blood-hi)' : 'var(--gold)', margin: '0 0 3px' }}>
         {isNom ? '⚖️ Nominaciones' : '🚶 Tiempo libre'}

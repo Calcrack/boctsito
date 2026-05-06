@@ -169,7 +169,7 @@ function generateNightInfo(game) {
     });
     demons.forEach(d => {
       const minionNames = minions.map(x => `${x.name} (${ROLES[x.role]?.name})`);
-      const rolesPool = (game.narratorRolesForImp?.length > 0) ? game.narratorRolesForImp : (game.rolesNotInPlay || []);
+      const rolesPool = ((game.narratorRolesForImp?.length > 0) ? game.narratorRolesForImp : (game.rolesNotInPlay || [])).filter(id => id !== 'DRUNK');
       const notInPlay3  = shuffle(rolesPool).slice(0, 3).map(id => ROLES[id]?.name || id);
       d.nightInfo = [
         `👹 Eres el Demonio (${ROLES[d.role]?.name}).`,
@@ -657,6 +657,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
           if (isRealRaven || isDrunkRaven) {
             redirectTarget.pendingRavenkeeper = true;
             redirectTarget.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
+            game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== redirectTarget.id);
           }
           checkScarletWoman(game, actor);
         }
@@ -669,6 +670,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         if (isRealRaven || isDrunkRaven) {
           target.pendingRavenkeeper = true;
           target.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
+          game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== target.id);
         }
         checkScarletWoman(game, actor);
       }

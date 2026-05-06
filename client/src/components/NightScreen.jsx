@@ -166,6 +166,9 @@ export default function NightScreen({ player }) {
   const iNightReady = game?.iNightReady;
 
   useEffect(() => { if (iNightReady && !submitted) setSubmitted(true); }, [iNightReady]);
+  useEffect(() => {
+    if (player.pendingRavenkeeper) { setSubmitted(false); setActionSent(false); }
+  }, [player.pendingRavenkeeper]);
 
   const isPassiveRole = PASSIVE_INFO_ROLES.has(player.role) ||
     (player.role === 'DRUNK' && PASSIVE_INFO_ROLES.has(displayRoleId));

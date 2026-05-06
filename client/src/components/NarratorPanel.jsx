@@ -1023,7 +1023,8 @@ function RankingsManager({ rankings, send }) {
             <div style={{ flex: 1 }} />
             <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--good)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>ALDEA</span>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--blood-hi)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>DEMO</span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>TOTAL</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-200)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>TOTAL</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', minWidth: 44, textAlign: 'center', letterSpacing: '0.05em' }}>JUGADAS</span>
             <div style={{ width: 56 }} />
           </div>
           {rows.map(([key, r]) => (
@@ -1053,6 +1054,9 @@ function RankingsManager({ rankings, send }) {
                 <>
                   {numInput('wins_as_good', 'var(--good)')}
                   {numInput('wins_as_demon', 'var(--blood-hi)')}
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-200)', minWidth: 44, textAlign: 'center' }}>
+                    {(parseInt(editVals.wins_as_good) || 0) + (parseInt(editVals.wins_as_demon) || 0)}
+                  </span>
                   {numInput('total_games', 'var(--bone-300)')}
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button onClick={saveEdit}
@@ -1069,6 +1073,7 @@ function RankingsManager({ rankings, send }) {
                 <>
                   <span title="Victorias aldeano" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--good)', minWidth: 44, textAlign: 'center' }}>{r.wins_as_good || 0}</span>
                   <span title="Victorias demonio" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--blood-hi)', minWidth: 44, textAlign: 'center' }}>{r.wins_as_demon || 0}</span>
+                  <span title="Total victorias" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-200)', minWidth: 44, textAlign: 'center' }}>{(r.wins_as_good || 0) + (r.wins_as_demon || 0)}</span>
                   <span title="Partidas jugadas" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-400)', minWidth: 44, textAlign: 'center' }}>{r.total_games || 0}</span>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button onClick={() => startEdit(key, r)}

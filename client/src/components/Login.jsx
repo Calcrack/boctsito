@@ -60,8 +60,12 @@ function RankingsPanel({ onBack }) {
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Demonio</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--bone-400)' }}>{r.total_games || 0}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--bone-200)' }}>{(r.wins_as_good || 0) + (r.wins_as_demon || 0)}</div>
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Total</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--bone-400)' }}>{r.total_games || 0}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Jugadas</div>
                 </div>
               </div>
             </div>

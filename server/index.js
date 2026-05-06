@@ -575,6 +575,10 @@ function handleMessage(type, payload, session) {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
       killPlayer(game, payload.playerId, payload.reason || 'manual');
+      if (game.phase === 'game_over' && game.winner) {
+        recordGameWin(game, game.winner);
+        broadcastToAll('GAME_OVER', { winner: game.winner });
+      }
       broadcastGame();
       break;
     }

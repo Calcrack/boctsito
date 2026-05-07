@@ -448,6 +448,10 @@ function generateDrunkInteractiveInfo(player, action, targetIds, game) {
       return targets[0] ? `🛡️ Monje\nProtegiste a ${targets[0].name} esta noche.` : null;
     case 'BUTLER_MASTER':
       return targets[0] ? `🤵 Mayordomo\nTu Amo esta noche es ${targets[0].name}.` : null;
+    case 'POISONER_ACTION':
+      return targets[0] ? `🧪 Envenenador\nEnvenenaste a ${targets[0].name} esta noche.` : null;
+    case 'IMP_KILL':
+      return targets[0] ? `👹 Diablillo\nAtacaste a ${targets[0].name} esta noche.` : null;
     default:
       return null;
   }
@@ -911,7 +915,6 @@ function startDay(game) {
   game.pendingNightAfterNomination = false;
   game.autoVotes = { skipDay: [], skipNom: [], extend: [] };
   game.players.forEach(p => { p.discordChannel = null; });
-  game.players.filter(p => p.role === 'SLAYER' && p.alive).forEach(p => { p.slayerUsed = false; });
   checkWinCondition(game);
   return game;
 }

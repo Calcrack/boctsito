@@ -127,13 +127,16 @@ async function moveUserToChannel(discordUserId, channelKey, channelLimits = {}) 
 }
 
 
+const BOCT_ROLE_ID = '1499987378755076218';
+
 async function setPlazaChannelPermission(allow) {
   if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
   try {
     const channel = guild.channels.cache.get(CHANNELS.PLAZA);
     if (!channel) return { ok: false, error: 'Canal PLAZA no encontrado' };
-    const everyoneRole = guild.roles.everyone;
-    await channel.permissionOverwrites.edit(everyoneRole, {
+    const boctRole = guild.roles.cache.get(BOCT_ROLE_ID) || await guild.roles.fetch(BOCT_ROLE_ID);
+    if (!boctRole) return { ok: false, error: 'Rol BOCT no encontrado' };
+    await channel.permissionOverwrites.edit(boctRole, {
       [PermissionFlagsBits.Speak]: allow ? null : false,
     });
     return { ok: true };

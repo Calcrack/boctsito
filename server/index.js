@@ -14,7 +14,7 @@ const {
 } = require('./gameLogic');
 const { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType } = require('./roles');
-const { loadRankings, initRankings, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
+const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 
 const SAVE_PATH = path.join(__dirname, 'game-save.json');
 
@@ -311,7 +311,9 @@ function handleMessage(type, payload, session) {
         broadcastToAll('GAME_OVER', { winner: 'good' });
         break;
       }
+      const isFirstNight = game.nightNumber === 0;
       startNight(game);
+      if (isFirstNight) recordGameStart(game);
       setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
       broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });
@@ -328,6 +330,7 @@ function handleMessage(type, payload, session) {
       distributeRoles(game, roles);
       game.autoMode = true;
       startNight(game);
+      recordGameStart(game);
       setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
       broadcastToAll('NOTIFICATION', { message: '🤖 Modo automático activado — Primera Noche comenzando...', type: 'night' });

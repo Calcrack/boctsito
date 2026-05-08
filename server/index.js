@@ -534,7 +534,7 @@ function handleMessage(type, payload, session) {
       if (result.poisoned) {
         broadcastToAll('BROADCAST_EVENT', {
           title: '🏹 Cazador disparó',
-          message: `${slayer?.name} disparó a ${targetName}... pero estaba envenenado/a. Sin efecto.`,
+          message: `${slayer?.name} disparó a ${targetName}... No hubo efecto.`,
           type: 'warning',
         });
       } else if (result.hit) {

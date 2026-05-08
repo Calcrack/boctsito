@@ -136,9 +136,13 @@ async function setPlazaChannelPermission(allow) {
     if (!channel) return { ok: false, error: 'Canal PLAZA no encontrado' };
     const boctRole = guild.roles.cache.get(BOCT_ROLE_ID) || await guild.roles.fetch(BOCT_ROLE_ID);
     if (!boctRole) return { ok: false, error: 'Rol BOCT no encontrado' };
-    await channel.permissionOverwrites.edit(boctRole, {
-      [PermissionFlagsBits.Speak]: allow ? null : false,
-    });
+    if (allow) {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, { [PermissionFlagsBits.Speak]: null });
+      await channel.permissionOverwrites.edit(boctRole, { [PermissionFlagsBits.Speak]: null });
+    } else {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, { [PermissionFlagsBits.Speak]: false });
+      await channel.permissionOverwrites.edit(boctRole, { [PermissionFlagsBits.Speak]: true });
+    }
     return { ok: true };
   } catch (err) {
     console.error('[Discord] setPlazaChannelPermission error:', err.message);

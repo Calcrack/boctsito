@@ -177,7 +177,7 @@ function recordGameWin(game, winner) {
     if (p.discordId) data[key].discordId = p.discordId;
     const isWinner = (winner === 'good' && p.alignment === 'good') || (winner === 'evil' && p.alignment === 'evil');
     if (isWinner) {
-      if (p.type === 'demon') data[key].wins_as_demon++;
+      if (winner === 'evil') data[key].wins_as_demon++;
       else data[key].wins_as_good++;
     }
   });

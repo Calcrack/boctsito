@@ -30,13 +30,5 @@
     "wins_as_good": 3,
     "wins_as_demon": 1,
     "total_games": 7
-  },
-  "668502963962118175": {
-    "discordId": "668502963962118175",
-    "name": "Aivan",
-    "avatar": "https://cdn.discordapp.com/avatars/668502963962118175/8d796061b77b943e61dbee5d7401380f.webp?size=64",
-    "wins_as_good": 2,
-    "wins_as_demon": 1,
-    "total_games": 8
   }
 }

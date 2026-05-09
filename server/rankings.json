@@ -5,7 +5,7 @@
     "avatar": "https://cdn.discordapp.com/avatars/723204863873384469/ed4609b7ffd0a96c5a9b75776bf347b2.webp?size=64",
     "wins_as_good": 4,
     "wins_as_demon": 0,
-    "total_games": 7
+    "total_games": 8
   },
   "1065312881995956226": {
     "discordId": "1065312881995956226",
@@ -37,7 +37,7 @@
     "avatar": "https://cdn.discordapp.com/avatars/668502963962118175/8d796061b77b943e61dbee5d7401380f.webp?size=64",
     "wins_as_good": 2,
     "wins_as_demon": 1,
-    "total_games": 7
+    "total_games": 8
   },
   "1001956199400488970": {
     "discordId": "1001956199400488970",
@@ -49,11 +49,11 @@
   },
   "997676545298673674": {
     "discordId": "997676545298673674",
-    "name": "Storm",
+    "name": "Mauro",
     "avatar": "https://cdn.discordapp.com/avatars/997676545298673674/cdf8a11e4bd1eef7af712fc4b2eeab9b.webp?size=64",
     "wins_as_good": 1,
     "wins_as_demon": 0,
-    "total_games": 4
+    "total_games": 5
   },
   "1017544117544296618": {
     "discordId": "1017544117544296618",
@@ -70,5 +70,29 @@
     "wins_as_good": 2,
     "wins_as_demon": 0,
     "total_games": 3
+  },
+  "1471847800038752380": {
+    "discordId": "1471847800038752380",
+    "name": "Astor",
+    "avatar": "https://cdn.discordapp.com/avatars/1471847800038752380/9116783cf62a01e7e1359088ace3817a.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "1154541227509821561": {
+    "discordId": "1154541227509821561",
+    "name": "FERD",
+    "avatar": "https://cdn.discordapp.com/avatars/1154541227509821561/980b105b5bffdb166c6058ae4b0bb02d.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "1115070408811610134": {
+    "discordId": "1115070408811610134",
+    "name": "Jabe",
+    "avatar": "https://cdn.discordapp.com/avatars/1115070408811610134/0190f44648789e36ea825436d8e038e5.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
   }
 }

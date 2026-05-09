@@ -637,14 +637,24 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
 
     case 'IMP_KILL': {
+      // FIX: Si el demonio está envenenado, no puede matar
+      if (actor?.poisoned) {
+        break;
+      }
+      
       const target = targets[0];
       if (!target) break;
       if (target.id === actorId) {
-        target.alive = false;
-        game.nightDeaths.push(target.id);
-        const minion = game.players.find(p => p.type === 'minion' && p.alive);
-        if (minion) {
-          minion.role = 'IMP'; minion.type = 'demon';
+        // FIX: Si el demonio está protegido, no puede matarse a sí mismo
+        if (target.protected) {
+          // blocked
+        } else {
+          target.alive = false;
+          game.nightDeaths.push(target.id);
+          const minion = game.players.find(p => p.type === 'minion' && p.alive);
+          if (minion) {
+            minion.role = 'IMP'; minion.type = 'demon';
+          }
         }
       } else if (target.role === 'SOLDIER' && !target.poisoned) {
         // blocked
@@ -793,8 +803,7 @@ function vote(game, voterId, nominationId, inFavor) {
 
   if (!voter.alive) {
     if (!inFavor) throw new Error('Los jugadores muertos solo pueden votar a favor (matar)');
-    // FIX: Solo pueden votar si no han usado su voto único ya
-    if (voter.deadVoteNominationId) {
+    if (voter.deadVoteNominationId && voter.deadVoteNominationId !== nominationId) {
       throw new Error('Los jugadores muertos solo pueden votar una vez en toda la partida');
     }
     voter.deadVoteNominationId = nominationId;
@@ -1070,7 +1079,7 @@ function getPublicState(game, viewerId, isNarrator) {
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);
-      const eligibleDead = players.filter(p => !p.alive && !p.deadVoteNominationId);
+      const eligibleDead = players.filter(p => !p.alive && p.deadVoteNominationId === null);
       const eligible = [...living, ...eligibleDead];
       const votedOrDeclined = new Set([...n.votes, ...n.against, ...(n.ghostDeclines || [])]);
       const pendingVoterNames = eligible

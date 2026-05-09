@@ -1,1 +1,42 @@
-{}
+{
+  "1115070408811610134": {
+    "discordId": "1115070408811610134",
+    "name": "Jabe",
+    "avatar": "https://cdn.discordapp.com/avatars/1115070408811610134/0190f44648789e36ea825436d8e038e5.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "1000976704757575701": {
+    "discordId": "1000976704757575701",
+    "name": "Lele",
+    "avatar": "https://cdn.discordapp.com/avatars/1000976704757575701/64ebb2ddea1eb3e566a4d1a2566fa07b.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "723204863873384469": {
+    "discordId": "723204863873384469",
+    "name": "Cal",
+    "avatar": "https://cdn.discordapp.com/avatars/723204863873384469/ed4609b7ffd0a96c5a9b75776bf347b2.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "668502963962118175": {
+    "discordId": "668502963962118175",
+    "name": "Aivan",
+    "avatar": "https://cdn.discordapp.com/avatars/668502963962118175/8d796061b77b943e61dbee5d7401380f.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "707784492395528204": {
+    "discordId": "707784492395528204",
+    "name": "Yoshi",
+    "avatar": "https://cdn.discordapp.com/avatars/707784492395528204/5eb1ed1fc6fcb5aee72cd66d9ec5ca6b.webp?size=64",
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  }
+}

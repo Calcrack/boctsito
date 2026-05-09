@@ -70,13 +70,5 @@
     "wins_as_good": 2,
     "wins_as_demon": 0,
     "total_games": 3
-  },
-  "1471847800038752380": {
-    "discordId": "1471847800038752380",
-    "name": "Astor",
-    "avatar": "https://cdn.discordapp.com/avatars/1471847800038752380/9116783cf62a01e7e1359088ace3817a.webp?size=64",
-    "wins_as_good": 0,
-    "wins_as_demon": 0,
-    "total_games": 1
   }
 }

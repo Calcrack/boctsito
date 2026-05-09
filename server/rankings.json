@@ -14,21 +14,5 @@
     "wins_as_good": 2,
     "wins_as_demon": 2,
     "total_games": 6
-  },
-  "1211433996148547644": {
-    "discordId": "1211433996148547644",
-    "name": "Kade",
-    "avatar": "https://cdn.discordapp.com/avatars/1211433996148547644/7bf971e129d704c62af4bf8ff85a0ea3.webp?size=64",
-    "wins_as_good": 2,
-    "wins_as_demon": 1,
-    "total_games": 3
-  },
-  "1000976704757575701": {
-    "discordId": "1000976704757575701",
-    "name": "lele<3",
-    "avatar": "https://cdn.discordapp.com/avatars/1000976704757575701/64ebb2ddea1eb3e566a4d1a2566fa07b.webp?size=64",
-    "wins_as_good": 3,
-    "wins_as_demon": 1,
-    "total_games": 7
   }
 }

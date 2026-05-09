@@ -793,7 +793,8 @@ function vote(game, voterId, nominationId, inFavor) {
 
   if (!voter.alive) {
     if (!inFavor) throw new Error('Los jugadores muertos solo pueden votar a favor (matar)');
-    if (voter.deadVoteNominationId && voter.deadVoteNominationId !== nominationId) {
+    // FIX: Solo pueden votar si no han usado su voto único ya
+    if (voter.deadVoteNominationId) {
       throw new Error('Los jugadores muertos solo pueden votar una vez en toda la partida');
     }
     voter.deadVoteNominationId = nominationId;
@@ -1069,7 +1070,7 @@ function getPublicState(game, viewerId, isNarrator) {
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);
-      const eligibleDead = players.filter(p => !p.alive && p.deadVoteNominationId === null);
+      const eligibleDead = players.filter(p => !p.alive && !p.deadVoteNominationId);
       const eligible = [...living, ...eligibleDead];
       const votedOrDeclined = new Set([...n.votes, ...n.against, ...(n.ghostDeclines || [])]);
       const pendingVoterNames = eligible

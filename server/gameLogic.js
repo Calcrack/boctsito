@@ -28,8 +28,7 @@ function createGame(narratorId, gameId) {
     nightSubmissions: {},
     nightWaitingForRavenkeeper: false,
     recluseRegistersAs: null,
-    recluseDetectedByLibrarian: false,
-    recluseDetectedByInvestigator: false,
+    empathDetectedRecluseFirstNight: false,
     recluseDetectedByFortuneTeller: false,
     spyRegistersAs: null,
     mayorKillTarget: null,
@@ -251,12 +250,60 @@ function generatePassiveNightInfo(game) {
     });
   }
 
-  // La Empática da info cada noche (no solo la primera), contando vecinos VIVOS malvados
+  // La Empática da info cada noche, contando vecinos VIVOS malvados
+  // PERO: si el Recluso es vecino, primera noche SIEMPRE malo, luego ALEATORIO cada noche
   players.filter(p => p.role === 'EMPATH' && p.alive).forEach(p => {
-    const real = countEvilNeighbors(p, players, game);
+    const allPlayers = game.players;
+    const empathIdx = allPlayers.findIndex(x => x.id === p.id);
+    const recluse = allPlayers.find(x => x.role === 'RECLUSE');
+    
+    let recluseIsEvilThisNight = null;
+    if (recluse && recluse.alive) {
+      const recluseIdx = allPlayers.findIndex(x => x.id === recluse.id);
+      const isNeighbor = (empathIdx !== -1 && recluseIdx !== -1) &&
+        ((empathIdx - recluseIdx + allPlayers.length) % allPlayers.length === 1 ||
+         (recluseIdx - empathIdx + allPlayers.length) % allPlayers.length === 1);
+      
+      if (isNeighbor) {
+        // Primera noche: siempre malo. Luego: aleatorio
+        if (isFirstNight && !game.empathDetectedRecluseFirstNight) {
+          recluseIsEvilThisNight = true;
+          game.empathDetectedRecluseFirstNight = true;
+        } else {
+          recluseIsEvilThisNight = Math.random() < 0.5;
+        }
+      }
+    }
+
+    // Contar vecinos malvados con override para el Recluso si aplica
+    const idx = allPlayers.findIndex(p => p.id === p.id);
+    const livingPlayers = allPlayers.filter(pl => pl.alive);
+    const livingIdx = livingPlayers.findIndex(pl => pl.id === p.id);
+    
+    if (livingIdx === -1 || livingPlayers.length <= 1) {
+      p.nightInfo = p.poisoned
+        ? `💞 Empático\nTienes ${falsifyCount(0, 0, 2)} vecino(s) malvado(s) vivos.`
+        : `💞 Empático\nTienes 0 vecino(s) malvado(s) vivos.`;
+      return;
+    }
+
+    const left = livingPlayers[(livingIdx - 1 + livingPlayers.length) % livingPlayers.length];
+    const right = livingPlayers[(livingIdx + 1) % livingPlayers.length];
+
+    let evilCount = 0;
+    [left, right].forEach(neighbor => {
+      if (neighbor && neighbor.id !== p.id) {
+        if (neighbor.role === 'RECLUSE' && recluseIsEvilThisNight !== null) {
+          if (recluseIsEvilThisNight) evilCount++;
+        } else if (isEvilNeighbor(neighbor, game)) {
+          evilCount++;
+        }
+      }
+    });
+
     p.nightInfo = p.poisoned
-      ? `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`
-      : `💞 Empático\nTienes ${real} vecino(s) malvado(s) vivos.`;
+      ? `💞 Empático\nTienes ${falsifyCount(evilCount, 0, 2)} vecino(s) malvado(s) vivos.`
+      : `💞 Empático\nTienes ${evilCount} vecino(s) malvado(s) vivos.`;
   });
 
   if (game.executedToday) {
@@ -323,28 +370,8 @@ function generateSingleRoleInfo(game, playerId) {
     }
     case 'LIBRARIAN': {
       if (!isFirstNight) return;
-      // El Recluso puede registrar como Forastero (malo): primera vez siempre, luego aleatorio
-      const reclusePlayer = living.find(x => x.role === 'RECLUSE' && x.id !== player.id);
-      const recluseFirstDetection = reclusePlayer && !game.recluseDetectedByLibrarian;
-      const recluseCountsAsOutsider = reclusePlayer && (recluseFirstDetection || Math.random() < 0.5);
-
-      let outsiderPool = living.filter(x => x.type === 'outsider' && x.id !== player.id);
-      if (recluseCountsAsOutsider && reclusePlayer && !outsiderPool.find(x => x.id === reclusePlayer.id)) {
-        outsiderPool = [...outsiderPool, reclusePlayer];
-      }
-
-      const target = rand(outsiderPool);
+      const target = rand(living.filter(x => x.type === 'outsider' && x.id !== player.id));
       if (!target) { player.nightInfo = '📚 Bibliotecario\nNo hay Forasteros en la partida.'; return; }
-
-      // Si el target es el Recluso, mostrarlo como Esbirro (rol malo de Forastero)
-      let displayRole = target.role;
-      if (target.role === 'RECLUSE') {
-        const fakeEvilOutsider = ['RECLUSE']; // Recluso se muestra como sí mismo (es outsider)
-        displayRole = 'RECLUSE';
-        // Marcar que el Bibliotecario ya detectó al Recluso
-        game.recluseDetectedByLibrarian = true;
-      }
-
       const decoy = rand(living.filter(x => x.id !== target.id && x.id !== player.id));
       const pair = shuffle([target, decoy]);
       if (player.poisoned) {
@@ -352,27 +379,23 @@ function generateSingleRoleInfo(game, playerId) {
         const [a, b] = shuffle([...living.filter(x => x.id !== player.id)]).slice(0, 2);
         if (a && b) player.nightInfo = `📚 Bibliotecario\nEntre ${a.name} y ${b.name} hay un/una ${ROLES[rand(fakeOuts.filter(r => r !== ROLES[a.role]?.id))]?.name}.`;
       } else {
-        player.nightInfo = `📚 Bibliotecario\nEntre ${pair[0].name} y ${pair[1].name} hay un/una ${ROLES[displayRole]?.name}.`;
+        player.nightInfo = `📚 Bibliotecario\nEntre ${pair[0].name} y ${pair[1].name} hay un/una ${ROLES[target.role]?.name}.`;
       }
       break;
     }
     case 'INVESTIGATOR': {
       if (!isFirstNight) return;
       const fakeMins = ['POISONER','SPY','SCARLET_WOMAN','BARON'];
-      // Recluso: primera detección siempre como Esbirro, luego aleatoria
+      
+      // Recluso: SIEMPRE lo detecta como Esbirro la primera noche (sin excepciones)
       const reclusePlayer = living.find(x => x.role === 'RECLUSE' && x.id !== player.id);
-      const recluseFirstDetection = reclusePlayer && !game.recluseDetectedByInvestigator;
-      const recluseCountsAsMinion = reclusePlayer && (recluseFirstDetection || Math.random() < 0.5);
-
       let minionPool = living.filter(x => x.type === 'minion' && x.id !== player.id);
-      if (recluseCountsAsMinion && reclusePlayer && !minionPool.find(x => x.id === reclusePlayer.id)) {
+      if (reclusePlayer && !minionPool.find(x => x.id === reclusePlayer.id)) {
         minionPool = [...minionPool, reclusePlayer];
       }
 
       const target = rand(minionPool);
       if (!target) { player.nightInfo = '🔍 Investigador\nNo hay Esbirros vivos en la partida.'; return; }
-
-      if (target.role === 'RECLUSE') game.recluseDetectedByInvestigator = true;
 
       const decoy = rand(living.filter(x => x.id !== target.id && x.id !== player.id));
       const pair = shuffle([target, decoy]);

@@ -5,7 +5,7 @@
     "avatar": null,
     "wins_as_good": 0,
     "wins_as_demon": 0,
-    "total_games": 1
+    "total_games": 2
   },
   "2": {
     "discordId": null,
@@ -13,7 +13,7 @@
     "avatar": null,
     "wins_as_good": 0,
     "wins_as_demon": 0,
-    "total_games": 1
+    "total_games": 2
   },
   "3": {
     "discordId": null,
@@ -21,7 +21,7 @@
     "avatar": null,
     "wins_as_good": 0,
     "wins_as_demon": 0,
-    "total_games": 1
+    "total_games": 2
   },
   "4": {
     "discordId": null,
@@ -29,7 +29,7 @@
     "avatar": null,
     "wins_as_good": 0,
     "wins_as_demon": 0,
-    "total_games": 1
+    "total_games": 2
   },
   "5": {
     "discordId": null,
@@ -37,11 +37,35 @@
     "avatar": null,
     "wins_as_good": 0,
     "wins_as_demon": 0,
-    "total_games": 1
+    "total_games": 2
   },
   "6": {
     "discordId": null,
     "name": "6",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 2
+  },
+  "7": {
+    "discordId": null,
+    "name": "7",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "8": {
+    "discordId": null,
+    "name": "8",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "9": {
+    "discordId": null,
+    "name": "9",
     "avatar": null,
     "wins_as_good": 0,
     "wins_as_demon": 0,

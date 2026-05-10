@@ -1,4 +1,52 @@
 {
+  "1": {
+    "discordId": null,
+    "name": "1",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "2": {
+    "discordId": null,
+    "name": "2",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "3": {
+    "discordId": null,
+    "name": "3",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "4": {
+    "discordId": null,
+    "name": "4",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "5": {
+    "discordId": null,
+    "name": "5",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
+  "6": {
+    "discordId": null,
+    "name": "6",
+    "avatar": null,
+    "wins_as_good": 0,
+    "wins_as_demon": 0,
+    "total_games": 1
+  },
   "1115070408811610134": {
     "discordId": "1115070408811610134",
     "name": "Jabe",

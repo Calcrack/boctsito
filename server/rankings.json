@@ -76,7 +76,7 @@
     "name": "Jabe",
     "avatar": "https://cdn.discordapp.com/avatars/1115070408811610134/0190f44648789e36ea825436d8e038e5.webp?size=64",
     "wins_as_good": 1,
-    "wins_as_demon": 0,
+    "wins_as_demon": 1,
     "total_games": 7
   },
   "1000976704757575701": {
@@ -92,7 +92,7 @@
     "name": "Calz",
     "avatar": "https://cdn.discordapp.com/avatars/723204863873384469/6a54e7541e561172d24df580ef9f81bb.webp?size=64",
     "wins_as_good": 2,
-    "wins_as_demon": 2,
+    "wins_as_demon": 3,
     "total_games": 7
   },
   "668502963962118175": {

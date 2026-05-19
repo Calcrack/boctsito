@@ -28,8 +28,6 @@ function createGame(narratorId, gameId) {
     nightSubmissions: {},
     nightWaitingForRavenkeeper: false,
     recluseRegistersAs: null,
-    empathDetectedRecluseFirstNight: false,
-    recluseDetectedByFortuneTeller: false,
     spyRegistersAs: null,
     mayorKillTarget: null,
     createdAt: Date.now(),
@@ -250,61 +248,14 @@ function generatePassiveNightInfo(game) {
     });
   }
 
-  // La Empática da info cada noche, contando vecinos VIVOS malvados
-  // PERO: si el Recluso es vecino, primera noche SIEMPRE malo, luego ALEATORIO cada noche
-  players.filter(p => p.role === 'EMPATH' && p.alive).forEach(p => {
-    const allPlayers = game.players;
-    const empathIdx = allPlayers.findIndex(x => x.id === p.id);
-    const recluse = allPlayers.find(x => x.role === 'RECLUSE');
-    
-    let recluseIsEvilThisNight = null;
-    if (recluse && recluse.alive) {
-      const recluseIdx = allPlayers.findIndex(x => x.id === recluse.id);
-      const isNeighbor = (empathIdx !== -1 && recluseIdx !== -1) &&
-        ((empathIdx - recluseIdx + allPlayers.length) % allPlayers.length === 1 ||
-         (recluseIdx - empathIdx + allPlayers.length) % allPlayers.length === 1);
-      
-      if (isNeighbor) {
-        // Primera noche: siempre malo. Luego: aleatorio
-        if (isFirstNight && !game.empathDetectedRecluseFirstNight) {
-          recluseIsEvilThisNight = true;
-          game.empathDetectedRecluseFirstNight = true;
-        } else {
-          recluseIsEvilThisNight = Math.random() < 0.5;
-        }
-      }
-    }
-
-    // Contar vecinos malvados con override para el Recluso si aplica
-    const idx = allPlayers.findIndex(p => p.id === p.id);
-    const livingPlayers = allPlayers.filter(pl => pl.alive);
-    const livingIdx = livingPlayers.findIndex(pl => pl.id === p.id);
-    
-    if (livingIdx === -1 || livingPlayers.length <= 1) {
+  if (isFirstNight) {
+    players.filter(p => p.role === 'EMPATH' && p.alive).forEach(p => {
+      const real = countEvilNeighbors(p, players);
       p.nightInfo = p.poisoned
-        ? `💞 Empático\nTienes ${falsifyCount(0, 0, 2)} vecino(s) malvado(s) vivos.`
-        : `💞 Empático\nTienes 0 vecino(s) malvado(s) vivos.`;
-      return;
-    }
-
-    const left = livingPlayers[(livingIdx - 1 + livingPlayers.length) % livingPlayers.length];
-    const right = livingPlayers[(livingIdx + 1) % livingPlayers.length];
-
-    let evilCount = 0;
-    [left, right].forEach(neighbor => {
-      if (neighbor && neighbor.id !== p.id) {
-        if (neighbor.role === 'RECLUSE' && recluseIsEvilThisNight !== null) {
-          if (recluseIsEvilThisNight) evilCount++;
-        } else if (isEvilNeighbor(neighbor, game)) {
-          evilCount++;
-        }
-      }
+        ? `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`
+        : `💞 Empático\nTienes ${real} vecino(s) malvado(s) vivos.`;
     });
-
-    p.nightInfo = p.poisoned
-      ? `💞 Empático\nTienes ${falsifyCount(evilCount, 0, 2)} vecino(s) malvado(s) vivos.`
-      : `💞 Empático\nTienes ${evilCount} vecino(s) malvado(s) vivos.`;
-  });
+  }
 
   if (game.executedToday) {
     players.filter(p => p.role === 'UNDERTAKER' && p.alive).forEach(p => {
@@ -385,23 +336,36 @@ function generateSingleRoleInfo(game, playerId) {
     }
     case 'INVESTIGATOR': {
       if (!isFirstNight) return;
-      const fakeMins = ['POISONER','SPY','SCARLET_WOMAN','BARON'];
       
-      // Recluso: SIEMPRE lo detecta como Esbirro la primera noche (sin excepciones)
-      const reclusePlayer = living.find(x => x.role === 'RECLUSE' && x.id !== player.id);
+      // FIX: Incluir esbirros reales en la lista de roles fake
+      const realMinions = living.filter(x => x.type === 'minion' && x.id !== player.id);
+      const realMinionRoles = [...new Set(realMinions.map(m => m.role))];
+      let fakeMins = ['POISONER','SPY','SCARLET_WOMAN','BARON'];
+      
+      // Si hay esbirros reales, asegurar que estén en la lista
+      realMinionRoles.forEach(role => {
+        if (!fakeMins.includes(role)) fakeMins.push(role);
+      });
+      
       let minionPool = living.filter(x => x.type === 'minion' && x.id !== player.id);
-      if (reclusePlayer && !minionPool.find(x => x.id === reclusePlayer.id)) {
-        minionPool = [...minionPool, reclusePlayer];
-      }
-
+      const recluseInPool = living.find(x => x.role === 'RECLUSE' && x.id !== player.id);
+      if (recluseInPool && game.recluseRegistersAs === 'minion') minionPool = [...minionPool, recluseInPool];
       const target = rand(minionPool);
       if (!target) { player.nightInfo = '🔍 Investigador\nNo hay Esbirros vivos en la partida.'; return; }
-
       const decoy = rand(living.filter(x => x.id !== target.id && x.id !== player.id));
       const pair = shuffle([target, decoy]);
+      
       if (player.poisoned) {
-        const [a, b] = shuffle([...living.filter(x => x.id !== player.id)]).slice(0, 2);
-        if (a && b) player.nightInfo = `🔍 Investigador\nEntre ${a.name} y ${b.name} hay un/una ${ROLES[rand(fakeMins)]?.name}.`;
+        // FIX: Cuando está envenenado, elegir un esbirro real (si existe) o jugador random
+        const allMinions = living.filter(x => x.type === 'minion' && x.id !== player.id);
+        const fakeTarget = allMinions.length > 0 ? rand(allMinions) : rand(living.filter(x => x.id !== player.id));
+        const fakeDecoy = rand(living.filter(x => x.id !== player.id && x.id !== fakeTarget.id));
+        const fakePair = shuffle([fakeTarget, fakeDecoy]);
+        
+        if (fakePair[0] && fakePair[1]) {
+          const fakeRole = rand(fakeMins);
+          player.nightInfo = `🔍 Investigador\nEntre ${fakePair[0].name} y ${fakePair[1].name} hay un/una ${ROLES[fakeRole]?.name}.`;
+        }
       } else {
         const displayRole = (target.role === 'RECLUSE') ? rand(fakeMins) : target.role;
         player.nightInfo = `🔍 Investigador\nEntre ${pair[0].name} y ${pair[1].name} hay un/una ${ROLES[displayRole]?.name}.`;
@@ -566,7 +530,6 @@ function generateDrunkInfo(p, living, rand, game) {
 
   switch (p.drunkAs) {
     case 'EMPATH': {
-      // El borracho siempre recibe info falsa: cuenta real pero aleatoriamente falseada
       const real = countEvilNeighbors(p, game.players, game);
       return `💞 Empático\nTienes ${falsifyCount(real, 0, 2)} vecino(s) malvado(s) vivos.`;
     }
@@ -652,7 +615,7 @@ function isEvilForInfo(p, game) {
 
 function isEvilNeighbor(p, game = null) {
   if (p.role === 'SPY') return false;    // Espía siempre registra como bueno
-  // Recluso: usa el valor pre-calculado para esta noche
+  // FIX: Recluso registra como malo aleatoriamente (50% de probabilidad)
   if (p.role === 'RECLUSE') {
     return game?.recluseRegistersAsEvil ?? Math.random() < 0.5;
   }
@@ -790,13 +753,8 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       if (actor.poisoned) {
         actor.nightInfo = `🔮 Adivina\nEntre ${targets.map(t=>t.name).join(' y ')}: ${Math.random() > 0.5 ? '✅ SÍ hay Demonio' : '❌ NO hay Demonio'}.`;
       } else {
-        const recluseTarget = targets.find(t => t.role === 'RECLUSE');
-        const recluseFirstDetection = recluseTarget && !game.recluseDetectedByFortuneTeller;
-        const recluseCountsAsDemon = recluseTarget && (recluseFirstDetection || Math.random() < 0.5);
-        if (recluseTarget && recluseCountsAsDemon) game.recluseDetectedByFortuneTeller = true;
-
         const isDemon = targets.some(t =>
-          t.type === 'demon' || t.id === game.smokeScreenPlayerId || (t.role === 'RECLUSE' && recluseCountsAsDemon)
+          t.type === 'demon' || t.id === game.smokeScreenPlayerId
         );
         actor.nightInfo = `🔮 Adivina\nEntre ${targets.map(t=>t.name).join(' y ')}: ${isDemon ? '✅ SÍ hay Demonio' : '❌ NO hay Demonio'}.`;
       }
@@ -843,13 +801,17 @@ function nominate(game, nominatorId, nomineeId) {
   const alreadyNominated = game.nominations.some(n => n.nominatorId === nominatorId);
   if (alreadyNominated) throw new Error('Ya has nominado a alguien hoy');
 
-  if (nominee.role === 'VIRGIN' && !nominee.virginUsed && nominator.type === 'townfolk') {
+  if (nominee.role === 'VIRGIN' && !nominee.virginUsed) {
+    // FIX: La Virgen gasta su poder en la PRIMERA nominación, sin importar quién la nomine
     nominee.virginUsed = true;
-    if (!nominee.poisoned) {
+    
+    // Solo mata si es Aldeano y no está envenenada
+    if (nominator.type === 'townfolk' && !nominee.poisoned) {
       nominator.alive = false;
       checkWinCondition(game);
       return { virginTrigger: true, executed: nominator };
     }
+    // Si no es Aldeano o está envenenada, el poder se gasta sin efecto
   }
 
   const nomination = {

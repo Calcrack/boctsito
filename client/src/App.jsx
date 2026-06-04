@@ -6,6 +6,7 @@ import PlayerPanel from './components/PlayerPanel';
 import NotificationStack from './components/NotificationStack';
 import BroadcastOverlay from './components/BroadcastOverlay';
 import GameOver from './components/GameOver';
+import GamepadController from './components/GamepadController';
 
 function AppInner() {
   const { state } = useGame();
@@ -47,6 +48,7 @@ export default function App() {
   return (
     <GameProvider>
       <AppInner />
+      <GamepadController />
     </GameProvider>
   );
 }

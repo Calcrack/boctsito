@@ -106,6 +106,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, seatSize, posX, pos
   return (
     <div
       className={classes}
+      data-gamepad={isClickable ? '' : undefined}
       style={{ '--sz': `${sz}px`, left: `calc(50% + ${posX}px)`, top: `calc(50% + ${posY}px)` }}
       onClick={() => isClickable && onClick(player)}
     >

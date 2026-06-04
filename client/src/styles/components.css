@@ -215,6 +215,14 @@
 .log-killed { color: var(--blood-hi); }
 .log-neutral { color: var(--bone-300); }
 
+/* ── GAMEPAD FOCUS ─────────────────────────────────────────── */
+
+button.gamepad-focused,
+[data-gamepad].gamepad-focused {
+  outline: 2px solid var(--gold-hot) !important;
+  outline-offset: 3px;
+}
+
 /* ── SCROLLBAR ─────────────────────────────────────────────── */
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }

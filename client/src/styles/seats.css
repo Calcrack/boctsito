@@ -76,6 +76,8 @@
 .seat.nominated .medallion { box-shadow: 0 0 0 2px var(--blood-hi), 0 0 20px rgba(168,58,45,0.4), var(--shadow-medallion); }
 .seat.dead { opacity: 0.42; filter: grayscale(0.6); }
 .seat.my-player .medallion { box-shadow: 0 0 0 2px var(--good), var(--shadow-medallion); }
+.seat.gamepad-focused { outline: none !important; }
+.seat.gamepad-focused .medallion { box-shadow: 0 0 0 3px var(--gold-hot), 0 0 18px rgba(201,162,74,0.5), var(--shadow-medallion); }
 
 /* ── MEDALLION ─────────────────────────────────────────────── */
 

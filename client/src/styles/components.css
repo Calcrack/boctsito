@@ -221,6 +221,9 @@ button.gamepad-focused,
 [data-gamepad].gamepad-focused {
   outline: 2px solid var(--gold-hot) !important;
   outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(201,162,74,0.18), 0 0 18px rgba(201,162,74,0.28) !important;
+  z-index: 10;
+  position: relative;
 }
 
 /* ── SCROLLBAR ─────────────────────────────────────────────── */

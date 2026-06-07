@@ -75,7 +75,7 @@ export default function GameOver() {
           <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
             {isGoodWin ? '✦' : '☠'}
           </div>
-          <h1 style={{ fontFamily: 'var(--serif)', fontSize: 42, fontWeight: 600, color: 'var(--bone-50)', margin: '0 0 8px' }}>
+          <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
             {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
           </h1>
           {winReason && (
@@ -83,6 +83,7 @@ export default function GameOver() {
               {winReason}
             </p>
           )}
+          <div className="flourish-divider" style={{ maxWidth: 200, margin: '4px auto 0' }}>✦</div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>

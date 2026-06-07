@@ -59,12 +59,16 @@ input, textarea { font-family: inherit; color: inherit; }
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  border-bottom: var(--hairline);
-  background: linear-gradient(to bottom, rgba(0,0,0,0.65), rgba(0,0,0,0.2));
-  backdrop-filter: blur(12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--scene-accent) 28%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--scene-accent) 8%, transparent),
+    inset 0 -1px 0 rgba(0,0,0,0.4);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0.22));
+  backdrop-filter: blur(14px);
   z-index: 20;
   gap: 12px;
   overflow: hidden;
+  transition: border-color 1.4s ease, box-shadow 1.4s ease;
 }
 .topbar > * { min-width: 0; }
 
@@ -77,34 +81,40 @@ input, textarea { font-family: inherit; color: inherit; }
 
 .brand-mark {
   width: 22px; height: 22px;
-  border: 1px solid var(--gold);
+  border: 1px solid var(--scene-accent);
   border-radius: 50%;
   position: relative;
   display: grid;
   place-items: center;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--scene-accent) 30%, transparent);
+  transition: border-color 1.4s ease, box-shadow 1.4s ease;
 }
 .brand-mark::before {
   content: '';
   width: 1px; height: 10px;
-  background: var(--gold);
+  background: var(--scene-accent);
   position: absolute; top: 3px;
   transform-origin: center 8px;
+  transition: background 1.4s ease;
 }
 .brand-mark::after {
   content: '';
   width: 1px; height: 6px;
-  background: var(--gold-hot);
+  background: var(--scene-accent-hot);
   position: absolute; top: 5px;
   transform-origin: center 6px;
   transform: rotate(120deg);
+  transition: background 1.4s ease;
 }
 
 .brand-title {
-  font-family: var(--serif);
-  font-size: 17px;
-  letter-spacing: 0.3em;
+  font-family: var(--title);
+  font-size: 13px;
+  letter-spacing: 0.18em;
   color: var(--bone-50);
   text-transform: uppercase;
+  text-shadow: 0 0 20px color-mix(in srgb, var(--scene-accent) 35%, transparent);
+  transition: text-shadow 1.4s ease;
 }
 
 .topbar-center {
@@ -121,7 +131,7 @@ input, textarea { font-family: inherit; color: inherit; }
   align-items: center;
   gap: 8px;
   padding: 5px 12px;
-  border: var(--hairline);
+  border: 1px solid color-mix(in srgb, var(--scene-accent) 28%, transparent);
   border-radius: 2px;
   font-family: var(--mono);
   font-size: 13px;
@@ -129,14 +139,15 @@ input, textarea { font-family: inherit; color: inherit; }
   text-transform: uppercase;
   color: var(--bone-100);
   background: rgba(0,0,0,0.3);
+  transition: border-color 1.4s ease;
 }
 .phase-badge .dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: var(--gold-hot);
-  box-shadow: 0 0 8px var(--gold-hot);
+  background: var(--scene-accent-hot);
+  box-shadow: 0 0 8px var(--scene-accent-hot);
+  transition: background 1.4s ease, box-shadow 1.4s ease;
 }
-.is-night .phase-badge .dot { background: var(--moon); box-shadow: 0 0 10px var(--moon); }
 
 .topbar-right {
   display: flex;
@@ -148,25 +159,29 @@ input, textarea { font-family: inherit; color: inherit; }
 .icon-btn {
   width: 36px; height: 36px;
   display: grid; place-items: center;
-  border: var(--hairline);
+  border: 1px solid color-mix(in srgb, var(--scene-accent) 22%, transparent);
   border-radius: 2px;
   color: var(--bone-200);
   font-size: 17px;
-  transition: all 0.2s;
+  transition: all 0.2s, border-color 1.4s ease;
 }
-.icon-btn:hover { border-color: var(--gold); color: var(--gold-hot); }
+.icon-btn:hover { border-color: var(--scene-accent); color: var(--scene-accent-hot); }
 
 /* ── LEFT PANEL ────────────────────────────────────────────── */
 
 .left-panel {
   grid-area: left;
-  border-right: var(--hairline);
-  background: linear-gradient(to right, rgba(0,0,0,0.5), transparent);
+  border-right: 1px solid color-mix(in srgb, var(--scene-accent) 18%, transparent);
+  background: linear-gradient(to right,
+    var(--scene-panel-bg, rgba(0,0,0,0.35)) 0%,
+    rgba(0,0,0,0.12) 100%
+  );
   padding: 18px 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  transition: background 1.4s ease, border-color 1.4s ease;
 }
 
 /* ── STAGE ─────────────────────────────────────────────────── */
@@ -184,11 +199,15 @@ input, textarea { font-family: inherit; color: inherit; }
 
 .right-panel {
   grid-area: right;
-  border-left: var(--hairline);
-  background: linear-gradient(to left, rgba(0,0,0,0.5), transparent);
+  border-left: 1px solid color-mix(in srgb, var(--scene-accent) 18%, transparent);
+  background: linear-gradient(to left,
+    var(--scene-panel-bg, rgba(0,0,0,0.35)) 0%,
+    rgba(0,0,0,0.12) 100%
+  );
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: background 1.4s ease, border-color 1.4s ease;
 }
 
 /* ── SECTION LABELS ────────────────────────────────────────── */
@@ -198,12 +217,13 @@ input, textarea { font-family: inherit; color: inherit; }
   font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--scene-accent);
   padding-bottom: 8px;
-  border-bottom: var(--hairline);
+  border-bottom: 1px solid color-mix(in srgb, var(--scene-accent) 28%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   margin-bottom: 10px;
+  transition: color 1.4s ease, border-color 1.4s ease;
 }
 .panel-label .count { color: var(--bone-400); font-size: 13px; }

@@ -55,11 +55,12 @@ export default function RoleReveal({ player }) {
         </p>
 
         <h2 style={{
-          fontFamily: 'var(--serif)',
-          fontSize: 32,
-          fontWeight: 600,
+          fontFamily: 'var(--title)',
+          fontSize: 26,
+          fontWeight: 400,
           color: 'var(--bone-50)',
           margin: '0 0 20px',
+          letterSpacing: '0.04em',
         }}>
           {role.name}
         </h2>

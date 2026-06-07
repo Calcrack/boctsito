@@ -107,13 +107,13 @@ export default function Login() {
 
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, letterSpacing: '0.4em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 12 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.42em', textTransform: 'uppercase', color: 'var(--scene-accent)', marginBottom: 14, transition: 'color 1.4s ease' }}>
             Los Campanarios
           </div>
-          <h1 style={{ fontFamily: 'var(--serif)', fontSize: 38, fontWeight: 600, color: 'var(--bone-50)', margin: 0, lineHeight: 1.2 }}>
+          <h1 style={{ fontFamily: 'var(--title)', fontSize: 28, fontWeight: 400, color: 'var(--bone-50)', margin: 0, lineHeight: 1.3, letterSpacing: '0.04em', textShadow: '0 0 40px color-mix(in srgb, var(--scene-accent) 40%, transparent)' }}>
             Blood on the<br />Clock Tower
           </h1>
-          <div style={{ width: 40, height: 1, background: 'var(--gold)', margin: '16px auto 0', opacity: 0.5 }} />
+          <div className="flourish-divider" style={{ maxWidth: 180, margin: '0 auto' }}>◆</div>
         </div>
 
         {/* Connection status */}

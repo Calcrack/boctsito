@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import Login from './components/Login';
 import NarratorPanel from './components/NarratorPanel';
@@ -7,12 +7,24 @@ import NotificationStack from './components/NotificationStack';
 import BroadcastOverlay from './components/BroadcastOverlay';
 import GameOver from './components/GameOver';
 import GamepadController from './components/GamepadController';
+import SceneAtmosphere from './components/SceneAtmosphere';
 
 function AppInner() {
   const { state } = useGame();
   const { isNarrator, playerId, game } = state;
 
   const isLoggedIn = isNarrator || !!playerId;
+
+  // Clase de fase en body → habilita tokens de escena profundos en toda la UI
+  useEffect(() => {
+    const p = game?.phase;
+    const cls =
+      (p === 'first_night' || p === 'night')           ? 'phase-night' :
+      (p === 'day' || p === 'nominations' || p === 'voting') ? 'phase-day'  :
+      'phase-dusk';
+    document.body.className = cls;
+    return () => { document.body.className = ''; };
+  }, [game?.phase]);
 
   if (!isLoggedIn) return <Login />;
 
@@ -47,6 +59,7 @@ function AppInner() {
 export default function App() {
   return (
     <GameProvider>
+      <SceneAtmosphere />
       <AppInner />
       <GamepadController />
     </GameProvider>

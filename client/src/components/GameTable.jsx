@@ -300,7 +300,7 @@ export default function GameTable({ isNarrator = false }) {
       </div>
 
       {/* Nomination lines */}
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
+      <svg className="nomination-svg" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
         {nominations.filter(nom => !nom.resolved).map(nom => {
           const fi = circlePlayers.findIndex(p => p.id === nom.nominatorId);
           const ti = circlePlayers.findIndex(p => p.id === nom.nomineeId);

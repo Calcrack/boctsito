@@ -50,4 +50,49 @@
   --shadow-deep:      0 30px 80px -20px rgba(0,0,0,0.9), 0 2px 0 rgba(201,162,74,0.08) inset;
   --shadow-medallion: 0 8px 22px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,162,74,0.35) inset;
   --shadow-card:      0 4px 20px rgba(0,0,0,0.6);
+
+  /* Fuente de títulos grandes — Cinzel Decorative (capitales grabadas) */
+  --title: 'Cinzel Decorative', 'Cinzel', var(--serif);
+
+  /* ── TOKENS DE ESCENA (defecto: dusk / lobby) ─────────────── */
+  /* Estos cambian con body.phase-night / .phase-day / .phase-dusk */
+  --scene-accent:     var(--gold);
+  --scene-accent-hot: var(--gold-hot);
+  --scene-accent-dim: var(--gold-dim);
+  --scene-glow:       rgba(201,162,74,0.3);
+  --scene-panel-bg:   rgba(0,0,0,0.28);
+  --scene-fog:        rgba(0,0,0,0);
+  --scene-vignette:   rgba(0,0,0,0.62);
+}
+
+/* ── OVERRIDES POR FASE (seteados en body por App.jsx) ──────── */
+
+body.phase-night {
+  --scene-accent:     var(--moon);
+  --scene-accent-hot: #e0e6f5;
+  --scene-accent-dim: var(--dusk);
+  --scene-glow:       rgba(207,214,232,0.28);
+  --scene-panel-bg:   rgba(3,6,22,0.45);
+  --scene-fog:        rgba(15,22,55,0.22);
+  --scene-vignette:   rgba(0,0,8,0.82);
+}
+
+body.phase-day {
+  --scene-accent:     var(--gold);
+  --scene-accent-hot: var(--gold-hot);
+  --scene-accent-dim: var(--gold-dim);
+  --scene-glow:       rgba(201,162,74,0.32);
+  --scene-panel-bg:   rgba(12,6,0,0.3);
+  --scene-fog:        rgba(0,0,0,0);
+  --scene-vignette:   rgba(4,2,0,0.65);
+}
+
+body.phase-dusk {
+  --scene-accent:     #9b7fc2;
+  --scene-accent-hot: #c4a8e0;
+  --scene-accent-dim: #6b4a8c;
+  --scene-glow:       rgba(155,127,194,0.28);
+  --scene-panel-bg:   rgba(8,4,18,0.35);
+  --scene-fog:        rgba(40,18,70,0.1);
+  --scene-vignette:   rgba(2,1,6,0.72);
 }

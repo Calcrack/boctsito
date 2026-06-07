@@ -295,7 +295,7 @@ export default function NightScreen({ player }) {
         <ExitBtn />
         <div style={{ textAlign: 'center', maxWidth: 420, width: '100%' }}>
           <div style={{ fontSize: 80, color: 'var(--bone-400)', marginBottom: 24 }}>☠</div>
-          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 36, fontWeight: 600, color: 'var(--bone-300)', marginBottom: 12 }}>
+          <h2 style={{ fontFamily: 'var(--title)', fontSize: 28, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
             Has muerto
           </h2>
           <p style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-400)', fontStyle: 'italic' }}>
@@ -413,7 +413,7 @@ export default function NightScreen({ player }) {
         <ExitBtn />
         <div style={{ textAlign: 'center', maxWidth: 460 }}>
           <div style={{ fontSize: 76, color: 'var(--moon)', marginBottom: 24, opacity: 0.8 }}>☾</div>
-          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 34, color: 'var(--bone-300)', marginBottom: 12 }}>
+          <h2 style={{ fontFamily: 'var(--title)', fontSize: 26, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
             {waitingForTurn ? 'Espera tu turno' : 'Es de noche'}
           </h2>
           <p style={{ fontFamily: 'var(--serif)', fontSize: 19, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 28 }}>

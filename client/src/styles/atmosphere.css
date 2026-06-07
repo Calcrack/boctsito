@@ -1,0 +1,142 @@
+/* ============================================================
+   ATMOSPHERE — Viñeta, niebla, partículas, ornamentos
+   Todo procedural — sin assets binarios nuevos
+   ============================================================ */
+
+/* ── VIÑETA (borde oscuro en todo el viewport) ─────────────── */
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 48%,
+    var(--scene-vignette, rgba(0,0,0,0.62)) 100%
+  );
+  transition: background 1.8s ease;
+}
+
+/* ── NIEBLA NOCTURNA (deriva lenta) ───────────────────────── */
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  background:
+    radial-gradient(ellipse 140% 30% at -5%  90%, var(--scene-fog, transparent) 0%, transparent 52%),
+    radial-gradient(ellipse 120% 25% at 105% 82%, var(--scene-fog, transparent) 0%, transparent 52%);
+  transition: background 2.2s ease;
+  animation: fog-drift 22s ease-in-out infinite alternate;
+}
+
+@keyframes fog-drift {
+  from { transform: translateX(-2.5%) scaleX(1); }
+  to   { transform: translateX(2.5%)  scaleX(1.05); }
+}
+
+/* ── PARTÍCULAS AMBIENTALES (brasas/polvo flotante) ────────── */
+
+.scene-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: hidden;
+}
+
+.scene-particle {
+  position: absolute;
+  bottom: -8px;
+  border-radius: 50% 50% 35% 35%;
+  background: var(--scene-accent);
+  opacity: 0;
+  animation: particle-rise linear infinite;
+  filter: blur(0.4px);
+  will-change: transform, opacity;
+}
+
+@keyframes particle-rise {
+  0%   { transform: translateY(0)      translateX(0px)  rotate(0deg);  opacity: 0;    }
+  8%   {                                                                 opacity: 0.35; }
+  88%  {                                                                 opacity: 0.06; }
+  100% { transform: translateY(-100vh) translateX(18px) rotate(80deg); opacity: 0;    }
+}
+
+/* ── CANTONERAS ORNAMENTALES (brackets en esquinas) ─────────── */
+/* Aplicar clase .corners a cualquier card para obtener brackets */
+
+.corners {
+  position: relative;
+}
+
+.corners::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    /* top-left */
+    linear-gradient(var(--scene-accent), var(--scene-accent)) top    0 left  0 / 14px 1px  no-repeat,
+    linear-gradient(var(--scene-accent), var(--scene-accent)) top    0 left  0 / 1px  14px no-repeat,
+    /* top-right */
+    linear-gradient(var(--scene-accent), var(--scene-accent)) top    0 right 0 / 14px 1px  no-repeat,
+    linear-gradient(var(--scene-accent), var(--scene-accent)) top    0 right 0 / 1px  14px no-repeat,
+    /* bottom-left */
+    linear-gradient(var(--scene-accent), var(--scene-accent)) bottom 0 left  0 / 14px 1px  no-repeat,
+    linear-gradient(var(--scene-accent), var(--scene-accent)) bottom 0 left  0 / 1px  14px no-repeat,
+    /* bottom-right */
+    linear-gradient(var(--scene-accent), var(--scene-accent)) bottom 0 right 0 / 14px 1px  no-repeat,
+    linear-gradient(var(--scene-accent), var(--scene-accent)) bottom 0 right 0 / 1px  14px no-repeat;
+  opacity: 0.45;
+  transition: background 1.4s ease, opacity 0.25s;
+}
+
+.corners:hover::before { opacity: 0.7; }
+
+/* ── FLOURISH DIVIDER (línea con símbolo central) ───────────── */
+
+.flourish-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--scene-accent);
+  margin: 14px 0;
+  opacity: 0.55;
+  transition: color 1.4s ease, opacity 1.4s ease;
+}
+
+.flourish-divider::before,
+.flourish-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--scene-accent);
+  transition: background 1.4s ease;
+  opacity: 0.6;
+}
+
+/* ── FULLSCREEN ESCENA BASE ──────────────────────────────────── */
+
+.scene-fullscreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at center, var(--ink-850) 0%, var(--ink-900) 70%, #030305 100%);
+}
+
+.scene-fullscreen.evil {
+  background: radial-gradient(ellipse at center, #1a0a08 0%, var(--ink-900) 70%);
+}
+
+.scene-fullscreen.good {
+  background: radial-gradient(ellipse at center, #080f1a 0%, var(--ink-900) 70%);
+}

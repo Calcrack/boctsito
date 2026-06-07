@@ -18,10 +18,7 @@ function AppInner() {
   // Clase de fase en body → habilita tokens de escena profundos en toda la UI
   useEffect(() => {
     const p = game?.phase;
-    const cls =
-      (p === 'first_night' || p === 'night')           ? 'phase-night' :
-      (p === 'day' || p === 'nominations' || p === 'voting') ? 'phase-day'  :
-      'phase-dusk';
+    const cls = (p === 'first_night' || p === 'night') ? 'phase-night' : 'phase-day';
     document.body.className = cls;
     return () => { document.body.className = ''; };
   }, [game?.phase]);

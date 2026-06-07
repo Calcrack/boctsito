@@ -58,16 +58,15 @@
   letter-spacing: 0.15em;
   text-transform: uppercase;
   padding: 7px 16px;
-  border: 1px solid color-mix(in srgb, var(--scene-accent) 25%, transparent);
+  border: var(--hairline);
   border-radius: 2px;
-  color: var(--scene-accent);
-  background: color-mix(in srgb, var(--scene-accent) 10%, transparent);
-  transition: background 0.2s, border-color 0.2s, color 0.2s,
-              background 1.2s ease, border-color 1.2s ease, color 1.2s ease;
+  color: var(--moon);
+  background: rgba(63,74,107,0.2);
+  transition: background 0.2s, border-color 0.2s;
 }
 .btn-night:hover {
-  background: color-mix(in srgb, var(--scene-accent) 25%, transparent);
-  border-color: var(--scene-accent);
+  background: rgba(63,74,107,0.4);
+  border-color: var(--moon);
 }
 
 /* ── PANEL CARDS ───────────────────────────────────────────── */

@@ -3,22 +3,6 @@
    Todo procedural — sin assets binarios nuevos
    ============================================================ */
 
-/* ── VIÑETA (borde oscuro en todo el viewport) ─────────────── */
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 10;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 48%,
-    var(--scene-vignette, rgba(0,0,0,0.62)) 100%
-  );
-  transition: background 1.8s ease;
-}
-
 /* ── NIEBLA NOCTURNA (deriva lenta) ───────────────────────── */
 
 body::after {

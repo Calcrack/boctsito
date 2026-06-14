@@ -61,10 +61,27 @@ export const roles = [
 export const firstNightOrder = ['MINION_INFO', 'LUNATIC', 'DEMON_INFO', 'SAILOR', 'COURTIER', 'GODFATHER', 'DEVILS_ADVOCATE', 'PUKKA', 'GRANDMOTHER', 'CHAMBERMAID'];
 export const otherNightOrder = ['SAILOR', 'COURTIER', 'INNKEEPER', 'GAMBLER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
 
+// ── Fichas recordatorias (reminder tokens) por rol dueño ───────────────
+export const reminders = {
+  GRANDMOTHER:    [{ id: 'GRANDCHILD', label: 'Nieto', duration: 'permanent' }],
+  SAILOR:         [{ id: 'DRUNK', label: 'Borracho', duration: 'night' }],
+  INNKEEPER:      [{ id: 'SAFE1', label: 'A salvo', duration: 'night' }, { id: 'SAFE2', label: 'A salvo', duration: 'night' }, { id: 'DRUNK', label: 'Borracho', duration: 'night' }],
+  COURTIER:       [{ id: 'CHOSEN', label: 'Elegido', duration: 'permanent' }, { id: 'DRUNK1', label: 'Borracho 1', duration: 'permanent' }, { id: 'DRUNK2', label: 'Borracho 2', duration: 'permanent' }, { id: 'DRUNK3', label: 'Borracho 3', duration: 'permanent' }, { id: 'NO_ABILITY', label: 'Sin habilidad', duration: 'oneShot' }],
+  PROFESSOR:      [{ id: 'ALIVE', label: 'Vivo', duration: 'permanent' }, { id: 'NO_ABILITY', label: 'Sin habilidad', duration: 'oneShot' }],
+  MINSTREL:       [{ id: 'ALL_DRUNK', label: 'Todos borrachos', duration: 'day' }],
+  TEA_LADY:       [{ id: 'CANT_DIE1', label: 'No puede morir', duration: 'permanent' }, { id: 'CANT_DIE2', label: 'No puede morir', duration: 'permanent' }],
+  GOON:           [{ id: 'DRUNK', label: 'Borracho', duration: 'night' }],
+  GODFATHER:      [{ id: 'DIES', label: 'Muere', duration: 'night' }],
+  DEVILS_ADVOCATE:[{ id: 'SURVIVES', label: 'Sobrevive ejecución', duration: 'day' }, { id: 'CHOSEN', label: 'Elegido', duration: 'night' }],
+  PUKKA:          [{ id: 'POISONED', label: 'Envenenado', duration: 'permanent' }],
+  PO:             [{ id: 'ATK3', label: '3 ataques', duration: 'night' }],
+};
+
 export default {
   id: 'BAD_MOON_RISING',
   name: 'Bad Moon Rising',
   roles,
   firstNightOrder,
   otherNightOrder,
+  reminders,
 };

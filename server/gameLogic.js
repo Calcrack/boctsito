@@ -74,6 +74,8 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     bluffRole: null,
     discordChannel: null,
     impShotUsed: false,
+    statuses: [],
+    tokens: [],
   };
   game.players.push(player);
   return player;
@@ -856,11 +858,30 @@ function nominate(game, nominatorId, nomineeId) {
     nominatorAvatar: nominator.avatar || null,
     votes: [], against: [], ghostDeclines: [],
     resolved: false, tally: 0, executed: false,
+    voteOrder: buildVoteOrder(game, nomineeId),
+    voteTurnIndex: 0,
+    argueTimer: null,
   };
   game.nominations.push(nomination);
   game.activeNomination = nomination.id;
   game.phase = 'voting';
   return { nomination };
+}
+
+// Orden de voto en sentido horario: empieza por el jugador a la izquierda del
+// nominado (siguiente en la rueda) y termina en el propio nominado. Solo
+// incluye a quienes pueden votar (vivos, o muertos con su voto fantasma intacto).
+function buildVoteOrder(game, nomineeId) {
+  const players = game.players;
+  const nomineeIdx = players.findIndex(p => p.id === nomineeId);
+  if (nomineeIdx === -1) return [];
+  const order = [];
+  for (let step = 1; step <= players.length; step++) {
+    const p = players[(nomineeIdx + step) % players.length];
+    const canVote = p.alive || (!p.alive && !p.deadVoteNominationId);
+    if (canVote) order.push(p.id);
+  }
+  return order;
 }
 
 function vote(game, voterId, nominationId, inFavor) {
@@ -994,7 +1015,11 @@ function startDay(game) {
   game.executedToday = null;
   game.pendingNightAfterNomination = false;
   game.autoVotes = { skipDay: [], skipNom: [], extend: [] };
-  game.players.forEach(p => { p.discordChannel = null; });
+  game.players.forEach(p => {
+    p.discordChannel = null;
+    // Purgar fichas temporales de noche; permanentes y de un uso persisten.
+    p.tokens = (p.tokens || []).filter(t => t.duration !== 'night');
+  });
   checkWinCondition(game);
   return game;
 }
@@ -1137,13 +1162,17 @@ function getPublicState(game, viewerId, isNarrator) {
       type:        canSeeRole ? p.type        : null,
       alignment:   canSeeRole ? p.alignment   : null,
       showRole:    p.showRole,
-      nightInfo:   isMe || isNarrator ? p.nightInfo : null,
+      // Modo manual: SOLO el narrador ve la info de noche (la transmite por voz).
+      // Modo automático: el jugador la ve en su panel.
+      nightInfo:   isNarrator ? p.nightInfo : (game.autoMode && isMe ? p.nightInfo : null),
       accusation:  (isNarrator || (viewerId && p.accusation?.accuserId === viewerId)) ? p.accusation : null,
       slayerUsed:  p.slayerUsed,
       impShotUsed: (isMe && p.type === 'demon') || isNarrator ? p.impShotUsed : false,
       pendingRavenkeeper: isNarrator ? p.pendingRavenkeeper : (isMe ? p.pendingRavenkeeper : false),
       isNightTarget: nightTargets.has(p.id),
       bluffRole: (isMe || isNarrator) ? p.bluffRole : null,
+      statuses: isNarrator ? (p.statuses || []) : undefined,
+      tokens: isNarrator ? (p.tokens || []) : undefined,
     };
   });
 

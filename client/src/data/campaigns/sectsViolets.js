@@ -59,10 +59,28 @@ export const roles = [
 export const firstNightOrder = ['PHILOSOPHER', 'MINION_INFO', 'DEMON_INFO', 'SNAKE_CHARMER', 'EVIL_TWIN', 'WITCH', 'CERENOVUS', 'CLOCKMAKER', 'DREAMER', 'SEAMSTRESS', 'MATHEMATICIAN'];
 export const otherNightOrder = ['PHILOSOPHER', 'SNAKE_CHARMER', 'WITCH', 'CERENOVUS', 'PIT_HAG', 'FANG_GU', 'NO_DASHII', 'VORTOX', 'VIGORMORTIS', 'SWEETHEART', 'SAGE', 'BARBER', 'DREAMER', 'FLOWERGIRL', 'TOWN_CRIER', 'ORACLE', 'SEAMSTRESS', 'MATHEMATICIAN'];
 
+// ── Fichas recordatorias (reminder tokens) por rol dueño ───────────────
+export const reminders = {
+  MATHEMATICIAN:  [{ id: 'ABNORMAL', label: 'Habilidad anormal', duration: 'night' }],
+  SNAKE_CHARMER:  [{ id: 'POISONED', label: 'Envenenado', duration: 'permanent' }],
+  PHILOSOPHER:    [{ id: 'IS_PHILOSOPHER', label: 'Es el Filósofo', duration: 'permanent' }, { id: 'DRUNK', label: 'Borracho', duration: 'permanent' }],
+  FLOWERGIRL:     [{ id: 'DEMON_VOTED', label: 'Demonio votó', duration: 'night' }, { id: 'DEMON_NOT_VOTED', label: 'Demonio no votó', duration: 'night' }],
+  TOWN_CRIER:     [{ id: 'MINION_NOM', label: 'Esbirro nominó', duration: 'night' }, { id: 'MINION_NOT_NOM', label: 'Esbirro no nominó', duration: 'night' }],
+  BARBER:         [{ id: 'HAIRCUT', label: 'Corte de pelo hoy', duration: 'day' }, { id: 'ONCE', label: 'Una vez', duration: 'oneShot' }],
+  SWEETHEART:     [{ id: 'CHARM', label: 'Encanto (borracho)', duration: 'permanent' }],
+  CERENOVUS:      [{ id: 'MAD', label: 'Maldito / Loco', duration: 'day' }],
+  EVIL_TWIN:      [{ id: 'TWIN', label: 'Gemela', duration: 'permanent' }],
+  MUTANT:         [{ id: 'CONVINCED', label: 'Convencido (loco)', duration: 'permanent' }],
+  NO_DASHII:      [{ id: 'POISONED1', label: 'Envenenado', duration: 'permanent' }, { id: 'POISONED2', label: 'Envenenado', duration: 'permanent' }],
+  VIGORMORTIS:    [{ id: 'WITH_ABILITY', label: 'Con habilidad', duration: 'permanent' }, { id: 'POISONED', label: 'Envenenado', duration: 'permanent' }],
+  VORTOX:         [{ id: 'DIES', label: 'Muere', duration: 'night' }],
+};
+
 export default {
   id: 'SECTS_AND_VIOLETS',
   name: 'Sects & Violets',
   roles,
   firstNightOrder,
   otherNightOrder,
+  reminders,
 };

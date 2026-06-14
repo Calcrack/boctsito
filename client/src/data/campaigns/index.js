@@ -36,3 +36,45 @@ export const ALL_ROLES = (() => {
 export const ROLE_BY_ID = Object.fromEntries(ALL_ROLES.map(r => [r.id, r]));
 export const ROLE_NAMES = Object.fromEntries(ALL_ROLES.map(r => [r.id, r.name]));
 export const ROLE_TYPES = Object.fromEntries(ALL_ROLES.map(r => [r.id, r.type]));
+
+// ── Fichas de estado (grimorio del narrador) ───────────────────────
+const GENERIC_STATUSES = [
+  '🍺 Borracho', '🧪 Envenenado', '🛡 Protegido', '✅ A salvo',
+  '☠ Muerto', '👻 Parece muerto', '🌙 No despierta', '🎯 Atacado',
+  '⭐ Marcado', '1️⃣ Habilidad usada',
+];
+const CAMPAIGN_STATUSES = {
+  TROUBLE_BREWING: ['🤵 Es el Amo', '🟥 Registra como malvado'],
+  BAD_MOON_RISING: ['⚓ Marinero', '🚫 No puede morir (Posadero)', '🤡 No-muerte usada', '🪦 Profesor usado'],
+  SECTS_AND_VIOLETS: ['🐍 Encantado', '🤪 Loco', '🧠 Filósofo activo', '🔮 Info falsa (Vortox)'],
+};
+
+export function statusTokens(id) {
+  return [...GENERIC_STATUSES, ...(CAMPAIGN_STATUSES[id] || [])];
+}
+
+// ── Fichas recordatorias (reminder tokens) ─────────────────────────
+// Devuelve el catálogo de fichas de los roles EN JUEGO, cada una con el
+// arte (img) y nombre del rol dueño, listo para colocar sobre un jugador.
+export function remindersForRolesInPlay(campaignId, roleIdsInPlay) {
+  const campaign = getCampaign(campaignId);
+  const map = campaign.reminders || {};
+  const seenRoles = new Set(roleIdsInPlay);
+  const out = [];
+  for (const roleId of Object.keys(map)) {
+    if (!seenRoles.has(roleId)) continue;
+    const role = ROLE_BY_ID[roleId];
+    if (!role) continue;
+    for (const t of map[roleId]) {
+      out.push({
+        tokenId: t.id,
+        roleId,
+        roleName: role.name,
+        img: role.img,
+        label: t.label,
+        duration: t.duration || 'permanent',
+      });
+    }
+  }
+  return out;
+}

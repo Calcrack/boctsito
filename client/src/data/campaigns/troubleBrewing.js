@@ -52,7 +52,27 @@ export const roles = [
 ];
 
 export const firstNightOrder = ['EVIL_INFO', 'POISONER', 'WASHERWOMAN', 'LIBRARIAN', 'INVESTIGATOR', 'COOK', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
-export const otherNightOrder = ['POISONER', 'MONK', 'IMP', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'RAVENKEEPER', 'BUTLER', 'SPY'];
+export const otherNightOrder = ['POISONER', 'MONK', 'SCARLET_WOMAN', 'IMP', 'RAVENKEEPER', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
+
+// ── Fichas recordatorias (reminder tokens) por rol dueño ───────────────
+// duration: 'permanent' (perdura) | 'night' (se quita al amanecer) | 'oneShot' (un uso)
+// El arte mostrado sobre el jugador es el del rol dueño (role.img).
+export const reminders = {
+  WASHERWOMAN:  [{ id: 'TOWNSFOLK', label: 'Aldeano', duration: 'permanent' }, { id: 'WRONG', label: 'Incorrecto', duration: 'permanent' }],
+  LIBRARIAN:    [{ id: 'OUTSIDER', label: 'Forastero', duration: 'permanent' }, { id: 'WRONG', label: 'Incorrecto', duration: 'permanent' }],
+  INVESTIGATOR: [{ id: 'MINION', label: 'Esbirro', duration: 'permanent' }, { id: 'WRONG', label: 'Incorrecto', duration: 'permanent' }],
+  FORTUNE_TELLER: [{ id: 'RED_HERRING', label: 'Cortina de humo', duration: 'permanent' }],
+  UNDERTAKER:   [{ id: 'EXECUTED', label: 'Muerto hoy', duration: 'night' }],
+  MONK:         [{ id: 'SAFE', label: 'A salvo', duration: 'night' }],
+  SOLDIER:      [{ id: 'SAFE', label: 'A salvo', duration: 'permanent' }],
+  VIRGIN:       [{ id: 'NO_ABILITY', label: 'Sin habilidad', duration: 'oneShot' }],
+  SLAYER:       [{ id: 'NO_ABILITY', label: 'Sin habilidad', duration: 'oneShot' }],
+  BUTLER:       [{ id: 'MASTER', label: 'Es el Amo', duration: 'permanent' }],
+  DRUNK:        [{ id: 'IS_DRUNK', label: 'Es el Borracho', duration: 'permanent' }],
+  RECLUSE:      [{ id: 'REGISTERS_EVIL', label: 'Registra como malvado', duration: 'permanent' }],
+  POISONER:     [{ id: 'POISONED', label: 'Envenenado', duration: 'night' }],
+  IMP:          [{ id: 'DIES', label: 'Muere', duration: 'night' }],
+};
 
 export default {
   id: 'TROUBLE_BREWING',
@@ -60,4 +80,5 @@ export default {
   roles,
   firstNightOrder,
   otherNightOrder,
+  reminders,
 };

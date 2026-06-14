@@ -461,6 +461,8 @@ function VotingPanel({ nomination, game, playerId, send }) {
     <div style={{ background: 'rgba(201,162,74,0.06)', border: 'var(--hairline)', borderRadius: 4, padding: '14px 16px' }}>
       <p className="panel-label" style={{ color: 'var(--gold-hot)' }}>Votación en curso</p>
 
+      <VoteTurnBanner nomination={nomination} game={game} playerId={playerId} />
+
       {/* Nominee display */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div style={{
@@ -588,6 +590,56 @@ function VotingPanel({ nomination, game, playerId, send }) {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Banner de turno de voto (sentido horario) + temporizador de argumentos.
+function VoteTurnBanner({ nomination, game, playerId }) {
+  const order = Array.isArray(nomination.voteOrder) ? nomination.voteOrder : [];
+  const turnIdx = nomination.voteTurnIndex || 0;
+  const turnId = order[turnIdx] || null;
+  const turnPlayer = turnId ? game.players.find(p => p.id === turnId) : null;
+  const isMyTurn = turnId === playerId;
+  const timer = nomination.argueTimer;
+  const timerForTurn = timer && timer.playerId === turnId;
+
+  const [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    if (!timerForTurn) { setRemaining(0); return; }
+    const tick = () => setRemaining(Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [timerForTurn, timer?.endsAt, timer?.playerId]);
+
+  if (order.length === 0) return null;
+  if (!turnPlayer) {
+    return (
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--good)', fontStyle: 'italic', textAlign: 'center', marginBottom: 10 }}>
+        ✓ Todos han pasado por su turno
+      </p>
+    );
+  }
+
+  const urgent = remaining <= 10;
+  return (
+    <div style={{
+      background: isMyTurn ? 'rgba(201,162,74,0.14)' : 'rgba(109,140,184,0.1)',
+      border: `1px solid ${isMyTurn ? 'var(--gold)' : 'rgba(109,140,184,0.35)'}`,
+      borderRadius: 6, padding: '10px 12px', marginBottom: 12, textAlign: 'center',
+    }}>
+      <p style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: isMyTurn ? 'var(--gold-hot)' : 'var(--good)', margin: '0 0 4px' }}>
+        Turno {turnIdx + 1}/{order.length}
+      </p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-50)', margin: 0, fontWeight: 600 }}>
+        {isMyTurn ? '👉 Es tu turno de argumentar y votar' : `Habla: ${turnPlayer.name}`}
+      </p>
+      {timerForTurn && (
+        <p style={{ fontFamily: 'var(--mono)', fontSize: 30, fontWeight: 700, color: urgent ? 'var(--blood-hi)' : 'var(--gold-hot)', margin: '6px 0 0' }}>
+          {remaining}s
+        </p>
       )}
     </div>
   );

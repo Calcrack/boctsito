@@ -86,10 +86,11 @@ function Celestials({ isNight }) {
   );
 }
 
-function Seat({ player, isMe, isNarrator, canAct, nominated, seatSize, posX, posY, onClick }) {
+function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTurn, seatSize, posX, posY, onClick }) {
   const role = player.role ? ROLE_BY_ID[player.role] : null;
   const isDead = !player.alive;
   const sz = seatSize;
+  const tokens = isNarrator ? (player.tokens || []) : [];
 
   const classes = [
     'seat',
@@ -97,6 +98,12 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, seatSize, posX, pos
     nominated ? 'nominated' : '',
     isDead ? 'dead' : '',
   ].filter(Boolean).join(' ');
+
+  const ring = activeActor
+    ? '0 0 0 3px var(--gold-hot), 0 0 22px rgba(201,162,74,0.7)'
+    : voteTurn
+      ? '0 0 0 3px var(--good), 0 0 22px rgba(109,140,184,0.7)'
+      : undefined;
 
   const isClickable = isNarrator
     || (canAct && !isMe && player.alive)
@@ -107,7 +114,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, seatSize, posX, pos
     <div
       className={classes}
       data-gamepad={isClickable ? '' : undefined}
-      style={{ '--sz': `${sz}px`, left: `calc(50% + ${posX}px)`, top: `calc(50% + ${posY}px)` }}
+      style={{ '--sz': `${sz}px`, left: `calc(50% + ${posX}px)`, top: `calc(50% + ${posY}px)`, ...(ring ? { borderRadius: '50%', boxShadow: ring } : {}) }}
       onClick={() => isClickable && onClick(player)}
     >
       {player.handRaised && <div className="hand-raised">✋</div>}
@@ -181,6 +188,27 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, seatSize, posX, pos
         </div>
       )}
 
+      {/* Fichas recordatorias colocadas por el narrador (arte del rol dueño) */}
+      {tokens.length > 0 && (
+        <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 2, zIndex: 6, pointerEvents: 'none' }}>
+          {tokens.slice(0, 4).map(t => {
+            const tRole = ROLE_BY_ID[t.roleId];
+            const temp = t.duration === 'night' || t.duration === 'day';
+            return (
+              <div key={t.instanceId} title={t.label}
+                style={{ width: Math.max(16, sz * 0.26), height: Math.max(16, sz * 0.26), borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-800)', border: `1.5px ${temp ? 'dashed' : 'solid'} var(--gold)`, boxShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                {tRole?.img && <img src={tRole.img} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />}
+              </div>
+            );
+          })}
+          {tokens.length > 4 && (
+            <div style={{ width: Math.max(16, sz * 0.26), height: Math.max(16, sz * 0.26), borderRadius: '50%', background: 'var(--ink-700)', border: '1.5px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--gold-hot)' }}>
+              +{tokens.length - 4}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="seat-nameplate">
         <div className="seat-name">{player.name}</div>
         {(isNarrator || isMe) && role && (
@@ -202,7 +230,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, seatSize, posX, pos
   );
 }
 
-export default function GameTable({ isNarrator = false }) {
+export default function GameTable({ isNarrator = false, activeActorId = null }) {
   const { state } = useGame();
   const { game, playerId } = state;
   const [actionTarget, setActionTarget] = useState(null);
@@ -241,6 +269,12 @@ export default function GameTable({ isNarrator = false }) {
   }[phase] || phase;
 
   const nomineeIds = new Set(nominations.filter(n => !n.resolved).map(n => n.nomineeId));
+
+  // Jugador cuyo turno de voto es ahora (votación activa en sentido horario)
+  const activeNom = nominations.find(n => n.id === game.activeNomination && !n.resolved);
+  const voteTurnId = activeNom && Array.isArray(activeNom.voteOrder)
+    ? activeNom.voteOrder[activeNom.voteTurnIndex] || null
+    : null;
 
   const cornerGroups = {};
   players.forEach(p => {
@@ -326,6 +360,8 @@ export default function GameTable({ isNarrator = false }) {
           isNarrator={isNarrator}
           canAct={canAct}
           nominated={nomineeIds.has(player.id)}
+          activeActor={isNarrator && player.id === activeActorId}
+          voteTurn={player.id === voteTurnId}
           seatSize={seatSize}
           posX={positions[i].x}
           posY={positions[i].y}

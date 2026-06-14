@@ -12,7 +12,7 @@ const {
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, getPublicState,
 } = require('./gameLogic');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 
@@ -100,9 +100,11 @@ function sendTo(ws, type, payload) {
 function broadcastGame() {
   const game = getGame(MAIN_GAME_ID);
   if (!game) return;
+  const hasNarrator = [...sessions.values()].some(s => s.gameId && s.isNarrator);
   sessions.forEach((session) => {
     if (!session.gameId) return;
     const state = getPublicState(game, session.playerId, session.isNarrator);
+    state.hasNarrator = hasNarrator;
     sendTo(session.ws, 'GAME_STATE', state);
   });
 }
@@ -236,6 +238,7 @@ function handleMessage(type, payload, session) {
         p.hasVotedDead = false; p.showRole = false; p.nightInfo = null;
         p.accusation = null; p.slayerUsed = false; p.virginUsed = false;
         p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
+        p.statuses = [];
       });
       setPlazaChannelPermission(true).catch(() => {});
       broadcastGame();
@@ -459,7 +462,17 @@ function handleMessage(type, payload, session) {
         broadcastToAll('NOTIFICATION', { message: `🗳️ ${voter.name} vota ${voteLabel} de ${nomination.nomineeName}`, type: 'vote' });
       }
 
-      if (allVoted && !nomination.resolved) {
+      // Voto en sentido horario: si el que vota es el del turno actual, avanza.
+      if (Array.isArray(nomination.voteOrder)) {
+        const idx = nomination.voteOrder.indexOf(session.playerId);
+        if (idx >= 0 && idx >= (nomination.voteTurnIndex || 0)) {
+          nomination.voteTurnIndex = idx + 1;
+          nomination.argueTimer = null;
+        }
+      }
+
+      // Con narrador, la votación la cierra él (RESOLVE_VOTE). Solo auto-resuelve sin narrador.
+      if (allVoted && !nomination.resolved && game.autoMode) {
         const result = resolveVote(game, nomination.id);
         broadcastGame();
         const msg = result.meetsThreshold
@@ -473,6 +486,27 @@ function handleMessage(type, payload, session) {
       } else {
         broadcastGame();
       }
+      break;
+    }
+
+    // ── Voto emitido por el narrador en nombre de un jugador (control manual) ──
+    case 'VOTE_AS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const nomination = vote(game, payload.playerId, payload.nominationId, payload.inFavor);
+      const voter = game.players.find(p => p.id === payload.playerId);
+      if (voter) {
+        const voteLabel = payload.inFavor ? '✅ a favor' : '❌ en contra';
+        broadcastToAll('NOTIFICATION', { message: `🗳️ ${voter.name} vota ${voteLabel} de ${nomination.nomineeName}`, type: 'vote' });
+      }
+      if (Array.isArray(nomination.voteOrder)) {
+        const idx = nomination.voteOrder.indexOf(payload.playerId);
+        if (idx >= 0 && idx >= (nomination.voteTurnIndex || 0)) {
+          nomination.voteTurnIndex = idx + 1;
+          nomination.argueTimer = null;
+        }
+      }
+      broadcastGame();
       break;
     }
 
@@ -728,6 +762,148 @@ function handleMessage(type, payload, session) {
     case 'REFRESH_DISCORD_MEMBERS': {
       if (!session.isNarrator) throw new Error('No autorizado');
       getGuildMembers(true).then(members => sendTo(ws, 'DISCORD_MEMBERS', { members }));
+      break;
+    }
+
+    case 'TOGGLE_STATUS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const p = game.players.find(x => x.id === payload.playerId);
+      if (p) {
+        if (!Array.isArray(p.statuses)) p.statuses = [];
+        const s = payload.status;
+        const i = p.statuses.indexOf(s);
+        if (i >= 0) p.statuses.splice(i, 1); else p.statuses.push(s);
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'CLEAR_STATUSES': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const p = game.players.find(x => x.id === payload.playerId);
+      if (p) { p.statuses = []; p.tokens = []; }
+      broadcastGame();
+      break;
+    }
+
+    // ── Fichas/tokens del grimorio (arte de rol sobre el jugador afectado) ──
+    case 'ADD_TOKEN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const p = game.players.find(x => x.id === payload.playerId);
+      if (p && payload.token) {
+        if (!Array.isArray(p.tokens)) p.tokens = [];
+        const t = payload.token; // { tokenId, roleId, label, duration }
+        const instanceId = `${t.roleId}:${t.tokenId}`;
+        const existing = p.tokens.findIndex(x => x.instanceId === instanceId);
+        if (existing >= 0) p.tokens.splice(existing, 1); // toggle off
+        else p.tokens.push({ instanceId, tokenId: t.tokenId, roleId: t.roleId, label: t.label, duration: t.duration || 'permanent' });
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'REMOVE_TOKEN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const p = game.players.find(x => x.id === payload.playerId);
+      if (p && Array.isArray(p.tokens)) {
+        p.tokens = p.tokens.filter(t => t.instanceId !== payload.instanceId);
+      }
+      broadcastGame();
+      break;
+    }
+
+    // ── Nominación fijada por el narrador (nominador + nominado) ──
+    case 'NOMINATE_AS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const result = nominate(game, payload.nominatorId, payload.nomineeId);
+      broadcastGame();
+      if (result.virginTrigger) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🛡️ ¡Virgen!',
+          message: `${result.executed.name} nominó a la Virgen y fue ejecutado/a inmediatamente.`,
+          type: 'execution',
+        });
+      } else {
+        const nom = result.nomination;
+        broadcastToAll('NOTIFICATION', { message: `⚖️ ${nom.nominatorName} nomina a ${nom.nomineeName}`, type: 'nomination' });
+      }
+      break;
+    }
+
+    // ── Avanzar el turno de voto (sentido horario) ──
+    case 'ADVANCE_VOTE_TURN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const nom = game.nominations.find(n => n.id === payload.nominationId);
+      if (nom && !nom.resolved) {
+        const max = Array.isArray(nom.voteOrder) ? nom.voteOrder.length : 0;
+        if (typeof payload.turnIndex === 'number') nom.voteTurnIndex = Math.max(0, Math.min(max, payload.turnIndex));
+        else nom.voteTurnIndex = Math.min(max, (nom.voteTurnIndex || 0) + 1);
+        nom.argueTimer = null;
+      }
+      broadcastGame();
+      break;
+    }
+
+    // ── Temporizador de argumentos por jugador ──
+    case 'START_ARGUE_TIMER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const nom = game.nominations.find(n => n.id === payload.nominationId);
+      if (nom && !nom.resolved) {
+        const seconds = Math.max(5, Math.min(600, payload.seconds || 30));
+        nom.argueTimer = { playerId: payload.playerId, endsAt: Date.now() + seconds * 1000, seconds };
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'STOP_ARGUE_TIMER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const nom = game.nominations.find(n => n.id === payload.nominationId);
+      if (nom) nom.argueTimer = null;
+      broadcastGame();
+      break;
+    }
+
+    case 'MOVE_NARRATOR_TO_ROOM': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const p = game.players.find(x => x.id === payload.playerId);
+      if (!p) throw new Error('Jugador no encontrado');
+      moveUserToOwnRoom(NARRATOR_USER_ID, p.name)
+        .then(r => sendTo(ws, 'NARRATOR_MOVED', { playerId: p.id, name: p.name, ...r }))
+        .catch(() => {});
+      break;
+    }
+
+    case 'TEST_ADD_PLAYERS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const count = Math.max(1, Math.min(15 - game.players.length, payload.count || 5));
+      const base = game.players.length;
+      for (let i = 0; i < count; i++) addPlayer(game, { name: `Prueba ${base + i + 1}` });
+      broadcastGame();
+      sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
+        players: game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
+      }));
+      break;
+    }
+
+    case 'TEST_DISTRIBUTE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      if (game.players.length < 5) throw new Error('Necesitas al menos 5 jugadores');
+      const roles = autoSelectRoles(game.players.length, game.campaignId);
+      distributeRoles(game, roles);
+      game.phase = 'role_reveal';
+      broadcastGame();
       break;
     }
 

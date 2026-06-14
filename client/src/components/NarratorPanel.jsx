@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST, getCampaign } from '../data/roles';
 import NightControl from './NightControl';
+import NightWalkthrough from './NightWalkthrough';
+import StatusChips from './StatusChips';
 import GameTable from './GameTable';
 
 const shuffleArr = (arr) => {
@@ -56,13 +58,14 @@ function getNeeded(count, roles) {
   return dist;
 }
 
-const TABS = ['setup', 'game', 'night', 'grimoire', 'ranking'];
-const TAB_LABELS = { setup: 'Config', game: 'Partida', night: 'Noche', grimoire: 'Grimorio', ranking: '🏆' };
+const TABS = ['setup', 'mesa', 'ranking'];
+const TAB_LABELS = { setup: 'Config', mesa: 'Mesa', ranking: '🏆' };
 
 export default function NarratorPanel() {
   const { state, send } = useGame();
   const { game, discordMembers, rankings } = state;
   const [tab, setTab] = useState('setup');
+  const [activeNightActorId, setActiveNightActorId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [discordMap, setDiscordMap] = useState({});
@@ -71,6 +74,7 @@ export default function NarratorPanel() {
   const [manualAssignments, setManualAssignments] = useState({});
   const [showReorder, setShowReorder] = useState(false);
   const [reorderList, setReorderList] = useState([]);
+  const [showAutoMode, setShowAutoMode] = useState(false);
 
   useEffect(() => {
     if (tab === 'setup') send('GET_DISCORD_MEMBERS', {});
@@ -78,7 +82,7 @@ export default function NarratorPanel() {
   }, [tab]);
 
   useEffect(() => {
-    if (game && game.phase !== 'lobby') setTab('game');
+    if (game && game.phase !== 'lobby') setTab('mesa');
   }, [game?.phase === 'lobby']);
 
   // Al cambiar de campaña, los roles seleccionados ya no aplican.
@@ -100,6 +104,9 @@ export default function NarratorPanel() {
 
   return (
     <div className={`app-shell ${isNight ? 'is-night' : 'is-day'}`}>
+
+      {/* ── Orden de noche (overlay narrador) ── */}
+      {isNight && <NightWalkthrough onActiveActor={setActiveNightActorId} />}
 
       {/* ── Topbar ── */}
       <header className="topbar">
@@ -282,7 +289,14 @@ export default function NarratorPanel() {
                 </button>
               </div>
 
-              {/* Auto mode */}
+              {/* Auto mode (partida sin narrador) — oculto por defecto cuando hay narrador */}
+              {game.autoMode ? null : (
+                <button onClick={() => setShowAutoMode(s => !s)} className="btn-night"
+                  style={{ width: '100%', marginTop: 8, fontSize: 9, opacity: 0.7 }}>
+                  {showAutoMode ? 'Ocultar' : '⚙ Partida sin narrador (modo automático)'}
+                </button>
+              )}
+              {(showAutoMode || game.autoMode) && (
               <div style={{ marginTop: 8, padding: '10px 12px', background: 'rgba(141,90,180,0.07)', borderRadius: 4, border: '1px solid rgba(141,90,180,0.2)' }}>
                 <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(141,90,180,0.8)', margin: '0 0 8px' }}>Modo automático</p>
 
@@ -334,6 +348,7 @@ export default function NarratorPanel() {
                   </>
                 )}
               </div>
+              )}
 
               {showManualAssign && (
                 <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: 4, border: 'var(--hairline)' }}>
@@ -506,7 +521,7 @@ export default function NarratorPanel() {
           </>
         )}
 
-        {tab === 'game' && (
+        {tab === 'mesa' && (
           <>
             {game.autoMode && (
               game.autoPhaseInfo
@@ -518,7 +533,16 @@ export default function NarratorPanel() {
                   </div>
                 )
             )}
+
             <PhaseStepControl phase={phase} game={game} send={send} />
+
+            {/* Control de noche por rol (matar / envenenar / proteger / info) */}
+            {isNight && <NightControl />}
+
+            {/* Nominación manual: el narrador fija nominador y nominado */}
+            {phase === 'nominations' && (
+              <ManualNominateCard game={game} send={send} />
+            )}
 
             {activeNomination && <ActiveNominationCard game={game} send={send} />}
 
@@ -554,18 +578,31 @@ export default function NarratorPanel() {
               </div>
             )}
 
-            {/* Compact seat order */}
+            {/* Jugadores: orden de rueda + roles + fichas/tokens + matar/revivir */}
             <div>
               <p className="panel-label">Jugadores <span className="count">{players.filter(p => p.alive).length}/{players.length}</span></p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 180, overflowY: 'auto' }}>
-                {players.map((p, i) => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: p.alive ? 1 : 0.5, padding: '2px 0' }}>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-600)', minWidth: 16, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
-                    <MiniAvatar player={p} size={22} />
-                    <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-200)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                    {!p.alive && <span style={{ color: 'var(--blood-hi)', fontSize: 10 }}>☠</span>}
-                  </div>
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 320, overflowY: 'auto' }}>
+                {players.map((p, i) => {
+                  const role = ALL_ROLES.find(r => r.id === p.role);
+                  return (
+                    <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 3, opacity: p.alive ? 1 : 0.55 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-600)', minWidth: 14, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ink-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-100)', overflow: 'hidden', flexShrink: 0 }}>
+                          {role?.img ? <img src={role.img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
+                        </div>
+                        <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: role?.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)' }}>{role?.name || '?'}</span>
+                        {p.poisoned && <span style={{ fontSize: 9, color: '#4ade80' }}>⚠</span>}
+                        <button onClick={() => send(p.alive ? 'KILL_PLAYER' : 'REVIVE_PLAYER', { playerId: p.id })}
+                          style={{ fontSize: 10, background: 'none', border: 'none', cursor: 'pointer', color: p.alive ? 'var(--blood-hi)' : 'var(--good)', padding: '2px 4px' }}>
+                          {p.alive ? '☠' : '♻'}
+                        </button>
+                      </div>
+                      <StatusChips player={p} compact />
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -573,41 +610,14 @@ export default function NarratorPanel() {
           </>
         )}
 
-        {tab === 'night' && <NightControl />}
-
         {tab === 'ranking' && (
           <RankingsManager rankings={rankings} send={send} />
-        )}
-
-        {tab === 'grimoire' && (
-          <div>
-            <p className="panel-label">Grimorio Completo</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {players.map(p => {
-                const role = ALL_ROLES.find(r => r.id === p.role);
-                return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 3, opacity: p.alive ? 1 : 0.45 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ink-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-100)', overflow: 'hidden', flexShrink: 0 }}>
-                      {p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
-                    </div>
-                    <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: role?.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)' }}>{role?.name || '?'}</span>
-                    {p.poisoned && <span style={{ fontSize: 9, color: '#4ade80' }}>⚠</span>}
-                    <button onClick={() => send(p.alive ? 'KILL_PLAYER' : 'REVIVE_PLAYER', { playerId: p.id })}
-                      style={{ fontSize: 10, background: 'none', border: 'none', cursor: 'pointer', color: p.alive ? 'var(--blood-hi)' : 'var(--good)', padding: '2px 4px' }}>
-                      {p.alive ? '☠' : '♻'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         )}
       </aside>
 
       {/* ── Stage ── */}
       <main className="stage">
-        <GameTable isNarrator={true} />
+        <GameTable isNarrator={true} activeActorId={activeNightActorId} />
       </main>
 
       {/* ── Right panel ── */}
@@ -733,9 +743,16 @@ function ActiveNominationCard({ game, send }) {
   const pendingVoters = nom.pendingVoters;
   const pendingCount = Array.isArray(pendingVoters) ? pendingVoters.length : 0;
 
+  // Turno de voto en sentido horario
+  const order = Array.isArray(nom.voteOrder) ? nom.voteOrder : [];
+  const turnIdx = nom.voteTurnIndex || 0;
+  const turnId = order[turnIdx] || null;
+  const turnPlayer = turnId ? game.players.find(p => p.id === turnId) : null;
+  const votedSet = new Set([...forVoters.map(v => (typeof v === 'object' ? v.id : v)), ...agstVoters.map(v => (typeof v === 'object' ? v.id : v))]);
+
   return (
     <div style={{ background: 'rgba(201,162,74,0.06)', border: 'var(--hairline)', borderRadius: 4, padding: '12px 14px' }}>
-      <p className="panel-label" style={{ color: 'var(--gold-hot)' }}>Votación activa</p>
+      <p className="panel-label" style={{ color: 'var(--gold-hot)' }}>Votación activa (sentido horario)</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6, flexWrap: 'wrap' }}>
         <MiniAvatar player={nominatorPlayer} size={24} />
         <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-200)' }}>{nom.nominatorName}</span>
@@ -743,41 +760,133 @@ function ActiveNominationCard({ game, send }) {
         <MiniAvatar player={nomineePlayer} size={24} />
         <strong style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)' }}>{nom.nomineeName}</strong>
       </div>
+
+      {/* Turno actual + temporizador de argumentos por jugador */}
+      {turnPlayer ? (
+        <div style={{ background: 'rgba(109,140,184,0.1)', border: '1px solid rgba(109,140,184,0.35)', borderRadius: 4, padding: '8px 10px', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--good)' }}>Turno {turnIdx + 1}/{order.length}</span>
+            <MiniAvatar player={turnPlayer} size={22} />
+            <strong style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', flex: 1 }}>{turnPlayer.name}</strong>
+            <ArgueTimer nom={nom} send={send} turnPlayer={turnPlayer} />
+          </div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button onClick={() => send('VOTE_AS', { nominationId: nom.id, inFavor: true, playerId: turnPlayer.id })}
+              className="btn-action danger" style={{ flex: 1, fontSize: 11, padding: '6px 0' }}>⚔ A favor</button>
+            <button onClick={() => send('VOTE_AS', { nominationId: nom.id, inFavor: false, playerId: turnPlayer.id })}
+              className="btn-action" style={{ flex: 1, fontSize: 11, padding: '6px 0' }}>🛡 En contra</button>
+            <button onClick={() => send('ADVANCE_VOTE_TURN', { nominationId: nom.id })}
+              className="btn-night" style={{ fontSize: 10, padding: '6px 8px' }} title="Saltar turno">→</button>
+          </div>
+        </div>
+      ) : (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--good)', fontStyle: 'italic', marginBottom: 8 }}>✓ Todos han pasado por su turno</p>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <span style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 600, color: 'var(--gold-hot)' }}>{votes}/{required}</span>
         <div className="vote-bar-track" style={{ flex: 1, margin: 0 }}>
           <div className="vote-bar-fill" style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-        <div style={{ background: 'rgba(168,58,45,0.08)', borderRadius: 3, padding: '4px 8px' }}>
-          <p style={{ fontFamily: 'var(--mono)', fontSize: 7, textTransform: 'uppercase', color: 'var(--blood-hi)', marginBottom: 2 }}>Matar ({votes})</p>
-          {forVoters.map((v, i) => <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 9, color: 'var(--bone-200)', margin: '1px 0' }}>{typeof v === 'object' ? v.name : v}</p>)}
-        </div>
-        <div style={{ background: 'rgba(109,140,184,0.08)', borderRadius: 3, padding: '4px 8px' }}>
-          <p style={{ fontFamily: 'var(--mono)', fontSize: 7, textTransform: 'uppercase', color: 'var(--good)', marginBottom: 2 }}>Salvar ({agstVoters.length})</p>
-          {agstVoters.map((v, i) => <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 9, color: 'var(--bone-200)', margin: '1px 0' }}>{typeof v === 'object' ? v.name : v}</p>)}
-        </div>
+
+      {/* Orden de voto con estado por jugador */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 8 }}>
+        {order.map((pid, i) => {
+          const pl = game.players.find(p => p.id === pid);
+          if (!pl) return null;
+          const votedFor = forVoters.some(v => (typeof v === 'object' ? v.id : v) === pid);
+          const votedAgainst = agstVoters.some(v => (typeof v === 'object' ? v.id : v) === pid);
+          const isTurn = i === turnIdx;
+          const bg = votedFor ? 'rgba(168,58,45,0.25)' : votedAgainst ? 'rgba(109,140,184,0.25)' : 'rgba(0,0,0,0.2)';
+          return (
+            <span key={pid} title={pl.name}
+              style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-200)', background: bg, border: isTurn ? '1px solid var(--good)' : 'var(--hairline-bone)', borderRadius: 2, padding: '2px 5px' }}>
+              {i + 1}.{pl.name.slice(0, 6)}{votedFor ? ' ⚔' : votedAgainst ? ' 🛡' : votedSet.has(pid) ? '' : ' ·'}
+            </span>
+          );
+        })}
       </div>
-      {!allVoted && (
-        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', fontStyle: 'italic', marginBottom: 6 }}>
-          ⏳ Sin votar: {Array.isArray(pendingVoters) ? pendingVoters.join(', ') : `${pendingCount} pendientes`}
-        </p>
-      )}
+
       <div style={{ display: 'flex', gap: 6 }}>
         <button
           onClick={() => send('RESOLVE_VOTE', { nominationId: nom.id })}
-          disabled={!allVoted}
           className="btn-action danger"
-          style={{ flex: 1, opacity: allVoted ? 1 : 0.4, cursor: allVoted ? 'pointer' : 'not-allowed' }}>
+          style={{ flex: 1 }}>
           {allVoted ? 'Cerrar votación' : `Cerrar (${pendingCount} sin votar)`}
         </button>
-        {!allVoted && (
-          <button onClick={() => send('RESOLVE_VOTE', { nominationId: nom.id })} className="btn-action" style={{ fontSize: 10, padding: '8px 10px' }}>
-            Forzar →
-          </button>
-        )}
       </div>
+    </div>
+  );
+}
+
+// Temporizador de argumentos por jugador (lo arranca el narrador, visible para todos).
+function ArgueTimer({ nom, send, turnPlayer }) {
+  const active = nom.argueTimer && nom.argueTimer.playerId === turnPlayer.id;
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    if (!active) { setRemaining(0); return; }
+    const tick = () => setRemaining(Math.max(0, Math.ceil((nom.argueTimer.endsAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [active, nom.argueTimer?.endsAt, nom.argueTimer?.playerId]);
+
+  if (active) {
+    const urgent = remaining <= 10;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 16, fontWeight: 700, color: urgent ? 'var(--blood-hi)' : 'var(--gold-hot)' }}>{remaining}s</span>
+        <button onClick={() => send('STOP_ARGUE_TIMER', { nominationId: nom.id })} className="btn-night" style={{ fontSize: 8 }}>■</button>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', gap: 3 }}>
+      {[30, 60].map(s => (
+        <button key={s} onClick={() => send('START_ARGUE_TIMER', { nominationId: nom.id, playerId: turnPlayer.id, seconds: s })}
+          className="btn-night" style={{ fontSize: 9, padding: '2px 6px' }} title={`${s}s para argumentar`}>⏱{s}</button>
+      ))}
+    </div>
+  );
+}
+
+// Nominación fijada por el narrador: elige nominador y nominado.
+function ManualNominateCard({ game, send }) {
+  const alive = game.players.filter(p => p.alive);
+  const alreadyNominated = new Set(game.nominations.map(n => n.nominatorId));
+  const [nominatorId, setNominatorId] = useState('');
+  const [nomineeId, setNomineeId] = useState('');
+  const busy = !!game.activeNomination;
+
+  const submit = () => {
+    if (!nominatorId || !nomineeId || nominatorId === nomineeId) return;
+    send('NOMINATE_AS', { nominatorId, nomineeId });
+    setNominatorId(''); setNomineeId('');
+  };
+
+  return (
+    <div style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, border: 'var(--hairline-bone)' }}>
+      <p className="panel-label" style={{ margin: '0 0 8px' }}>Nueva nominación</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <select value={nominatorId} onChange={e => setNominatorId(e.target.value)}
+          style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '5px 6px' }}>
+          <option value="">Nomina…</option>
+          {alive.map(p => <option key={p.id} value={p.id} disabled={alreadyNominated.has(p.id)}>{p.name}{alreadyNominated.has(p.id) ? ' (ya nominó)' : ''}</option>)}
+        </select>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-500)' }}>→</span>
+        <select value={nomineeId} onChange={e => setNomineeId(e.target.value)}
+          style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '5px 6px' }}>
+          <option value="">Nominado…</option>
+          {alive.map(p => <option key={p.id} value={p.id} disabled={p.id === nominatorId}>{p.name}</option>)}
+        </select>
+      </div>
+      <button onClick={submit} disabled={busy || !nominatorId || !nomineeId || nominatorId === nomineeId}
+        className="btn-action primary"
+        style={{ width: '100%', marginTop: 8, opacity: (busy || !nominatorId || !nomineeId || nominatorId === nomineeId) ? 0.4 : 1 }}>
+        {busy ? 'Resuelve la votación activa primero' : '⚖ Nominar'}
+      </button>
     </div>
   );
 }

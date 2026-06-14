@@ -18,11 +18,17 @@ export default function ActionModal({ target, onClose, isNarrator }) {
   const isNomineeInActiveVote = activeNom?.nomineeId === target.id;
   const deadCanStillVote = !me?.alive &&
     (me?.deadVoteNominationId === null || me?.deadVoteNominationId === activeNomination);
-  const canVote = phase === 'voting' && isNomineeInActiveVote && (me?.alive || deadCanStillVote);
+  // Votación abierta + es mi turno (orden horario desde el nominador).
+  const votingOpen = activeNom && (!activeNom.stage || activeNom.stage === 'voting');
+  const myTurn = Array.isArray(activeNom?.voteOrder)
+    ? activeNom.voteOrder[activeNom.voteTurnIndex || 0] === playerId
+    : true;
+  const canVote = phase === 'voting' && votingOpen && isNomineeInActiveVote && myTurn && (me?.alive || deadCanStillVote);
 
   const myVoteOnThis = activeNom?.myVote === 'for' ? 'favor' : activeNom?.myVote === 'against' ? 'contra' : null;
 
-  const canNominate = phase === 'nominations' && !activeNomination && me?.alive && target.alive;
+  // Las nominaciones las gestiona SOLO el narrador (NOMINATE_AS).
+  const canNominate = false;
   const hasAlreadyNominated = nominations.some(n => n.nominatorId === playerId);
 
   const role   = target.role ? ROLE_BY_ID[target.role] : null;

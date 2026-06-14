@@ -884,7 +884,9 @@ function nominate(game, nominatorId, nomineeId) {
     nominatorAvatar: nominator.avatar || null,
     votes: [], against: [], ghostDeclines: [],
     resolved: false, tally: 0, executed: false,
-    voteOrder: buildVoteOrder(game, nomineeId),
+    stage: 'arguments',            // 'arguments' → 'voting'
+    argSpeaker: null,              // 'nominator' | 'nominee' (quién argumenta)
+    voteOrder: buildVoteOrder(game, nominatorId),
     voteTurnIndex: 0,
     argueTimer: null,
   };
@@ -894,16 +896,16 @@ function nominate(game, nominatorId, nomineeId) {
   return { nomination };
 }
 
-// Orden de voto en sentido horario: empieza por el jugador a la izquierda del
-// nominado (siguiente en la rueda) y termina en el propio nominado. Solo
-// incluye a quienes pueden votar (vivos, o muertos con su voto fantasma intacto).
-function buildVoteOrder(game, nomineeId) {
+// Orden de voto en sentido horario empezando por QUIEN NOMINÓ y recorriendo
+// la rueda hasta volver a él. Solo incluye a quienes pueden votar
+// (vivos, o muertos con su voto fantasma intacto). El nominador es el primero.
+function buildVoteOrder(game, nominatorId) {
   const players = game.players;
-  const nomineeIdx = players.findIndex(p => p.id === nomineeId);
-  if (nomineeIdx === -1) return [];
+  const startIdx = players.findIndex(p => p.id === nominatorId);
+  if (startIdx === -1) return [];
   const order = [];
-  for (let step = 1; step <= players.length; step++) {
-    const p = players[(nomineeIdx + step) % players.length];
+  for (let step = 0; step < players.length; step++) {
+    const p = players[(startIdx + step) % players.length];
     const canVote = p.alive || (!p.alive && !p.deadVoteNominationId);
     if (canVote) order.push(p.id);
   }
@@ -913,6 +915,15 @@ function buildVoteOrder(game, nomineeId) {
 function vote(game, voterId, nominationId, inFavor) {
   const nomination = game.nominations.find(n => n.id === nominationId);
   if (!nomination || nomination.resolved) throw new Error('Nominación no válida o ya resuelta');
+
+  // La votación debe estar abierta (tras la fase de argumentos).
+  if (nomination.stage && nomination.stage !== 'voting') throw new Error('La votación aún no está abierta');
+
+  // Solo puede votar quien tiene el turno (orden horario desde el nominador).
+  if (Array.isArray(nomination.voteOrder) && nomination.voteOrder.length > 0) {
+    const turnId = nomination.voteOrder[nomination.voteTurnIndex || 0];
+    if (turnId && turnId !== voterId) throw new Error('No es tu turno de votar');
+  }
 
   const voter = game.players.find(p => p.id === voterId);
   if (!voter) throw new Error('Jugador no encontrado');
@@ -939,6 +950,15 @@ function vote(game, voterId, nominationId, inFavor) {
 
   if (inFavor) nomination.votes.push(voterId);
   else nomination.against.push(voterId);
+
+  // Avanza el turno en sentido horario y limpia el temporizador de palabra.
+  if (Array.isArray(nomination.voteOrder)) {
+    const idx = nomination.voteOrder.indexOf(voterId);
+    if (idx >= 0 && idx >= (nomination.voteTurnIndex || 0)) {
+      nomination.voteTurnIndex = idx + 1;
+      nomination.argueTimer = null;
+    }
+  }
 
   return nomination;
 }

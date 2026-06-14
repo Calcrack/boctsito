@@ -223,7 +223,9 @@ function NightStep({ idx, role, actor, game, send, isPendingRole }) {
           {roleReminders.length > 0 && (
             <div>
               <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 6 }}>
-                Colocar ficha {targets.length === 0 && '(elige jugador primero)'}
+                {targets.length === 0
+                  ? 'Colocar ficha (elige jugador primero)'
+                  : `Colocar ficha sobre: ${targets.map(id => players.find(p => p.id === id)?.name).join(', ')}`}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {roleReminders.map(t => (

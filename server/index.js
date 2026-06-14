@@ -462,14 +462,7 @@ function handleMessage(type, payload, session) {
         broadcastToAll('NOTIFICATION', { message: `🗳️ ${voter.name} vota ${voteLabel} de ${nomination.nomineeName}`, type: 'vote' });
       }
 
-      // Voto en sentido horario: si el que vota es el del turno actual, avanza.
-      if (Array.isArray(nomination.voteOrder)) {
-        const idx = nomination.voteOrder.indexOf(session.playerId);
-        if (idx >= 0 && idx >= (nomination.voteTurnIndex || 0)) {
-          nomination.voteTurnIndex = idx + 1;
-          nomination.argueTimer = null;
-        }
-      }
+      // El avance de turno horario lo hace vote() en gameLogic.
 
       // Con narrador, la votación la cierra él (RESOLVE_VOTE). Solo auto-resuelve sin narrador.
       if (allVoted && !nomination.resolved && game.autoMode) {
@@ -489,22 +482,35 @@ function handleMessage(type, payload, session) {
       break;
     }
 
-    // ── Voto emitido por el narrador en nombre de un jugador (control manual) ──
-    case 'VOTE_AS': {
+    // ── Fase de argumentos: el narrador da la palabra al acusador / acusado ──
+    case 'SET_ARG_SPEAKER': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
-      const nomination = vote(game, payload.playerId, payload.nominationId, payload.inFavor);
-      const voter = game.players.find(p => p.id === payload.playerId);
-      if (voter) {
-        const voteLabel = payload.inFavor ? '✅ a favor' : '❌ en contra';
-        broadcastToAll('NOTIFICATION', { message: `🗳️ ${voter.name} vota ${voteLabel} de ${nomination.nomineeName}`, type: 'vote' });
+      const nom = game.nominations.find(n => n.id === payload.nominationId);
+      if (nom && !nom.resolved) {
+        const who = payload.who === 'nominee' ? 'nominee' : 'nominator';
+        nom.argSpeaker = who;
+        const speakerId = who === 'nominee' ? nom.nomineeId : nom.nominatorId;
+        const seconds = Math.max(10, Math.min(600, payload.seconds || 60));
+        nom.argueTimer = { playerId: speakerId, endsAt: Date.now() + seconds * 1000, seconds };
+        const sp = game.players.find(p => p.id === speakerId);
+        broadcastToAll('NOTIFICATION', { message: `🗣 Argumentos de ${sp?.name || '?'} (${seconds}s)`, type: 'info' });
       }
-      if (Array.isArray(nomination.voteOrder)) {
-        const idx = nomination.voteOrder.indexOf(payload.playerId);
-        if (idx >= 0 && idx >= (nomination.voteTurnIndex || 0)) {
-          nomination.voteTurnIndex = idx + 1;
-          nomination.argueTimer = null;
-        }
+      broadcastGame();
+      break;
+    }
+
+    // ── Abrir la votación tras los argumentos (empieza por el nominador) ──
+    case 'OPEN_VOTING': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const nom = game.nominations.find(n => n.id === payload.nominationId);
+      if (nom && !nom.resolved) {
+        nom.stage = 'voting';
+        nom.argSpeaker = null;
+        nom.voteTurnIndex = 0;
+        nom.argueTimer = null;
+        broadcastToAll('NOTIFICATION', { message: '🗳️ Votación abierta — empieza el nominador', type: 'vote' });
       }
       broadcastGame();
       break;

@@ -105,8 +105,6 @@ export default function NarratorPanel() {
   return (
     <div className={`app-shell ${isNight ? 'is-night' : 'is-day'}`}>
 
-      {/* ── Orden de noche (overlay narrador) ── */}
-      {isNight && <NightWalkthrough onActiveActor={setActiveNightActorId} />}
 
       {/* ── Topbar ── */}
       <header className="topbar">
@@ -622,6 +620,9 @@ export default function NarratorPanel() {
 
       {/* ── Right panel ── */}
       <aside className="right-panel" style={{ padding: '18px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Orden de noche — centro de mando del narrador */}
+        {isNight && <NightWalkthrough embedded onActiveActor={setActiveNightActorId} />}
+
         {/* Night deaths summary */}
         {nightDeaths.length > 0 && (
           <div>
@@ -743,17 +744,20 @@ function ActiveNominationCard({ game, send }) {
   const pendingVoters = nom.pendingVoters;
   const pendingCount = Array.isArray(pendingVoters) ? pendingVoters.length : 0;
 
-  // Turno de voto en sentido horario
+  // Turno de voto en sentido horario (empieza por el nominador)
   const order = Array.isArray(nom.voteOrder) ? nom.voteOrder : [];
   const turnIdx = nom.voteTurnIndex || 0;
   const turnId = order[turnIdx] || null;
   const turnPlayer = turnId ? game.players.find(p => p.id === turnId) : null;
   const votedSet = new Set([...forVoters.map(v => (typeof v === 'object' ? v.id : v)), ...agstVoters.map(v => (typeof v === 'object' ? v.id : v))]);
+  const inArguments = nom.stage === 'arguments';
 
   return (
     <div style={{ background: 'rgba(201,162,74,0.06)', border: 'var(--hairline)', borderRadius: 4, padding: '12px 14px' }}>
-      <p className="panel-label" style={{ color: 'var(--gold-hot)' }}>Votación activa (sentido horario)</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6, flexWrap: 'wrap' }}>
+      <p className="panel-label" style={{ color: 'var(--gold-hot)' }}>
+        {inArguments ? 'Argumentos' : 'Votación (sentido horario)'}
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, flexWrap: 'wrap' }}>
         <MiniAvatar player={nominatorPlayer} size={24} />
         <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-200)' }}>{nom.nominatorName}</span>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-500)' }}>acusa a</span>
@@ -761,93 +765,109 @@ function ActiveNominationCard({ game, send }) {
         <strong style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)' }}>{nom.nomineeName}</strong>
       </div>
 
-      {/* Turno actual + temporizador de argumentos por jugador */}
-      {turnPlayer ? (
-        <div style={{ background: 'rgba(109,140,184,0.1)', border: '1px solid rgba(109,140,184,0.35)', borderRadius: 4, padding: '8px 10px', marginBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--good)' }}>Turno {turnIdx + 1}/{order.length}</span>
-            <MiniAvatar player={turnPlayer} size={22} />
-            <strong style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', flex: 1 }}>{turnPlayer.name}</strong>
-            <ArgueTimer nom={nom} send={send} turnPlayer={turnPlayer} />
-          </div>
-          <div style={{ display: 'flex', gap: 5 }}>
-            <button onClick={() => send('VOTE_AS', { nominationId: nom.id, inFavor: true, playerId: turnPlayer.id })}
-              className="btn-action danger" style={{ flex: 1, fontSize: 11, padding: '6px 0' }}>⚔ A favor</button>
-            <button onClick={() => send('VOTE_AS', { nominationId: nom.id, inFavor: false, playerId: turnPlayer.id })}
-              className="btn-action" style={{ flex: 1, fontSize: 11, padding: '6px 0' }}>🛡 En contra</button>
-            <button onClick={() => send('ADVANCE_VOTE_TURN', { nominationId: nom.id })}
-              className="btn-night" style={{ fontSize: 10, padding: '6px 8px' }} title="Saltar turno">→</button>
-          </div>
-        </div>
+      {inArguments ? (
+        <ArgumentsControls nom={nom} send={send} nominatorPlayer={nominatorPlayer} nomineePlayer={nomineePlayer} />
       ) : (
-        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--good)', fontStyle: 'italic', marginBottom: 8 }}>✓ Todos han pasado por su turno</p>
+        <>
+          {/* Turno actual */}
+          {turnPlayer ? (
+            <div style={{ background: 'rgba(109,140,184,0.1)', border: '1px solid rgba(109,140,184,0.35)', borderRadius: 4, padding: '8px 10px', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--good)' }}>Turno {turnIdx + 1}/{order.length}</span>
+                <MiniAvatar player={turnPlayer} size={22} />
+                <strong style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', flex: 1 }}>{turnPlayer.name}</strong>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic' }}>vota en su pantalla</span>
+                <button onClick={() => send('ADVANCE_VOTE_TURN', { nominationId: nom.id })}
+                  className="btn-night" style={{ fontSize: 10, padding: '4px 8px' }} title="Saltar turno (no vota)">Saltar →</button>
+              </div>
+            </div>
+          ) : (
+            <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--good)', fontStyle: 'italic', marginBottom: 8 }}>✓ Todos han pasado por su turno</p>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 600, color: 'var(--gold-hot)' }}>{votes}/{required}</span>
+            <div className="vote-bar-track" style={{ flex: 1, margin: 0 }}>
+              <div className="vote-bar-fill" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+
+          {/* Orden de voto con estado por jugador */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 8 }}>
+            {order.map((pid, i) => {
+              const pl = game.players.find(p => p.id === pid);
+              if (!pl) return null;
+              const votedFor = forVoters.some(v => (typeof v === 'object' ? v.id : v) === pid);
+              const votedAgainst = agstVoters.some(v => (typeof v === 'object' ? v.id : v) === pid);
+              const isTurn = i === turnIdx;
+              const bg = votedFor ? 'rgba(168,58,45,0.25)' : votedAgainst ? 'rgba(109,140,184,0.25)' : 'rgba(0,0,0,0.2)';
+              return (
+                <span key={pid} title={pl.name}
+                  style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-200)', background: bg, border: isTurn ? '1px solid var(--good)' : 'var(--hairline-bone)', borderRadius: 2, padding: '2px 5px' }}>
+                  {i + 1}.{pl.name.slice(0, 6)}{votedFor ? ' ⚔' : votedAgainst ? ' 🛡' : votedSet.has(pid) ? '' : ' ·'}
+                </span>
+              );
+            })}
+          </div>
+
+          <button onClick={() => send('RESOLVE_VOTE', { nominationId: nom.id })} className="btn-action danger" style={{ width: '100%' }}>
+            {allVoted ? 'Cerrar votación' : `Cerrar (${pendingCount} sin votar)`}
+          </button>
+        </>
       )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-        <span style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 600, color: 'var(--gold-hot)' }}>{votes}/{required}</span>
-        <div className="vote-bar-track" style={{ flex: 1, margin: 0 }}>
-          <div className="vote-bar-fill" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-
-      {/* Orden de voto con estado por jugador */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 8 }}>
-        {order.map((pid, i) => {
-          const pl = game.players.find(p => p.id === pid);
-          if (!pl) return null;
-          const votedFor = forVoters.some(v => (typeof v === 'object' ? v.id : v) === pid);
-          const votedAgainst = agstVoters.some(v => (typeof v === 'object' ? v.id : v) === pid);
-          const isTurn = i === turnIdx;
-          const bg = votedFor ? 'rgba(168,58,45,0.25)' : votedAgainst ? 'rgba(109,140,184,0.25)' : 'rgba(0,0,0,0.2)';
-          return (
-            <span key={pid} title={pl.name}
-              style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-200)', background: bg, border: isTurn ? '1px solid var(--good)' : 'var(--hairline-bone)', borderRadius: 2, padding: '2px 5px' }}>
-              {i + 1}.{pl.name.slice(0, 6)}{votedFor ? ' ⚔' : votedAgainst ? ' 🛡' : votedSet.has(pid) ? '' : ' ·'}
-            </span>
-          );
-        })}
-      </div>
-
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button
-          onClick={() => send('RESOLVE_VOTE', { nominationId: nom.id })}
-          className="btn-action danger"
-          style={{ flex: 1 }}>
-          {allVoted ? 'Cerrar votación' : `Cerrar (${pendingCount} sin votar)`}
-        </button>
-      </div>
     </div>
   );
 }
 
-// Temporizador de argumentos por jugador (lo arranca el narrador, visible para todos).
-function ArgueTimer({ nom, send, turnPlayer }) {
-  const active = nom.argueTimer && nom.argueTimer.playerId === turnPlayer.id;
+// Controles de la fase de argumentos: da la palabra al acusador / acusado con tiempo.
+function ArgumentsControls({ nom, send, nominatorPlayer, nomineePlayer }) {
+  const [secs, setSecs] = useState(60);
+  const timer = nom.argueTimer;
   const [remaining, setRemaining] = useState(0);
-
   useEffect(() => {
-    if (!active) { setRemaining(0); return; }
-    const tick = () => setRemaining(Math.max(0, Math.ceil((nom.argueTimer.endsAt - Date.now()) / 1000)));
+    if (!timer) { setRemaining(0); return; }
+    const tick = () => setRemaining(Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000)));
     tick();
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  }, [active, nom.argueTimer?.endsAt, nom.argueTimer?.playerId]);
+  }, [timer?.endsAt, timer?.playerId]);
 
-  if (active) {
-    const urgent = remaining <= 10;
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 16, fontWeight: 700, color: urgent ? 'var(--blood-hi)' : 'var(--gold-hot)' }}>{remaining}s</span>
-        <button onClick={() => send('STOP_ARGUE_TIMER', { nominationId: nom.id })} className="btn-night" style={{ fontSize: 8 }}>■</button>
-      </div>
-    );
-  }
+  const speaker = nom.argSpeaker === 'nominee' ? nomineePlayer : nom.argSpeaker === 'nominator' ? nominatorPlayer : null;
+  const urgent = remaining <= 10;
+
   return (
-    <div style={{ display: 'flex', gap: 3 }}>
-      {[30, 60].map(s => (
-        <button key={s} onClick={() => send('START_ARGUE_TIMER', { nominationId: nom.id, playerId: turnPlayer.id, seconds: s })}
-          className="btn-night" style={{ fontSize: 9, padding: '2px 6px' }} title={`${s}s para argumentar`}>⏱{s}</button>
-      ))}
+    <div>
+      {speaker && timer && (
+        <div style={{ textAlign: 'center', background: 'rgba(201,162,74,0.08)', border: '1px solid rgba(201,162,74,0.3)', borderRadius: 6, padding: '8px', marginBottom: 8 }}>
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 2px' }}>🗣 Habla {speaker.name}</p>
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 26, fontWeight: 700, color: urgent ? 'var(--blood-hi)' : 'var(--gold-hot)', margin: 0 }}>{remaining}s</p>
+        </div>
+      )}
+
+      {/* Selector de segundos */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)' }}>Tiempo</span>
+        <button onClick={() => setSecs(s => Math.max(15, s - 15))} className="btn-night" style={{ fontSize: 11, padding: '2px 8px' }}>−</button>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: 'var(--gold-hot)', minWidth: 38, textAlign: 'center' }}>{secs}s</span>
+        <button onClick={() => setSecs(s => Math.min(300, s + 15))} className="btn-night" style={{ fontSize: 11, padding: '2px 8px' }}>+</button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button onClick={() => send('SET_ARG_SPEAKER', { nominationId: nom.id, who: 'nominator', seconds: secs })}
+          className="btn-action" style={{ width: '100%', borderColor: nom.argSpeaker === 'nominator' ? 'var(--gold)' : undefined }}>
+          🗣 Argumentos de {nominatorPlayer?.name || 'nominador'}
+        </button>
+        <button onClick={() => send('SET_ARG_SPEAKER', { nominationId: nom.id, who: 'nominee', seconds: secs })}
+          className="btn-action" style={{ width: '100%', borderColor: nom.argSpeaker === 'nominee' ? 'var(--gold)' : undefined }}>
+          🗣 Argumentos de {nomineePlayer?.name || 'nominado'}
+        </button>
+        {timer && (
+          <button onClick={() => send('STOP_ARGUE_TIMER', { nominationId: nom.id })} className="btn-night" style={{ fontSize: 10 }}>■ Parar tiempo</button>
+        )}
+        <button onClick={() => send('OPEN_VOTING', { nominationId: nom.id })} className="btn-action primary" style={{ width: '100%', marginTop: 4 }}>
+          🗳️ Abrir votación
+        </button>
+      </div>
     </div>
   );
 }

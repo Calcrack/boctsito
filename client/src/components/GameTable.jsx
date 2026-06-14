@@ -188,27 +188,6 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
         </div>
       )}
 
-      {/* Fichas recordatorias colocadas por el narrador (arte del rol dueño) */}
-      {tokens.length > 0 && (
-        <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 2, zIndex: 6, pointerEvents: 'none' }}>
-          {tokens.slice(0, 4).map(t => {
-            const tRole = ROLE_BY_ID[t.roleId];
-            const temp = t.duration === 'night' || t.duration === 'day';
-            return (
-              <div key={t.instanceId} title={t.label}
-                style={{ width: Math.max(16, sz * 0.26), height: Math.max(16, sz * 0.26), borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-800)', border: `1.5px ${temp ? 'dashed' : 'solid'} var(--gold)`, boxShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
-                {tRole?.img && <img src={tRole.img} alt={t.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />}
-              </div>
-            );
-          })}
-          {tokens.length > 4 && (
-            <div style={{ width: Math.max(16, sz * 0.26), height: Math.max(16, sz * 0.26), borderRadius: '50%', background: 'var(--ink-700)', border: '1.5px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--gold-hot)' }}>
-              +{tokens.length - 4}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="seat-nameplate">
         <div className="seat-name">{player.name}</div>
         {(isNarrator || isMe) && role && (
@@ -226,6 +205,24 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
           ) : null;
         })()}
       </div>
+
+      {/* Fichas recordatorias colocadas por el narrador (arte del rol + texto) */}
+      {tokens.length > 0 && (
+        <div className="seat-tokens">
+          {tokens.map(t => {
+            const tRole = ROLE_BY_ID[t.roleId];
+            const temp = t.duration === 'night' || t.duration === 'day';
+            return (
+              <div key={t.instanceId} className={`seat-token${temp ? ' temp' : ''}`} title={t.label}>
+                <span className="seat-token-art">
+                  {tRole?.img && <img src={tRole.img} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                </span>
+                <span className="seat-token-label">{t.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

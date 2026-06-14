@@ -438,8 +438,13 @@ function VotingPanel({ nomination, game, playerId, send }) {
   const alreadyVoted = !!nomination.myVote;
   const myGhostDeclined = !!nomination.myGhostDeclined;
   const deadCanStillVote = !me?.alive && (me?.deadVoteNominationId === null || me?.deadVoteNominationId === nomination.id);
-  const canVote = (me?.alive || deadCanStillVote) && !alreadyVoted && !myGhostDeclined;
+  // Solo se vota cuando la votación está abierta y es mi turno (orden horario desde el nominador).
+  const votingOpen = !nomination.stage || nomination.stage === 'voting';
+  const order = Array.isArray(nomination.voteOrder) ? nomination.voteOrder : [];
+  const myTurn = order.length === 0 || order[nomination.voteTurnIndex || 0] === playerId;
+  const canVote = votingOpen && myTurn && (me?.alive || deadCanStillVote) && !alreadyVoted && !myGhostDeclined;
   const isDead = !me?.alive;
+  const turnPlayer = order.length ? game.players.find(p => p.id === order[nomination.voteTurnIndex || 0]) : null;
   const pct = Math.min(100, (forCount / required) * 100);
 
   const [confirmKill, setConfirmKill] = useState(false);
@@ -545,7 +550,11 @@ function VotingPanel({ nomination, game, playerId, send }) {
         </div>
       ) : (
         <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-400)', textAlign: 'center', fontStyle: 'italic' }}>
-          {ghostDeclined ? 'Decidiste no usar tu voto fantasma.' : alreadyVoted ? `Votaste: ${nomination.myVote === 'for' ? '⚔ Matar' : '🛡 Salvar'}` : 'Sin voto disponible'}
+          {ghostDeclined ? 'Decidiste no usar tu voto fantasma.'
+            : alreadyVoted ? `Votaste: ${nomination.myVote === 'for' ? '⚔ Matar' : '🛡 Salvar'}`
+            : !votingOpen ? 'Fase de argumentos — la votación aún no está abierta.'
+            : !myTurn ? `⏳ Espera tu turno — vota ${turnPlayer?.name || '...'}`
+            : 'Sin voto disponible'}
         </p>
       )}
       {isDead && canVote && !ghostDeclined && (
@@ -595,27 +604,40 @@ function VotingPanel({ nomination, game, playerId, send }) {
   );
 }
 
-// Banner de turno de voto (sentido horario) + temporizador de argumentos.
+// Banner: fase de argumentos (acusador/acusado) o turno de voto horario.
 function VoteTurnBanner({ nomination, game, playerId }) {
   const order = Array.isArray(nomination.voteOrder) ? nomination.voteOrder : [];
   const turnIdx = nomination.voteTurnIndex || 0;
-  const turnId = order[turnIdx] || null;
-  const turnPlayer = turnId ? game.players.find(p => p.id === turnId) : null;
-  const isMyTurn = turnId === playerId;
+  const inArguments = nomination.stage === 'arguments';
+
+  // Quién está "activo": en argumentos = el orador; en voto = el del turno.
+  const activeId = inArguments
+    ? (nomination.argSpeaker === 'nominee' ? nomination.nomineeId
+       : nomination.argSpeaker === 'nominator' ? nomination.nominatorId : null)
+    : (order[turnIdx] || null);
+  const activePlayer = activeId ? game.players.find(p => p.id === activeId) : null;
+  const isMe = activeId === playerId;
   const timer = nomination.argueTimer;
-  const timerForTurn = timer && timer.playerId === turnId;
+  const timerActive = timer && timer.playerId === activeId;
 
   const [remaining, setRemaining] = useState(0);
   useEffect(() => {
-    if (!timerForTurn) { setRemaining(0); return; }
+    if (!timerActive) { setRemaining(0); return; }
     const tick = () => setRemaining(Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000)));
     tick();
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  }, [timerForTurn, timer?.endsAt, timer?.playerId]);
+  }, [timerActive, timer?.endsAt, timer?.playerId]);
 
-  if (order.length === 0) return null;
-  if (!turnPlayer) {
+  if (inArguments && !activePlayer) {
+    return (
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--gold)', fontStyle: 'italic', textAlign: 'center', marginBottom: 10 }}>
+        ⏳ Fase de argumentos — el narrador dará la palabra.
+      </p>
+    );
+  }
+  if (!inArguments && order.length === 0) return null;
+  if (!inArguments && !activePlayer) {
     return (
       <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--good)', fontStyle: 'italic', textAlign: 'center', marginBottom: 10 }}>
         ✓ Todos han pasado por su turno
@@ -626,17 +648,19 @@ function VoteTurnBanner({ nomination, game, playerId }) {
   const urgent = remaining <= 10;
   return (
     <div style={{
-      background: isMyTurn ? 'rgba(201,162,74,0.14)' : 'rgba(109,140,184,0.1)',
-      border: `1px solid ${isMyTurn ? 'var(--gold)' : 'rgba(109,140,184,0.35)'}`,
+      background: isMe ? 'rgba(201,162,74,0.14)' : 'rgba(109,140,184,0.1)',
+      border: `1px solid ${isMe ? 'var(--gold)' : 'rgba(109,140,184,0.35)'}`,
       borderRadius: 6, padding: '10px 12px', marginBottom: 12, textAlign: 'center',
     }}>
-      <p style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: isMyTurn ? 'var(--gold-hot)' : 'var(--good)', margin: '0 0 4px' }}>
-        Turno {turnIdx + 1}/{order.length}
+      <p style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: isMe ? 'var(--gold-hot)' : 'var(--good)', margin: '0 0 4px' }}>
+        {inArguments ? '🗣 Argumentos' : `Turno ${turnIdx + 1}/${order.length}`}
       </p>
       <p style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-50)', margin: 0, fontWeight: 600 }}>
-        {isMyTurn ? '👉 Es tu turno de argumentar y votar' : `Habla: ${turnPlayer.name}`}
+        {inArguments
+          ? (isMe ? '👉 Es tu turno de argumentar' : `Habla: ${activePlayer.name}`)
+          : (isMe ? '👉 Es tu turno de votar' : `Vota: ${activePlayer.name}`)}
       </p>
-      {timerForTurn && (
+      {timerActive && (
         <p style={{ fontFamily: 'var(--mono)', fontSize: 30, fontWeight: 700, color: urgent ? 'var(--blood-hi)' : 'var(--gold-hot)', margin: '6px 0 0' }}>
           {remaining}s
         </p>

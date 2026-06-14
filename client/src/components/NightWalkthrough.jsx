@@ -31,7 +31,7 @@ function buildSteps(game) {
   return steps;
 }
 
-export default function NightWalkthrough({ onActiveActor }) {
+export default function NightWalkthrough({ onActiveActor, embedded = false }) {
   const { state, send } = useGame();
   const { game } = state;
   const [idx, setIdx] = useState(0);
@@ -54,7 +54,7 @@ export default function NightWalkthrough({ onActiveActor }) {
 
   if (!isNight) return null;
 
-  if (collapsed) {
+  if (collapsed && !embedded) {
     return (
       <button onClick={() => setCollapsed(false)}
         style={{ position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 250,
@@ -68,16 +68,20 @@ export default function NightWalkthrough({ onActiveActor }) {
   const minions = game.players.filter(p => p.type === 'minion');
   const demons = game.players.filter(p => p.type === 'demon');
 
+  const containerStyle = embedded
+    ? { width: '100%', background: 'rgba(8,9,16,0.7)', border: '1px solid var(--gold)', borderRadius: 10, overflow: 'hidden' }
+    : { position: 'fixed', top: 56, left: '50%', transform: 'translateX(-50%)', zIndex: 250, width: 'min(560px, 94vw)',
+        background: 'rgba(8,9,16,0.96)', border: '1px solid var(--gold)', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', overflow: 'hidden' };
+
   return (
-    <div style={{ position: 'fixed', top: 56, left: '50%', transform: 'translateX(-50%)', zIndex: 250, width: 'min(560px, 94vw)',
-      background: 'rgba(8,9,16,0.96)', border: '1px solid var(--gold)', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', overflow: 'hidden' }}>
+    <div style={containerStyle}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'rgba(201,162,74,0.08)', borderBottom: 'var(--hairline)' }}>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)' }}>
           🌙 Orden de Noche {game.nightNumber} — {current + 1}/{total}
         </span>
-        <button onClick={() => setCollapsed(true)} className="btn-night" style={{ fontSize: 9 }}>Ocultar</button>
+        {!embedded && <button onClick={() => setCollapsed(true)} className="btn-night" style={{ fontSize: 9 }}>Ocultar</button>}
       </div>
 
       <div style={{ padding: '14px 16px' }}>
@@ -89,14 +93,24 @@ export default function NightWalkthrough({ onActiveActor }) {
           <div>
             <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--blood-hi)', marginBottom: 8 }}>Info Esbirros &amp; Demonio</p>
             <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 8 }}>
-              Despierta al equipo malvado y dales esta información por voz.
+              Entra a la sala de cada uno y dale su información por voz (aliados y Demonio).
             </p>
-            {[...minions, ...demons].map(m => m.nightInfo ? (
+            {[...minions, ...demons].map(m => (
               <div key={m.id} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 4, padding: '8px 10px', marginBottom: 6 }}>
-                <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--blood-hi)', marginBottom: 4 }}>{m.name}</p>
-                <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{m.nightInfo}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--blood-hi)', flex: 1 }}>
+                    {m.name} · {m.type === 'demon' ? '👹 Demonio' : '😈 Esbirro'}
+                  </span>
+                  {m.discordId && (
+                    <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: m.id })}
+                      className="btn-action primary" style={{ fontSize: 9, padding: '3px 8px' }}>🚪 Ir a su sala</button>
+                  )}
+                </div>
+                {m.nightInfo
+                  ? <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{m.nightInfo}</p>
+                  : <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-500)', fontStyle: 'italic', margin: 0 }}>Info se genera al iniciar la noche.</p>}
               </div>
-            ) : null)}
+            ))}
           </div>
         ) : (
           <RoleStepView step={step} send={send} />

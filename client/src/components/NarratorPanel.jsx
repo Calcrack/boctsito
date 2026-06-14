@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { ALL_ROLES, ROLE_BY_ID } from '../data/roles';
+import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST, getCampaign } from '../data/roles';
 import NightControl from './NightControl';
 import GameTable from './GameTable';
 
@@ -81,10 +81,15 @@ export default function NarratorPanel() {
     if (game && game.phase !== 'lobby') setTab('game');
   }, [game?.phase === 'lobby']);
 
+  // Al cambiar de campaña, los roles seleccionados ya no aplican.
+  useEffect(() => { setSelectedRoles([]); }, [game?.campaignId]);
+
   if (!game) return <div style={{ padding: 32, fontFamily: 'var(--serif)', color: 'var(--bone-400)' }}>Cargando...</div>;
 
   const { players, phase, nominations, activeNomination, nightDeaths } = game;
   const isNight = ['first_night', 'night'].includes(phase);
+  const campaign = getCampaign(game.campaignId);
+  const campaignRoleList = campaign.roles;
 
   const addPlayer = () => {
     if (!newPlayerName.trim()) return;
@@ -136,6 +141,37 @@ export default function NarratorPanel() {
       <aside className="left-panel">
         {tab === 'setup' && (
           <>
+            {/* Campaign selector */}
+            <div>
+              <p className="panel-label">Campaña</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {CAMPAIGN_LIST.map(c => {
+                  const active = game.campaignId === c.id;
+                  const locked = phase !== 'lobby';
+                  return (
+                    <button key={c.id}
+                      disabled={locked && !active}
+                      onClick={() => { if (!locked) send('SET_CAMPAIGN', { campaignId: c.id }); }}
+                      className="btn-night"
+                      style={{
+                        textAlign: 'left', padding: '8px 10px',
+                        borderColor: active ? 'var(--gold)' : undefined,
+                        color: active ? 'var(--gold-hot)' : undefined,
+                        opacity: (locked && !active) ? 0.35 : 1,
+                        cursor: locked ? 'default' : 'pointer',
+                      }}>
+                      {active ? '◆ ' : ''}{c.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {phase !== 'lobby' && (
+                <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 4 }}>
+                  Resetea la partida para cambiar de campaña.
+                </p>
+              )}
+            </div>
+
             {/* Discord member quick-picker */}
             <DiscordMemberPicker discordMembers={discordMembers} players={players} send={send} />
 
@@ -179,7 +215,7 @@ export default function NarratorPanel() {
                     {type === 'townfolk' ? 'Aldeanos' : type === 'outsider' ? 'Forasteros' : type === 'minion' ? 'Esbirros' : 'Demonios'}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {ALL_ROLES.filter(r => r.type === type).map(r => (
+                    {campaignRoleList.filter(r => r.type === type).map(r => (
                       <button key={r.id}
                         onClick={() => setSelectedRoles(prev => prev.includes(r.id) ? prev.filter(x => x !== r.id) : [...prev, r.id])}
                         className="btn-night"
@@ -398,7 +434,7 @@ export default function NarratorPanel() {
                   onChange={e => send('SET_DRUNK_AS', { roleId: e.target.value || null })}
                   style={{ width: '100%', background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '4px 8px', fontFamily: 'var(--serif)', fontSize: 12 }}>
                   <option value="">Aleatorio</option>
-                  {ALL_ROLES.filter(r => r.type === 'townfolk').map(r => (
+                  {campaignRoleList.filter(r => r.type === 'townfolk').map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
@@ -421,7 +457,7 @@ export default function NarratorPanel() {
                     onClick={() => send('SET_ROLES_FOR_IMP', { roleIds: [] })}>
                     Automático
                   </button>
-                  {ALL_ROLES.filter(r => r.alignment === 'good').map(r => {
+                  {campaignRoleList.filter(r => r.alignment === 'good').map(r => {
                     const sel = (game.narratorRolesForImp || []).includes(r.id);
                     const full = (game.narratorRolesForImp || []).length >= 3 && !sel;
                     return (
@@ -611,22 +647,25 @@ function PhaseStepControl({ phase, game, send }) {
     const allReady = readyTotal > 0 && readyCount >= readyTotal;
     const deaths = game.nightDeaths.map(id => players.find(p => p.id === id)?.name).filter(Boolean);
     const notReady = game.nightNotReady || [];
+    // En modo manual el narrador dirige y avanza cuando quiere; "Hecho" solo cuenta en auto.
     main = {
-      label: `Amanecer → (${readyCount}/${readyTotal} listos)`,
+      label: game.autoMode ? `Amanecer → (${readyCount}/${readyTotal} listos)` : `Amanecer → Día ${game.dayNumber + 1}`,
       color: 'primary',
       action: () => send('START_DAY', { nightDeaths: deaths }),
-      disabled: !allReady,
+      disabled: game.autoMode && !allReady,
     };
-    if (!allReady) {
+    if (game.autoMode && !allReady) {
       secondary = { label: 'Forzar →', color: '', action: () => send('START_DAY', { nightDeaths: deaths }) };
     }
     stepLabel = deaths.length > 0 ? `Muertos: ${deaths.join(', ')}` : 'Nadie muerto esta noche';
-    stepLabel2 = allReady
-      ? '✓ Todos confirmaron Hecho'
-      : notReady.length > 0
-        ? `⏳ Pendientes: ${notReady.map(p => p.name).join(', ')}`
-        : `⏳ Faltan ${readyTotal - readyCount} jugador(es)`;
-    label2Color = allReady ? 'var(--good)' : 'var(--gold)';
+    stepLabel2 = !game.autoMode
+      ? '🎙 Dirige la noche desde la pestaña Noche'
+      : allReady
+        ? '✓ Todos confirmaron Hecho'
+        : notReady.length > 0
+          ? `⏳ Pendientes: ${notReady.map(p => p.name).join(', ')}`
+          : `⏳ Faltan ${readyTotal - readyCount} jugador(es)`;
+    label2Color = (!game.autoMode || allReady) ? 'var(--good)' : 'var(--gold)';
   } else if (phase === 'day') {
     main      = { label: 'Abrir Nominaciones', color: 'primary', action: () => send('OPEN_NOMINATIONS', {}) };
     secondary = { label: 'Saltar a Noche', color: '', action: () => send('START_NIGHT', {}) };

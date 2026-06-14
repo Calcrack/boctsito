@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const { ROLES, getDistribution, getRolesByType } = require('./roles');
+const { ROLES, getDistribution, getRolesByType, getCampaign, DEFAULT_CAMPAIGN } = require('./roles');
 
 // ── In-memory store ────────────────────────────────────────────────
 const games = new Map();
@@ -8,6 +8,7 @@ function createGame(narratorId, gameId) {
   const id = gameId || uuidv4();
   const game = {
     id, narratorId,
+    campaignId: DEFAULT_CAMPAIGN,
     phase: 'lobby',
     dayNumber: 0, nightNumber: 0,
     players: [],
@@ -61,6 +62,7 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     alive: true,
     poisoned: false,
     protected: false,
+    safeTonight: false,
     deadVoteNominationId: null,
     butlerMaster: null,
     slayerUsed: false, virginUsed: false,
@@ -86,7 +88,7 @@ function distributeRoles(game, selectedRoleIds) {
   const n = game.players.length;
   if (n < 5 || n > 15) throw new Error('Se requieren entre 5 y 15 jugadores');
 
-  const dist = getDistribution(n, selectedRoleIds);
+  const dist = getDistribution(n, selectedRoleIds, game.campaignId);
   const available = {
     townfolk: selectedRoleIds.filter(id => ROLES[id]?.type === 'townfolk'),
     outsiders: selectedRoleIds.filter(id => ROLES[id]?.type === 'outsider'),
@@ -118,27 +120,25 @@ function distributeRoles(game, selectedRoleIds) {
       if (game.narratorDrunkAs) {
         player.drunkAs = game.narratorDrunkAs;
       } else {
-        const fakeTownfolk = getRolesByType('townfolk').filter(r => r.id !== 'DRUNK');
+        const fakeTownfolk = getRolesByType('townfolk', game.campaignId).filter(r => r.id !== 'DRUNK');
         player.drunkAs = fakeTownfolk[Math.floor(Math.random() * fakeTownfolk.length)].id;
       }
     }
   });
 
   const rolesInPlay = new Set(game.players.map(p => p.role));
-  const allGoodRoles = [...getRolesByType('townfolk'), ...getRolesByType('outsider')];
+  const allGoodRoles = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
   game.rolesNotInPlay = allGoodRoles.filter(r => !rolesInPlay.has(r.id)).map(r => r.id);
 
   return game;
 }
 
-const NIGHT_QUEUE_FIRST  = ['POISONER', 'WASHERWOMAN', 'LIBRARIAN', 'INVESTIGATOR', 'COOK', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
-const NIGHT_QUEUE_SECOND = ['POISONER', 'MONK', 'IMP', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
-
 const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
 const FIRST_NIGHT_ONLY_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK']);
 
-function getInteractiveRolesForPhase(phase) {
-  return phase === 'first_night' ? NIGHT_QUEUE_FIRST : NIGHT_QUEUE_SECOND;
+function getInteractiveRolesForPhase(game) {
+  const campaign = getCampaign(game.campaignId);
+  return game.phase === 'first_night' ? campaign.queueFirst : campaign.queueOther;
 }
 
 function generateNightInfo(game) {
@@ -186,7 +186,7 @@ function generatePassiveNightInfo(game) {
   const { players } = game;
   const living = players.filter(p => p.alive);
   const rand = arr => arr[Math.floor(Math.random() * arr.length)];
-  const interactiveRoles = getInteractiveRolesForPhase(game.phase);
+  const interactiveRoles = getInteractiveRolesForPhase(game);
 
   if (isFirstNight) {
     players.filter(p => p.role === 'WASHERWOMAN' && p.alive).forEach(p => {
@@ -428,7 +428,7 @@ function generateCurrentPassiveInfo(game) {
 }
 
 function buildNightQueue(game) {
-  const order = getInteractiveRolesForPhase(game.phase);
+  const order = getInteractiveRolesForPhase(game);
   const queue = [];
   for (const roleId of order) {
     if (roleId === 'UNDERTAKER' && !game.executedToday) continue;
@@ -776,6 +776,39 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       actor.nightInfo = '🕵️ GRIMORIO:\n' + grimoire.join('\n');
       break;
     }
+
+    // ── Acciones genéricas para campañas con narrador (BMR / S&V) ──────
+    case 'KILL': {
+      for (const t of targets) {
+        if (!t || !t.alive) continue;
+        if (t.protected || t.safeTonight) continue;
+        t.alive = false;
+        game.nightDeaths.push(t.id);
+        checkScarletWoman(game, actor);
+      }
+      break;
+    }
+
+    case 'MAKE_DRUNK':
+      for (const t of targets) if (t) t.poisoned = true;
+      break;
+
+    case 'SAFE':
+      for (const t of targets) if (t) t.safeTonight = true;
+      break;
+
+    case 'REVIVE':
+      for (const t of targets) {
+        if (!t) continue;
+        t.alive = true;
+        t.deadVoteNominationId = null;
+        game.nightDeaths = game.nightDeaths.filter(id => id !== t.id);
+      }
+      break;
+
+    case 'CLEAR_STATUS':
+      for (const t of targets) { if (t) { t.poisoned = false; t.protected = false; t.safeTonight = false; } }
+      break;
   }
   return game;
 }
@@ -969,7 +1002,7 @@ function startDay(game) {
 function startNight(game) {
   game.phase = game.nightNumber === 0 ? 'first_night' : 'night';
   game.nightNumber++;
-  game.players.forEach(p => p.protected = false);
+  game.players.forEach(p => { p.protected = false; p.safeTonight = false; });
   game.players.filter(p => p.alive && p.role === 'BUTLER').forEach(p => { p.butlerMaster = null; });
   
   // FIX: Determinar si el Recluso registra como malvado esta noche (50% probabilidad)
@@ -1001,6 +1034,11 @@ function startNight(game) {
     const info = generateDrunkInfo(p, _living, _rand, game);
     if (info) p.nightInfo = info;
   });
+  // Modo manual (con narrador): genera toda la info pasiva por adelantado
+  // para que el narrador la vea y la transmita. En auto se genera por cola.
+  if (!game.autoMode) {
+    game.players.filter(p => p.alive).forEach(p => generateSingleRoleInfo(game, p.id));
+  }
   generateCurrentPassiveInfo(game);
   return game;
 }
@@ -1117,6 +1155,7 @@ function getPublicState(game, viewerId, isNarrator) {
 
   return {
     id: game.id, phase, dayNumber, nightNumber,
+    campaignId: game.campaignId,
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);

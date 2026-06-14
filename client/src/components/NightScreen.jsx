@@ -288,6 +288,45 @@ export default function NightScreen({ player }) {
     </button>
   );
 
+  // ── Modo manual (con narrador): el jugador NO elige nada ─────────────
+  const narratorDriven = ['first_night', 'night'].includes(phase) && !game?.autoMode;
+  if (narratorDriven) {
+    return (
+      <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 }}>
+        <ExitBtn />
+        <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
+          {!player.alive ? (
+            <div style={{ fontSize: 64, color: 'var(--bone-400)', marginBottom: 16 }}>☠</div>
+          ) : (
+            <div style={{ fontSize: 70, color: 'var(--moon)', marginBottom: 16, opacity: 0.85 }}>☾</div>
+          )}
+          <h2 style={{ fontFamily: 'var(--title)', fontSize: 24, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 10, letterSpacing: '0.04em' }}>
+            {player.alive ? 'Es de noche' : 'Has muerto'}
+          </h2>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 24 }}>
+            El narrador dirige la noche. Observa y espera.
+          </p>
+          {role && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 20, background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '16px 20px' }}>
+              {role.img && <img src={role.img} style={{ width: 56, height: 56, borderRadius: 6, objectFit: 'cover' }} />}
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-200)' }}>{role.name}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 4, lineHeight: 1.5 }}>{role.ability}</div>
+              </div>
+            </div>
+          )}
+          {player.nightInfo && infoBox(<>
+            {infoLabel}
+            <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)', lineHeight: 2.4 }}>
+              <RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} />
+            </p>
+            {isSpy && game?.players && <SpyGrimoire players={game.players} />}
+          </>)}
+        </div>
+      </div>
+    );
+  }
+
   // ── Dead player ─────────────────────────────────────────────────────
   if (!player.alive && !player.pendingRavenkeeper) {
     return (

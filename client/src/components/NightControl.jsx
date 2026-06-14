@@ -1,194 +1,93 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { ROLE_BY_ID } from '../data/roles';
+import { ROLE_BY_ID, getCampaign } from '../data/roles';
 
-const FIRST_NIGHT = [
-  { key: 'evil_info',    label: 'Info Esbirros & Demonio', systemOnly: true },
-  { role: 'POISONER',    label: 'Envenenador',        action: 'POISONER_ACTION',  targets: 1, evil: true, playerControlled: true },
-  { role: 'WASHERWOMAN', label: 'Lavandera',           action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'LIBRARIAN',   label: 'Bibliotecario',       action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'INVESTIGATOR',label: 'Investigador',        action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'COOK',        label: 'Cocinero',            action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'EMPATH',      label: 'Empática',            action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'FORTUNE_TELLER',label:'Adivina',            action: 'FORTUNE_TELLER',  targets: 2, playerControlled: true },
-  { role: 'BUTLER',      label: 'Mayordomo',           action: 'BUTLER_MASTER',   targets: 1, playerControlled: true },
-  { role: 'SPY',         label: 'Espía',               action: 'INFO_ACKNOWLEDGE', targets: 0, evil: true, playerControlled: true },
-];
+// Marcadores especiales del orden de noche → paso de info de equipo malvado.
+const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 
-const OTHER_NIGHTS = [
-  { role: 'POISONER',    label: 'Envenenador',         action: 'POISONER_ACTION',  targets: 1, evil: true, playerControlled: true },
-  { role: 'MONK',        label: 'Monje',               action: 'MONK_PROTECT',     targets: 1, playerControlled: true },
-  { role: 'IMP',         label: 'Diablillo',           action: 'IMP_KILL',         targets: 1, evil: true, playerControlled: true },
-  { role: 'UNDERTAKER',  label: 'Enterrador',          action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'EMPATH',      label: 'Empática',            action: 'INFO_ACKNOWLEDGE', targets: 0, playerControlled: true },
-  { role: 'RAVENKEEPER', label: 'Criacuervos',         action: 'RAVENKEEPER_INFO', targets: 1, onlyIfPending: true, playerControlled: true },
-  { role: 'FORTUNE_TELLER',label:'Adivina',            action: 'FORTUNE_TELLER',  targets: 2, playerControlled: true },
-  { role: 'BUTLER',      label: 'Mayordomo',           action: 'BUTLER_MASTER',   targets: 1, playerControlled: true },
-  { role: 'SPY',         label: 'Espía',               action: 'INFO_ACKNOWLEDGE', targets: 0, evil: true, playerControlled: true },
-];
+// Controles genéricos (campañas con narrador) → acción del motor.
+const CONTROL_DEFS = {
+  kill:    { action: 'KILL',       label: '☠ Matar',       color: 'var(--blood-hi)', max: 3 },
+  poison:  { action: 'POISON',     label: '🧪 Envenenar',  color: 'var(--good)',     max: 1 },
+  drunk:   { action: 'MAKE_DRUNK', label: '🍺 Emborrachar', color: 'var(--gold)',    max: 1 },
+  protect: { action: 'PROTECT',    label: '🛡 Proteger',    color: 'var(--moon)',    max: 1 },
+  safe:    { action: 'SAFE',       label: '✅ A salvo',     color: 'var(--good)',     max: 2 },
+  revive:  { action: 'REVIVE',     label: '♻ Revivir',     color: 'var(--good)',     max: 1 },
+};
 
 export default function NightControl() {
   const { state, send } = useGame();
   const { game } = state;
-  const [openStep, setOpenStep] = useState(null);
-  const [targets, setTargets] = useState([]);
-
   if (!game) return null;
-  const { players, nightNumber, executedToday, nightDeaths } = game;
+
+  const { players, nightNumber, nightDeaths } = game;
+  const campaign = getCampaign(game.campaignId);
   const isFirst = nightNumber <= 1;
-  const order = isFirst ? FIRST_NIGHT : OTHER_NIGHTS;
-  const living = players.filter(p => p.alive);
+  const order = isFirst ? campaign.firstNightOrder : campaign.otherNightOrder;
 
-  const presentRoles = new Set(players.filter(p => p.alive).map(p => p.role));
   const pendingRaven = players.find(p => p.role === 'RAVENKEEPER' && p.pendingRavenkeeper);
-  if (pendingRaven) presentRoles.add('RAVENKEEPER');
 
-  const activeSteps = order.map((step, idx) => ({ ...step, _idx: idx + 1 })).filter(step => {
-    if (step.systemOnly) return true;
-    if (!presentRoles.has(step.role)) return false;
-    if (step.onlyIfPending) return !!pendingRaven;
-    if (step.role === 'UNDERTAKER') return !!executedToday;
-    return true;
-  });
-
-  const handleApply = (step) => {
-    if (!step.action) return;
-    const actor = players.find(p => p.role === step.role && (step.onlyIfPending ? true : p.alive));
-    if (!actor) return;
-    send('NIGHT_ACTION', { actionType: step.action, actorId: actor.id, targetIds: targets });
-    setTargets([]);
-    setOpenStep(null);
-  };
-
-  const toggleTarget = (pid, max) => {
-    setTargets(prev => {
-      if (prev.includes(pid)) return prev.filter(id => id !== pid);
-      if (prev.length >= max) return max === 1 ? [pid] : [...prev.slice(1), pid];
-      return [...prev, pid];
-    });
-  };
-
-  const row = (content, extra = {}) => (
-    <div style={{ padding: '6px 0', borderBottom: 'var(--hairline-bone)', ...extra }}>{content}</div>
-  );
+  let infoShown = false;
+  let stepNum = 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 0' }}>
-      <SmokeScreenControl game={game} send={send} />
-
+      {/* Controles especiales TB (solo si el rol está en juego) */}
+      {players.some(p => p.role === 'FORTUNE_TELLER') && <SmokeScreenControl game={game} send={send} />}
       {players.some(p => p.role === 'RECLUSE' && p.alive) && <RecluseControl game={game} send={send} />}
       {players.some(p => p.role === 'SPY' && p.alive) && <SpyControl game={game} send={send} />}
-      {['first_night','night'].includes(game.phase) && players.some(p => p.role === 'MAYOR' && p.alive) && (
+      {['first_night', 'night'].includes(game.phase) && players.some(p => p.role === 'MAYOR' && p.alive) && (
         <MayorControl game={game} send={send} players={players} />
       )}
 
       <div>
         <p className="panel-label">
-          Orden Noche {nightNumber} {isFirst ? '— Primera' : ''}
+          {campaign.name} — Orden Noche {nightNumber} {isFirst ? '— Primera' : ''}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {activeSteps.map(step => {
-            if (step.systemOnly) return <SystemInfoStep key="evil_info" game={game} players={players} />;
+          {order.map((roleId) => {
+            if (INFO_MARKERS.has(roleId)) {
+              if (infoShown) return null;
+              infoShown = true;
+              stepNum += 1;
+              return <SystemInfoStep key="evil_info" idx={stepNum} game={game} players={players} />;
+            }
 
-            const actor = players.find(p => p.role === step.role && (step.onlyIfPending ? !p.alive : p.alive));
-            if (!actor) return null;
-            const isOpen = openStep === step.role;
-            const roleData = ROLE_BY_ID[step.role];
-
-            return (
-              <div key={step.role} style={{
-                borderRadius: 4,
-                border: isOpen ? '1px solid rgba(201,162,74,0.4)' : 'var(--hairline-bone)',
-                borderLeft: step.evil ? '3px solid var(--blood-hi)' : (isOpen ? undefined : undefined),
-                background: isOpen ? 'rgba(201,162,74,0.05)' : 'rgba(0,0,0,0.15)',
-                overflow: 'hidden',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer' }}
-                  onClick={() => { setOpenStep(isOpen ? null : step.role); setTargets([]); }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', width: 16, textAlign: 'right', flexShrink: 0 }}>{step._idx}</span>
-                  {roleData?.img && <img src={roleData.img} style={{ width: 24, height: 24, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />}
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: step.evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>
-                      {step.label}
-                    </span>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', marginLeft: 6 }}>
-                      {actor.name}{actor.poisoned ? ' ⚠' : ''}
-                    </span>
-                  </div>
-                  {actor.nightInfo && <span style={{ color: 'var(--good)', fontSize: 11 }}>✓</span>}
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{isOpen ? '▲' : '▼'}</span>
-                </div>
-
-                {isOpen && (
-                  <div style={{ borderTop: 'var(--hairline-bone)', padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {actor.nightInfo && (
-                      <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 3, padding: '8px 10px' }}>
-                        <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>Info para {actor.name}</p>
-                        <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line' }}>{actor.nightInfo}</p>
-                      </div>
-                    )}
-
-                    {step.targets > 0 && !step.playerControlled && (
-                      <div>
-                        <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 6 }}>
-                          Elige {step.targets === 1 ? 'objetivo' : `${step.targets} objetivos`}
-                          {targets.length > 0 && `: ${targets.map(id => players.find(p => p.id === id)?.name).join(', ')}`}
-                        </p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {(step.evil ? players : living)
-                            .filter(p => step.role !== 'MONK' || p.id !== actor.id)
-                            .map(p => (
-                              <button key={p.id} onClick={() => toggleTarget(p.id, step.targets)}
-                                className="btn-night"
-                                style={{
-                                  fontSize: 9,
-                                  borderColor: targets.includes(p.id) ? 'var(--gold)' : undefined,
-                                  color: targets.includes(p.id) ? 'var(--gold-hot)' : undefined,
-                                  opacity: p.alive ? 1 : 0.5,
-                                }}>
-                                {p.name}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {step.action && !step.playerControlled && (
-                      <button onClick={() => handleApply(step)}
-                        disabled={step.targets > 0 && targets.length < step.targets}
-                        className="btn-action primary"
-                        style={{ opacity: (step.targets > 0 && targets.length < step.targets) ? 0.35 : 1 }}>
-                        Aplicar acción
-                      </button>
-                    )}
-                    {step.playerControlled && (
-                      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', textAlign: 'center' }}>
-                        El jugador actúa desde su panel
-                        {actor.nightInfo && <span style={{ color: 'var(--good)', marginLeft: 6 }}>— ya actuó</span>}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+            const role = ROLE_BY_ID[roleId];
+            const isPendingRole = roleId === 'RAVENKEEPER' && !!pendingRaven;
+            const actors = players.filter(p =>
+              (p.role === roleId || (p.role === 'DRUNK' && p.drunkAs === roleId)) &&
+              (isPendingRole ? true : p.alive)
             );
+            if (actors.length === 0) return null;
+
+            return actors.map(actor => {
+              stepNum += 1;
+              return (
+                <NightStep
+                  key={actor.id + roleId}
+                  idx={stepNum}
+                  role={role}
+                  actor={actor}
+                  game={game}
+                  send={send}
+                  isPendingRole={isPendingRole}
+                />
+              );
+            });
           })}
         </div>
 
-        {/* Pending players — haven't pressed Hecho */}
-        {(game.nightNotReady || []).length > 0 && (
+        {/* Jugadores sin confirmar Hecho (relevante en modo automático) */}
+        {(game.nightNotReady || []).length > 0 && game.autoMode && (
           <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(201,162,74,0.06)', border: 'var(--hairline)', borderRadius: 4 }}>
             <p style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>
               ⏳ Sin confirmar Hecho ({game.nightNotReady.length})
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {game.nightNotReady.map(p => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0,0,0,0.2)', borderRadius: 3, padding: '3px 7px' }}>
-                  <div style={{ width: 20, height: 20, borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-700)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--bone-100)' }}>
-                    {p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
-                  </div>
-                  <span style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-200)' }}>{p.name}</span>
-                </div>
+                <span key={p.id} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-200)', background: 'rgba(0,0,0,0.2)', borderRadius: 3, padding: '3px 7px' }}>{p.name}</span>
               ))}
             </div>
           </div>
@@ -222,7 +121,142 @@ export default function NightControl() {
   );
 }
 
-function SystemInfoStep({ game, players }) {
+// ── Un paso del orden de noche (un rol) ────────────────────────────
+function NightStep({ idx, role, actor, game, send, isPendingRole }) {
+  const [open, setOpen] = useState(false);
+  const [targets, setTargets] = useState([]);
+  const [infoText, setInfoText] = useState('');
+  const players = game.players;
+
+  if (!role) return null;
+  const evil = role.alignment === 'evil';
+  const concrete = role.night;           // TB: acción automatizada
+  const controls = role.controls || [];  // campañas nuevas: botones genéricos
+
+  const toggle = (pid, max) => {
+    setTargets(prev => {
+      if (prev.includes(pid)) return prev.filter(x => x !== pid);
+      if (prev.length >= max) return max === 1 ? [pid] : [...prev.slice(1), pid];
+      return [...prev, pid];
+    });
+  };
+
+  const applyConcrete = () => {
+    send('NIGHT_ACTION', { actionType: concrete.action, actorId: actor.id, targetIds: targets });
+    setTargets([]); setOpen(false);
+  };
+  const applyControl = (def) => {
+    if (def.action !== 'REVIVE' && targets.length === 0) return;
+    send('NIGHT_ACTION', { actionType: def.action, actorId: actor.id, targetIds: targets });
+    setTargets([]);
+  };
+  const sendInfo = () => {
+    send('NIGHT_ACTION', { actionType: 'SEND_INFO', actorId: actor.id, info: infoText });
+    setInfoText('');
+  };
+
+  const maxTargets = concrete?.targets ?? Math.max(1, ...controls.map(c => CONTROL_DEFS[c]?.max || 1), 1);
+  const pool = players; // narrador puede elegir a cualquiera
+
+  return (
+    <div style={{
+      borderRadius: 4,
+      border: open ? '1px solid rgba(201,162,74,0.4)' : 'var(--hairline-bone)',
+      borderLeft: evil ? '3px solid var(--blood-hi)' : undefined,
+      background: open ? 'rgba(201,162,74,0.05)' : 'rgba(0,0,0,0.15)',
+      overflow: 'hidden',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer' }}
+        onClick={() => setOpen(!open)}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', width: 16, textAlign: 'right', flexShrink: 0 }}>{idx}</span>
+        {role.img && <img src={role.img} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>{role.name}</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', marginLeft: 6 }}>
+            {actor.name}{actor.poisoned ? ' ⚠' : ''}{!actor.alive ? ' ☠' : ''}
+          </span>
+        </div>
+        {actor.nightInfo && <span style={{ color: 'var(--good)', fontSize: 11 }}>✓</span>}
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: 'var(--hairline-bone)', padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: 0 }}>{role.ability}</p>
+
+          {actor.nightInfo && (
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 3, padding: '8px 10px' }}>
+              <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>Info de {actor.name}</p>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{actor.nightInfo}</p>
+            </div>
+          )}
+
+          {/* Selector de objetivos (si el paso necesita) */}
+          {(concrete?.targets || controls.some(c => CONTROL_DEFS[c])) && (
+            <div>
+              <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 6 }}>
+                Objetivos {targets.length > 0 && `: ${targets.map(id => players.find(p => p.id === id)?.name).join(', ')}`}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {pool.map(p => (
+                  <button key={p.id} onClick={() => toggle(p.id, maxTargets)}
+                    className="btn-night"
+                    style={{
+                      fontSize: 9,
+                      borderColor: targets.includes(p.id) ? 'var(--gold)' : undefined,
+                      color: targets.includes(p.id) ? 'var(--gold-hot)' : undefined,
+                      opacity: p.alive ? 1 : 0.5,
+                    }}>
+                    {p.name}{!p.alive ? ' ☠' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TB: acción concreta automatizada */}
+          {concrete && !concrete.passive && (
+            <button onClick={applyConcrete}
+              disabled={concrete.targets > 0 && targets.length < concrete.targets}
+              className="btn-action primary"
+              style={{ opacity: (concrete.targets > 0 && targets.length < concrete.targets) ? 0.35 : 1 }}>
+              Aplicar acción
+            </button>
+          )}
+
+          {/* Campañas nuevas: botones genéricos */}
+          {!concrete && controls.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {controls.filter(c => CONTROL_DEFS[c]).map(c => {
+                const def = CONTROL_DEFS[c];
+                return (
+                  <button key={c} onClick={() => applyControl(def)}
+                    className="btn-night"
+                    style={{ fontSize: 11, color: def.color, borderColor: 'currentColor' }}>
+                    {def.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Caja de info libre (siempre disponible para el narrador) */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+            <textarea value={infoText} onChange={e => setInfoText(e.target.value)}
+              placeholder="Enviar información a este jugador…"
+              rows={2}
+              style={{ flex: 1, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 3, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', resize: 'vertical' }}
+            />
+            <button onClick={sendInfo} disabled={!infoText.trim()} className="btn-action primary"
+              style={{ padding: '8px 10px', opacity: infoText.trim() ? 1 : 0.35 }}>Enviar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SystemInfoStep({ idx, game, players }) {
   const [open, setOpen] = useState(false);
   const minions = players.filter(p => p.type === 'minion');
   const demons  = players.filter(p => p.type === 'demon');
@@ -230,16 +264,16 @@ function SystemInfoStep({ game, players }) {
     <div style={{ borderRadius: 4, border: '1px solid var(--blood-dim)', background: 'rgba(168,58,45,0.08)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer' }}
         onClick={() => setOpen(!open)}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', width: 16, textAlign: 'right' }}>1</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', width: 16, textAlign: 'right' }}>{idx}</span>
         <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--blood-hi)', flex: 1 }}>Info Esbirros & Demonio</span>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
       </div>
       {open && (
-        <div style={{ borderTop: 'var(--hairline-bone)', padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ borderTop: 'var(--hairline-bone)', padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[...minions, ...demons].map(m => m.nightInfo ? (
             <div key={m.id} style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 3, padding: '8px 10px' }}>
               <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--blood-hi)', marginBottom: 4 }}>{m.name}</p>
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line' }}>{m.nightInfo}</p>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{m.nightInfo}</p>
             </div>
           ) : null)}
           {[...minions, ...demons].every(p => !p.nightInfo) && (
@@ -260,7 +294,7 @@ function ControlBlock({ title, children, borderColor = 'var(--hairline)' }) {
         <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)' }}>{title}</span>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
       </div>
-      {open && <div style={{ borderTop: 'var(--hairline-bone)', padding: '10px 10px' }}>{children}</div>}
+      {open && <div style={{ borderTop: 'var(--hairline-bone)', padding: '10px' }}>{children}</div>}
     </div>
   );
 }
@@ -268,9 +302,9 @@ function ControlBlock({ title, children, borderColor = 'var(--hairline)' }) {
 function RecluseControl({ game, send }) {
   const current = game.recluseRegistersAs;
   const options = [
-    { value: null,    label: 'Normal (bueno)' },
+    { value: null, label: 'Normal (bueno)' },
     { value: 'minion', label: 'Parece Esbirro' },
-    { value: 'demon',  label: 'Parece Demonio' },
+    { value: 'demon', label: 'Parece Demonio' },
   ];
   return (
     <ControlBlock title="Recluso — ¿cómo se registra?" borderColor="rgba(109,140,184,0.3)">
@@ -290,7 +324,7 @@ function RecluseControl({ game, send }) {
 function SpyControl({ game, send }) {
   const current = game.spyRegistersAs;
   const options = [
-    { value: null,   label: 'Normal (malvado)' },
+    { value: null, label: 'Normal (malvado)' },
     { value: 'good', label: 'Parece Bueno' },
   ];
   return (

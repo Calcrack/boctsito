@@ -1,7 +1,10 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, ChannelType } = require('discord.js');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = '1462151561575928034';
+
+// Categoría donde viven las "habitaciones" de noche (1 canal de voz por jugador).
+const NIGHT_CATEGORY_ID = '1515577274248859648';
 
 const CHANNELS = {
   PLAZA:        '1467693963610951711',
@@ -127,6 +130,61 @@ async function moveUserToChannel(discordUserId, channelKey, channelLimits = {}) 
 }
 
 
+// Cache nombre-de-sala → channelId para no re-buscar cada noche.
+const nightRoomCache = new Map();
+
+function sanitizeRoomName(name) {
+  // Discord recorta nombres largos; mantener legible.
+  return String(name).trim().slice(0, 90) || 'jugador';
+}
+
+// Busca el canal de voz del jugador dentro de la categoría de noche; si no
+// existe lo CREA (nunca se borra: se reutiliza entre partidas).
+async function ensurePlayerRoom(playerName) {
+  if (!isReady || !guild) return null;
+  const wanted = sanitizeRoomName(playerName);
+  const key = wanted.toLowerCase();
+  // Cache
+  const cachedId = nightRoomCache.get(key);
+  if (cachedId && guild.channels.cache.get(cachedId)) return cachedId;
+  try {
+    // Buscar por nombre dentro de la categoría
+    const existing = guild.channels.cache.find(c =>
+      c.parentId === NIGHT_CATEGORY_ID &&
+      c.type === ChannelType.GuildVoice &&
+      c.name.toLowerCase() === key
+    );
+    if (existing) { nightRoomCache.set(key, existing.id); return existing.id; }
+    // Crear
+    const created = await guild.channels.create({
+      name: wanted,
+      type: ChannelType.GuildVoice,
+      parent: NIGHT_CATEGORY_ID,
+    });
+    nightRoomCache.set(key, created.id);
+    return created.id;
+  } catch (err) {
+    console.error('[Discord] ensurePlayerRoom error:', err.message);
+    return null;
+  }
+}
+
+// Teletransporta a un usuario a su propia habitación de noche (la crea si falta).
+async function moveUserToOwnRoom(discordUserId, playerName) {
+  if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
+  try {
+    const roomId = await ensurePlayerRoom(playerName);
+    if (!roomId) return { ok: false, error: 'No se pudo crear la sala' };
+    const member = guild.members.cache.get(discordUserId) || await guild.members.fetch(discordUserId);
+    if (!member.voice?.channelId) return { ok: false, error: 'El jugador no está en un canal de voz' };
+    await member.voice.setChannel(roomId);
+    return { ok: true };
+  } catch (err) {
+    console.error('[Discord] moveUserToOwnRoom error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 const BOCT_ROLE_ID = '1499987378755076218';
 
 async function setPlazaChannelPermission(allow) {
@@ -166,4 +224,4 @@ function getBotStatus() {
   return { connected: isReady, tag: client?.user?.tag || null };
 }
 
-module.exports = { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, CHANNELS, setVoiceStateCallback, setPlazaChannelPermission };
+module.exports = { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom, sendDM, getBotStatus, CHANNELS, setVoiceStateCallback, setPlazaChannelPermission };

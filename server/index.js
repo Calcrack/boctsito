@@ -12,8 +12,8 @@ const {
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, getPublicState,
 } = require('./gameLogic');
-const { initBot, getGuildMembers, moveUserToChannel, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
-const { ROLES, BASE_DISTRIBUTION, getRolesByType } = require('./roles');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
+const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 
 const SAVE_PATH = path.join(__dirname, 'game-save.json');
@@ -54,17 +54,20 @@ function shuffleLocal(arr) {
   return a;
 }
 
-function autoSelectRoles(playerCount) {
-  const baseDist = BASE_DISTRIBUTION[playerCount];
+function autoSelectRoles(playerCount, campaignId) {
+  const campaign = getCampaign(campaignId);
+  const baseDist = campaign.distribution[playerCount];
   if (!baseDist) throw new Error('Número de jugadores no soportado (5-15)');
 
-  const allRoles    = Object.values(ROLES);
+  const allRoles    = Object.values(campaign.roles);
   const tfPool      = allRoles.filter(r => r.type === 'townfolk').map(r => r.id);
   const outPool     = allRoles.filter(r => r.type === 'outsider').map(r => r.id);
   const minionPool  = allRoles.filter(r => r.type === 'minion').map(r => r.id);
+  const demonPool   = allRoles.filter(r => r.type === 'demon').map(r => r.id);
 
-  // 35% chance of including Baron when player count supports extra outsiders
-  const canBaron  = baseDist.outsiders < outPool.length;
+  // Barón (solo si la campaña lo tiene): 35% si caben +2 forasteros.
+  const hasBaronRole = minionPool.includes('BARON');
+  const canBaron  = hasBaronRole && baseDist.outsiders + 2 <= outPool.length;
   const useBaron  = canBaron && Math.random() < 0.35;
   const dist      = { ...baseDist };
 
@@ -82,8 +85,9 @@ function autoSelectRoles(playerCount) {
   } else {
     minions = shuffleLocal(minionPool).slice(0, dist.minions);
   }
+  const demons = shuffleLocal(demonPool).slice(0, dist.demons || 1);
 
-  return [...townfolk, ...outsiders, ...minions, 'IMP'];
+  return [...townfolk, ...outsiders, ...minions, ...demons];
 }
 
 // ── WebSocket helpers ──────────────────────────────────────────────
@@ -106,6 +110,21 @@ function broadcastGame() {
 function broadcastToAll(type, payload) {
   sessions.forEach(session => {
     if (session.gameId) sendTo(session.ws, type, payload);
+  });
+}
+
+// ── Teletransporte de voz ──────────────────────────────────────────
+// Noche: cada jugador vivo a su propia habitación (canal con su nombre).
+function teleportToNightRooms(game) {
+  game.players.forEach(p => {
+    if (p.alive && p.discordId) moveUserToOwnRoom(p.discordId, p.name).catch(() => {});
+  });
+}
+// Amanecer: todos de vuelta a la Plaza.
+function teleportAllToPlaza(game) {
+  game.players.forEach(p => {
+    p.discordChannel = null;
+    if (p.discordId) moveUserToChannel(p.discordId, 'PLAZA', game.channelLimits || {}).catch(() => {});
   });
 }
 
@@ -213,7 +232,7 @@ function handleMessage(type, payload, session) {
       if (t0) { clearTimeout(t0); autoTimers.delete(MAIN_GAME_ID); }
       game.players.forEach(p => {
         p.role = null; p.alignment = null; p.type = null;
-        p.alive = true; p.poisoned = false; p.protected = false;
+        p.alive = true; p.poisoned = false; p.protected = false; p.safeTonight = false;
         p.hasVotedDead = false; p.showRole = false; p.nightInfo = null;
         p.accusation = null; p.slayerUsed = false; p.virginUsed = false;
         p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
@@ -256,6 +275,17 @@ function handleMessage(type, payload, session) {
         if (payload.discordTag !== undefined) player.discordTag = payload.discordTag;
         if (payload.avatar !== undefined) player.avatar = payload.avatar;
       }
+      broadcastGame();
+      break;
+    }
+
+    case 'SET_CAMPAIGN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      if (game.phase !== 'lobby') throw new Error('Solo se puede cambiar de campaña en el lobby');
+      const cid = payload.campaignId;
+      if (!CAMPAIGNS[cid]) throw new Error('Campaña desconocida');
+      game.campaignId = cid;
       broadcastGame();
       break;
     }
@@ -314,10 +344,12 @@ function handleMessage(type, payload, session) {
       const isFirstNight = game.nightNumber === 0;
       startNight(game);
       if (isFirstNight) recordGameStart(game);
+      teleportToNightRooms(game);
       setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
       broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });
-      if (game.nightQueue.length === 0) {
+      // Solo en modo automático la noche vacía avanza sola; en manual la dirige el narrador.
+      if (game.autoMode && game.nightQueue.length === 0) {
         setTimeout(() => triggerAutoDawn(game), 5000);
       }
       break;
@@ -326,11 +358,12 @@ function handleMessage(type, payload, session) {
     case 'AUTO_MODE': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
-      const roles = autoSelectRoles(game.players.length);
+      const roles = autoSelectRoles(game.players.length, game.campaignId);
       distributeRoles(game, roles);
       game.autoMode = true;
       startNight(game);
       recordGameStart(game);
+      teleportToNightRooms(game);
       setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
       broadcastToAll('NOTIFICATION', { message: '🤖 Modo automático activado — Primera Noche comenzando...', type: 'night' });
@@ -364,6 +397,7 @@ function handleMessage(type, payload, session) {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
       startDay(game);
+      teleportAllToPlaza(game);
       setPlazaChannelPermission(true).catch(() => {});
       broadcastGame();
       const deaths = payload.nightDeaths || [];
@@ -485,7 +519,12 @@ function handleMessage(type, payload, session) {
     case 'NIGHT_ACTION': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
-      applyNightAction(game, payload.actionType, payload.actorId, payload.targetIds || []);
+      if (payload.actionType === 'SEND_INFO') {
+        const actor = game.players.find(p => p.id === payload.actorId);
+        if (actor) actor.nightInfo = payload.info || '';
+      } else {
+        applyNightAction(game, payload.actionType, payload.actorId, payload.targetIds || []);
+      }
       broadcastGame();
       break;
     }
@@ -711,13 +750,13 @@ function handleMessage(type, payload, session) {
           player.poisoned = false;
           player.protected = false;
           if (role.id === 'DRUNK') {
-            const fakeTownfolk = getRolesByType('townfolk').filter(r => r.id !== 'DRUNK');
+            const fakeTownfolk = getRolesByType('townfolk', game.campaignId).filter(r => r.id !== 'DRUNK');
             player.drunkAs = fakeTownfolk[Math.floor(Math.random() * fakeTownfolk.length)].id;
           }
         }
       });
       const rolesInPlay = new Set(game.players.map(p => p.role));
-      const allGoodRoles = [...getRolesByType('townfolk'), ...getRolesByType('outsider')];
+      const allGoodRoles = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
       game.rolesNotInPlay = allGoodRoles.filter(r => !rolesInPlay.has(r.id)).map(r => r.id);
       game.phase = 'role_reveal';
       broadcastGame();
@@ -971,6 +1010,7 @@ function triggerAutoDawn(game) {
   if (!['first_night', 'night'].includes(game.phase)) return;
   const deaths = game.nightDeaths.map(id => game.players.find(p => p.id === id)?.name).filter(Boolean);
   startDay(game);
+  teleportAllToPlaza(game);
   setPlazaChannelPermission(true).catch(() => {});
   broadcastGame();
   if (game.phase === 'game_over') {
@@ -1061,6 +1101,7 @@ function scheduleAutoNight(game) {
   setAutoTimer(MAIN_GAME_ID, () => {
     if (!game.autoMode || game.phase === 'game_over') return;
     startNight(game);
+    teleportToNightRooms(game);
     setPlazaChannelPermission(false).catch(() => {});
     broadcastGame();
     broadcastToAll('NOTIFICATION', { message: `🌙 Noche ${game.nightNumber} ha comenzado`, type: 'night' });

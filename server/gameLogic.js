@@ -652,14 +652,30 @@ function countEvilNeighborPairs(living, game = null) {
   return pairs;
 }
 
+// Coloca automáticamente una ficha recordatoria (arte del rol que actúa)
+// sobre el jugador afectado, para guiar al narrador.
+function placeToken(target, ownerRole, tokenId, label, duration) {
+  if (!target || !ownerRole) return;
+  if (!Array.isArray(target.tokens)) target.tokens = [];
+  const instanceId = `${ownerRole}:${tokenId}`;
+  if (!target.tokens.some(t => t.instanceId === instanceId)) {
+    target.tokens.push({ instanceId, tokenId, roleId: ownerRole, label, duration });
+  }
+}
+
 function applyNightAction(game, actionType, actorId, targetIds) {
   const actor   = game.players.find(p => p.id === actorId);
   const targets = targetIds.map(id => game.players.find(p => p.id === id)).filter(Boolean);
+  // Rol cuyo arte se muestra en la ficha (el del actor; fallback por tipo de acción).
+  const artRole = actor?.role || null;
 
   switch (actionType) {
     case 'POISON':
     case 'POISONER_ACTION':
-      if (targets[0]) { targets[0].poisoned = true; }
+      if (targets[0]) {
+        targets[0].poisoned = true;
+        placeToken(targets[0], artRole || 'POISONER', 'POISONED', 'Envenenado', 'night');
+      }
       break;
 
     case 'PROTECT':
@@ -667,6 +683,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       game.players.forEach(p => p.protected = false);
       if (targets[0] && !actor?.poisoned) {
         targets[0].protected = true;
+        placeToken(targets[0], artRole || 'MONK', 'SAFE', 'A salvo', 'night');
       }
       break;
 
@@ -685,6 +702,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         } else {
           target.alive = false;
           game.nightDeaths.push(target.id);
+          placeToken(target, artRole || 'IMP', 'DIES', 'Muere', 'night');
           const minion = game.players.find(p => p.type === 'minion' && p.alive);
           if (minion) {
             minion.role = 'IMP'; minion.type = 'demon';
@@ -700,6 +718,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
           const redirectTarget = pool[Math.floor(Math.random() * pool.length)];
           redirectTarget.alive = false;
           game.nightDeaths.push(redirectTarget.id);
+          placeToken(redirectTarget, artRole || 'IMP', 'DIES', 'Muere', 'night');
           const isRealRaven = redirectTarget.role === 'RAVENKEEPER' && !redirectTarget.poisoned;
           const isDrunkRaven = redirectTarget.role === 'DRUNK' && redirectTarget.drunkAs === 'RAVENKEEPER';
           if (isRealRaven || isDrunkRaven) {
@@ -713,6 +732,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       } else {
         target.alive = false;
         game.nightDeaths.push(target.id);
+        placeToken(target, artRole || 'IMP', 'DIES', 'Muere', 'night');
         const isRealRaven = target.role === 'RAVENKEEPER' && !target.poisoned;
         const isDrunkRaven = target.role === 'DRUNK' && target.drunkAs === 'RAVENKEEPER';
         if (isRealRaven || isDrunkRaven) {
@@ -747,7 +767,12 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
 
     case 'BUTLER_MASTER':
-      if (actor && targets[0]) actor.butlerMaster = targets[0].id;
+      if (actor && targets[0]) {
+        actor.butlerMaster = targets[0].id;
+        // Limpia el Amo anterior antes de marcar el nuevo.
+        game.players.forEach(p => { p.tokens = (p.tokens || []).filter(t => t.instanceId !== 'BUTLER:MASTER'); });
+        placeToken(targets[0], 'BUTLER', 'MASTER', 'Es el Amo', 'permanent');
+      }
       break;
 
     case 'FORTUNE_TELLER': {
@@ -786,17 +811,18 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         if (t.protected || t.safeTonight) continue;
         t.alive = false;
         game.nightDeaths.push(t.id);
+        placeToken(t, artRole || 'IMP', 'DIES', 'Muere', 'night');
         checkScarletWoman(game, actor);
       }
       break;
     }
 
     case 'MAKE_DRUNK':
-      for (const t of targets) if (t) t.poisoned = true;
+      for (const t of targets) if (t) { t.poisoned = true; placeToken(t, artRole, 'DRUNK', 'Borracho', 'night'); }
       break;
 
     case 'SAFE':
-      for (const t of targets) if (t) t.safeTonight = true;
+      for (const t of targets) if (t) { t.safeTonight = true; placeToken(t, artRole, 'SAFE', 'A salvo', 'night'); }
       break;
 
     case 'REVIVE':
@@ -809,7 +835,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
 
     case 'CLEAR_STATUS':
-      for (const t of targets) { if (t) { t.poisoned = false; t.protected = false; t.safeTonight = false; } }
+      for (const t of targets) { if (t) { t.poisoned = false; t.protected = false; t.safeTonight = false; t.tokens = []; } }
       break;
   }
   return game;

@@ -132,6 +132,8 @@ function NightStep({ idx, role, actor, game, send, isPendingRole }) {
   const evil = role.alignment === 'evil';
   const concrete = role.night;           // TB: acción automatizada
   const controls = role.controls || [];  // campañas nuevas: botones genéricos
+  const campaign = getCampaign(game.campaignId);
+  const roleReminders = campaign.reminders?.[role.id] || []; // fichas de este rol
 
   const toggle = (pid, max) => {
     setTargets(prev => {
@@ -153,6 +155,11 @@ function NightStep({ idx, role, actor, game, send, isPendingRole }) {
   const sendInfo = () => {
     send('NIGHT_ACTION', { actionType: 'SEND_INFO', actorId: actor.id, info: infoText });
     setInfoText('');
+  };
+  // Coloca una ficha del rol sobre los jugadores seleccionados.
+  const placeFicha = (t) => {
+    if (targets.length === 0) return;
+    targets.forEach(pid => send('ADD_TOKEN', { playerId: pid, token: { tokenId: t.id, roleId: role.id, label: t.label, duration: t.duration } }));
   };
 
   const maxTargets = concrete?.targets ?? Math.max(1, ...controls.map(c => CONTROL_DEFS[c]?.max || 1), 1);
@@ -191,23 +198,40 @@ function NightStep({ idx, role, actor, game, send, isPendingRole }) {
             </div>
           )}
 
-          {/* Selector de objetivos (si el paso necesita) */}
-          {(concrete?.targets || controls.some(c => CONTROL_DEFS[c])) && (
+          {/* Selector de objetivos — siempre disponible para el narrador */}
+          <div>
+            <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 6 }}>
+              Elige jugador(es){targets.length > 0 && `: ${targets.map(id => players.find(p => p.id === id)?.name).join(', ')}`}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {pool.map(p => (
+                <button key={p.id} onClick={() => toggle(p.id, maxTargets)}
+                  className="btn-night"
+                  style={{
+                    fontSize: 9,
+                    borderColor: targets.includes(p.id) ? 'var(--gold)' : undefined,
+                    color: targets.includes(p.id) ? 'var(--gold-hot)' : undefined,
+                    opacity: p.alive ? 1 : 0.5,
+                  }}>
+                  {p.name}{!p.alive ? ' ☠' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Fichas de este rol → colocar sobre el/los jugador(es) elegidos */}
+          {roleReminders.length > 0 && (
             <div>
               <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 6 }}>
-                Objetivos {targets.length > 0 && `: ${targets.map(id => players.find(p => p.id === id)?.name).join(', ')}`}
+                Colocar ficha {targets.length === 0 && '(elige jugador primero)'}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {pool.map(p => (
-                  <button key={p.id} onClick={() => toggle(p.id, maxTargets)}
+                {roleReminders.map(t => (
+                  <button key={t.id} onClick={() => placeFicha(t)} disabled={targets.length === 0}
                     className="btn-night"
-                    style={{
-                      fontSize: 9,
-                      borderColor: targets.includes(p.id) ? 'var(--gold)' : undefined,
-                      color: targets.includes(p.id) ? 'var(--gold-hot)' : undefined,
-                      opacity: p.alive ? 1 : 0.5,
-                    }}>
-                    {p.name}{!p.alive ? ' ☠' : ''}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, padding: '2px 6px 2px 2px', opacity: targets.length === 0 ? 0.4 : 1 }}>
+                    {role.img && <img src={role.img} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />}
+                    {t.label}
                   </button>
                 ))}
               </div>

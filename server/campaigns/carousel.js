@@ -190,6 +190,8 @@ const roles = {
     id: 'MARIONETTE', name: 'Marioneta', alignment: 'evil', type: 'minion',
     ability: 'Crees que eres bueno, pero eres un Esbirro. El Demonio te conoce.',
     firstNight: true, otherNights: false,
+    // Capa 2: cree ser un rol bueno no en juego; no despierta con el mal; el Demonio la conoce.
+    misperception: { believes: 'unusedGood', wakesWithEvil: false, demonKnows: true },
   },
   MEZEPHELES: {
     id: 'MEZEPHELES', name: 'Mezefeles', alignment: 'evil', type: 'minion',
@@ -297,7 +299,8 @@ const BASE_DISTRIBUTION = {
 // Orden nocturno derivado de análisis de habilidades
 const queueFirst = [
   'POPPY_GROWER', 'MAGICIAN', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'RIOT', 'LEVIATHAN',
-  'MARIONETTE', 'MEZEPHELES', 'WIDOW', 'SUMMONER', 'SHUGENJA', 'STEWARD',
+  // 'MARIONETTE' NO entra en la cola interactiva: es pasiva y no despierta con el mal.
+  'MEZEPHELES', 'WIDOW', 'SUMMONER', 'SHUGENJA', 'STEWARD',
   'PUZZLEMASTER', 'ALCHEMIST', 'AMNESIAC',
   'BOUNTY_HUNTER', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',

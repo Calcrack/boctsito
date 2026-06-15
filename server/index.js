@@ -11,6 +11,7 @@ const {
   applyNightAction, advanceNightQueue,
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, addDeferred, getPublicState,
+  assignBelievedRoles,
 } = require('./gameLogic');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
@@ -251,7 +252,7 @@ function handleMessage(type, payload, session) {
         p.hasVotedDead = false; p.showRole = false; p.nightInfo = null;
         p.accusations = []; p.slayerUsed = false; p.virginUsed = false;
         p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
-        p.statuses = []; p.tokens = [];
+        p.statuses = []; p.tokens = []; p.believedRole = null; p.drunkAs = null;
       });
       game.deferredEffects = [];
       game.statusLog = [];
@@ -1026,6 +1027,7 @@ function handleMessage(type, payload, session) {
       const rolesInPlay = new Set(game.players.map(p => p.role));
       const allGoodRoles = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
       game.rolesNotInPlay = allGoodRoles.filter(r => !rolesInPlay.has(r.id)).map(r => r.id);
+      assignBelievedRoles(game);
       game.phase = 'role_reveal';
       broadcastGame();
       break;

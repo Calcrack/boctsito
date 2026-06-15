@@ -181,6 +181,12 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
             {role.name}
           </div>
         )}
+        {isNarrator && player.believedRole && ROLE_BY_ID[player.believedRole] && (
+          <div className="seat-role-label"
+            style={{ color: 'var(--moon)', fontStyle: 'italic', fontSize: '0.82em', opacity: 0.85 }}>
+            cree: {ROLE_BY_ID[player.believedRole].name}
+          </div>
+        )}
       </div>
     </div>
   );

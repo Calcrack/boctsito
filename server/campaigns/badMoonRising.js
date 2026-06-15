@@ -33,7 +33,9 @@ const roles = {
   GOON: { id: 'GOON', name: 'Matón', alignment: 'good', type: 'outsider',
     ability: 'Cada noche, el primer jugador que te elija con su habilidad se emborracha hasta el atardecer. Tú adoptas su alineación.', firstNight: false, otherNights: false },
   LUNATIC: { id: 'LUNATIC', name: 'Lunático', alignment: 'good', type: 'outsider',
-    ability: 'Crees ser el Demonio pero no lo eres. El Demonio sabe quién eres y a quién eliges de noche.', firstNight: true, otherNights: true },
+    ability: 'Crees ser el Demonio pero no lo eres. El Demonio sabe quién eres y a quién eliges de noche.', firstNight: true, otherNights: true,
+    // Capa 2: cree ser el Demonio. (La lógica nocturna completa requiere el orden de noche de BMR.)
+    misperception: { believes: 'demon', wakesWithEvil: false, demonKnows: true } },
   TINKER: { id: 'TINKER', name: 'Manitas', alignment: 'good', type: 'outsider',
     ability: 'Puedes morir en cualquier momento.', firstNight: false, otherNights: false },
   MOONCHILD: { id: 'MOONCHILD', name: 'Hijo de la Luna', alignment: 'good', type: 'outsider',

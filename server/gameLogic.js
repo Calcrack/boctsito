@@ -72,6 +72,7 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     nightInfo: null,
     accusations: [],
     drunkAs: null,
+    believedRole: null,   // capa 2: rol que CREE ser (Marioneta/Lunático/Borracho)
     pendingRavenkeeper: false,
     bluffRole: null,
     discordChannel: null,
@@ -134,6 +135,45 @@ function distributeRoles(game, selectedRoleIds) {
   const allGoodRoles = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
   game.rolesNotInPlay = allGoodRoles.filter(r => !rolesInPlay.has(r.id)).map(r => r.id);
 
+  assignBelievedRoles(game);
+  return game;
+}
+
+// ── Misperception (capa 2: percibido ≠ real) ───────────────────────
+// Un rol con `misperception` hace que el jugador CREA ser otro personaje
+// (Borracho→Aldeano, Marioneta→rol bueno, Lunático→Demonio). Toda su
+// información se enruta por believedRole; su verdadero rol jamás llega a
+// la vista de ese jugador. `believes`: 'unusedTownfolk'|'unusedGood'|'demon'.
+function isNoWakeMisperception(p) {
+  const m = p && ROLES[p.role]?.misperception;
+  return !!m && m.wakesWithEvil === false;
+}
+
+function assignBelievedRoles(game) {
+  const inPlay = new Set(game.players.map(p => p.role));
+  const goodPool = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)]
+    .filter(r => !inPlay.has(r.id) && !r.misperception);
+  const tfPool = goodPool.filter(r => r.type === 'townfolk');
+  const demonsInCampaign = getRolesByType('demon', game.campaignId);
+  const demonsInPlay = game.players.filter(p => p.type === 'demon');
+  const pick = arr => (arr.length ? arr[Math.floor(Math.random() * arr.length)].id : null);
+
+  for (const p of game.players) p.believedRole = null;
+
+  for (const p of game.players) {
+    const m = ROLES[p.role]?.misperception;
+    if (!m) continue;
+    // El Borracho conserva su mecánica existente (drunkAs ya asignado arriba).
+    if (p.role === 'DRUNK') { p.believedRole = p.drunkAs || null; continue; }
+    if (m.believes === 'demon') {
+      const inPlayDemon = demonsInPlay.find(d => d.id !== p.id)?.role;
+      p.believedRole = inPlayDemon || (demonsInCampaign[0]?.id) || null;
+    } else if (m.believes === 'unusedTownfolk') {
+      p.believedRole = pick(tfPool.length ? tfPool : goodPool);
+    } else { // 'unusedGood'
+      p.believedRole = pick(goodPool);
+    }
+  }
   return game;
 }
 
@@ -160,10 +200,13 @@ function generateNightInfo(game) {
   game.nightDeaths = [];
 
   if (isFirstNight) {
-    const minions = players.filter(p => p.type === 'minion');
+    // La Marioneta (misperception sin despertar) NO despierta con el mal y los
+    // demás Esbirros NO la conocen; el Demonio SÍ sabe quién es.
+    const wakingMinions = players.filter(p => p.type === 'minion' && !isNoWakeMisperception(p));
+    const hiddenMinions = players.filter(p => p.type === 'minion' && isNoWakeMisperception(p));
     const demons  = players.filter(p => p.type === 'demon');
-    minions.forEach(m => {
-      const otherMinions = minions.filter(x => x.id !== m.id).map(x => x.name);
+    wakingMinions.forEach(m => {
+      const otherMinions = wakingMinions.filter(x => x.id !== m.id).map(x => x.name);
       const demonNames   = demons.map(x => x.name);
       m.nightInfo = [
         `⚔️ Eres ${ROLES[m.role]?.name}.`,
@@ -172,14 +215,17 @@ function generateNightInfo(game) {
       ].join('\n');
     });
     demons.forEach(d => {
-      const minionNames = minions.map(x => `${x.name} (${ROLES[x.role]?.name})`);
+      const minionNames = wakingMinions.map(x => `${x.name} (${ROLES[x.role]?.name})`);
       const rolesPool = ((game.narratorRolesForImp?.length > 0) ? game.narratorRolesForImp : (game.rolesNotInPlay || [])).filter(id => id !== 'DRUNK');
       const notInPlay3  = shuffle(rolesPool).slice(0, 3).map(id => ROLES[id]?.name || id);
-      d.nightInfo = [
+      const knownMarionettes = hiddenMinions.filter(p => ROLES[p.role]?.misperception?.demonKnows).map(p => p.name);
+      const lines = [
         `👹 Eres el Demonio (${ROLES[d.role]?.name}).`,
         minionNames.length ? `Tus Esbirros: ${minionNames.join(', ')}.` : 'Sin Esbirros.',
-        `Roles del Bien no en juego:\n${notInPlay3.map((r, i) => `\t${i + 1}. ${r}`).join('\n')}`,
-      ].join('\n');
+      ];
+      if (knownMarionettes.length) lines.push(`🎭 Marioneta (cree ser bueno): ${knownMarionettes.join(', ')}.`);
+      lines.push(`Roles del Bien no en juego:\n${notInPlay3.map((r, i) => `\t${i + 1}. ${r}`).join('\n')}`);
+      d.nightInfo = lines.join('\n');
     });
   }
   return game;
@@ -772,6 +818,18 @@ function computeAdvice(game) {
     if (p.alive && p.poisoned) advice.push({ severity: 'warn', text: `🧪 ${p.name} está envenenado: cualquier información que dé o reciba debe ser FALSA.` });
   }
 
+  // Misperception (Marioneta/Lunático/Borracho): su habilidad no funciona → info falsa.
+  for (const p of game.players) {
+    if (!p.alive) continue;
+    const m = ROLES[p.role]?.misperception;
+    if (!m) continue;
+    const believedName = ROLES[p.believedRole]?.name || 'un rol bueno';
+    advice.push({ severity: 'info', text: `🎭 ${p.name} es ${ROLES[p.role]?.name} pero CREE ser ${believedName}. Su habilidad no funciona: dale información FALSA coherente con ${believedName}.` });
+    if (m.wakesWithEvil === false && isNight && game.nightNumber === 1) {
+      advice.push({ severity: 'warn', text: `🎭 ${ROLES[p.role]?.name} (${p.name}) NO despierta con el mal y los Esbirros no la conocen; el Demonio sí. Colócala vecina del Demonio.` });
+    }
+  }
+
   // 3 vivos → aviso victoria del mal.
   if (alive.length === 3) advice.push({ severity: 'info', text: 'Quedan 3 jugadores vivos: si baja a 2, gana el Mal (los viajeros no cuentan).' });
 
@@ -1349,7 +1407,11 @@ function getPublicState(game, viewerId, isNarrator) {
   const publicPlayers = players.map(p => {
     const isMe        = p.id === viewerId;
     const canSeeRole  = isNarrator || isMe || phase === 'game_over' || !!winner || viewerIsSpy;
-    const displayRole = isMe && p.role === 'DRUNK' ? p.drunkAs : p.role;
+    // Capa 2: el jugador ve su rol CREÍDO (Marioneta/Lunático/Borracho), nunca el real.
+    const showSelfPerceived = isMe && !!p.believedRole && !winner;
+    const perceivedDef = showSelfPerceived ? ROLES[p.believedRole] : null;
+    const effectiveRole = showSelfPerceived ? p.believedRole : p.role;
+    const displayRole = effectiveRole;
 
     const isMaster = players.some(x => x.role === 'BUTLER' && x.butlerMaster === p.id);
 
@@ -1364,11 +1426,12 @@ function getPublicState(game, viewerId, isNarrator) {
       protected:  isNarrator ? p.protected  : (isMe ? p.protected : false),
       isMaster:   isNarrator ? isMaster     : false,
       isSmokeScreen: (isNarrator || !!winner) ? p.id === smokeScreenPlayerId : false,
-      role:        canSeeRole ? (isMe && p.role === 'DRUNK' && !winner ? p.drunkAs : p.role) : null,
+      role:        canSeeRole ? effectiveRole : null,
       drunkAs:     (isNarrator || !!winner) ? p.drunkAs : null,
+      believedRole:(isNarrator || !!winner) ? (p.believedRole || null) : null,
       displayRole: canSeeRole ? displayRole   : null,
-      type:        canSeeRole ? p.type        : null,
-      alignment:   canSeeRole ? p.alignment   : null,
+      type:        canSeeRole ? (perceivedDef ? perceivedDef.type : p.type) : null,
+      alignment:   canSeeRole ? (perceivedDef ? perceivedDef.alignment : p.alignment) : null,
       showRole:    p.showRole,
       // Modo manual: SOLO el narrador ve la info de noche (la transmite por voz).
       // Modo automático: el jugador la ve en su panel.
@@ -1477,6 +1540,6 @@ module.exports = {
   startDay, startNight, openNominations,
   checkWinCondition, mayorWin,
   killPlayer, revivePlayer,
-  addDeferred,
+  addDeferred, assignBelievedRoles,
   getPublicState,
 };

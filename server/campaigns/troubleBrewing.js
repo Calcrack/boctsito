@@ -76,6 +76,8 @@ const roles = {
     id: 'DRUNK', name: 'Borracho', alignment: 'good', type: 'outsider',
     ability: 'No sabes que eres el Borracho. Crees ser un Aldeano, pero tu información es falsa.',
     firstNight: false, otherNights: false,
+    // Capa 2: cree ser un Aldeano (drunkAs ya gestiona el detalle).
+    misperception: { believes: 'unusedTownfolk' },
   },
   RECLUSE: {
     id: 'RECLUSE', name: 'Recluso', alignment: 'good', type: 'outsider',

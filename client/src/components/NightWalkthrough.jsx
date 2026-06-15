@@ -66,7 +66,8 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
     );
   }
 
-  const minions = game.players.filter(p => p.type === 'minion');
+  // La Marioneta (misperception sin despertar) NO se muestra con el mal: los Esbirros no la conocen.
+  const minions = game.players.filter(p => p.type === 'minion' && ROLE_BY_ID[p.role]?.misperception?.wakesWithEvil !== false);
   const demons = game.players.filter(p => p.type === 'demon');
 
   const containerStyle = embedded
@@ -145,20 +146,33 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
 
 function RoleStepView({ step, send }) {
   const { role, actor } = step;
-  const evil = role.alignment === 'evil';
+  // Misperception: el jugador CREE ser otro rol. Muestra el rol creído + aviso de info FALSA.
+  const trueDef = ROLE_BY_ID[actor.role] || role;
+  const believedDef = actor.believedRole ? ROLE_BY_ID[actor.believedRole] : null;
+  const isMisperc = !!believedDef && actor.believedRole !== actor.role;
+  const shown = isMisperc ? believedDef : role;
+  const evil = shown.alignment === 'evil';
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        {role.img && <img src={role.img} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+        {shown.img && <img src={shown.img} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>{role.name}</div>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>{shown.name}</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-300)' }}>
             🗣 {actor.name}{actor.poisoned ? ' · 🧪 envenenado' : ''}{!actor.alive ? ' · ☠' : ''}
           </div>
         </div>
       </div>
 
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-300)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>{role.ability}</p>
+      {isMisperc && (
+        <div style={{ background: 'rgba(168,58,45,0.14)', border: '1px solid var(--blood-dim)', borderRadius: 4, padding: '8px 10px', marginBottom: 10 }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--blood-hi)', margin: 0, lineHeight: 1.5 }}>
+            ⚠ Cree ser <strong>{shown.name}</strong>, pero en realidad es <strong>{trueDef.name}</strong>. Su habilidad NO funciona — dale información <strong>FALSA</strong> y arbitraria coherente con {shown.name}.
+          </p>
+        </div>
+      )}
+
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-300)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>{shown.ability}</p>
 
       {actor.nightInfo ? (
         <div style={{ background: 'rgba(201,162,74,0.07)', border: 'var(--hairline)', borderRadius: 4, padding: '8px 10px', marginBottom: 10 }}>

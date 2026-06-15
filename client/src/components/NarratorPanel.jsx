@@ -635,7 +635,7 @@ export default function NarratorPanel() {
       </main>
 
       {/* ── Right panel ── */}
-      <aside className="right-panel" style={{ padding: '18px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, zoom: uiScale }}>
+      <aside className="right-panel">
         {/* Asistente: consejos + pendientes diferidos (Po, Pukka…) */}
         <AssistantPanel game={game} send={send} />
 
@@ -656,7 +656,7 @@ export default function NarratorPanel() {
               const p = players.find(pl => pl.id === id);
               const role = p?.role ? ROLE_BY_ID[p.role] : null;
               return p ? (
-                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-200)' }}>
+                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-200)' }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-700)', border: '1px solid var(--blood-dim)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--bone-100)' }}>
                     {p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
                   </div>

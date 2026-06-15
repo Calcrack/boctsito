@@ -1,3 +1,4 @@
 server/.env
 .env
 server/rankings.json
+node_modules

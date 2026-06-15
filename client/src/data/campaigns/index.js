@@ -2,14 +2,16 @@
 import troubleBrewing from './troubleBrewing';
 import badMoonRising from './badMoonRising';
 import sectsViolets from './sectsViolets';
+import carousel from './carousel';
 
 export const CAMPAIGNS = {
   [troubleBrewing.id]: troubleBrewing,
   [badMoonRising.id]: badMoonRising,
   [sectsViolets.id]: sectsViolets,
+  [carousel.id]: carousel,
 };
 
-export const CAMPAIGN_LIST = [troubleBrewing, badMoonRising, sectsViolets];
+export const CAMPAIGN_LIST = [troubleBrewing, badMoonRising, sectsViolets, carousel];
 export const DEFAULT_CAMPAIGN = troubleBrewing.id;
 
 export function getCampaign(id) {
@@ -47,6 +49,7 @@ const CAMPAIGN_STATUSES = {
   TROUBLE_BREWING: ['🤵 Es el Amo', '🟥 Registra como malvado'],
   BAD_MOON_RISING: ['⚓ Marinero', '🚫 No puede morir (Posadero)', '🤡 No-muerte usada', '🪦 Profesor usado'],
   SECTS_AND_VIOLETS: ['🐍 Encantado', '🤪 Loco', '🧠 Filósofo activo', '🔮 Info falsa (Vortox)'],
+  CAROUSEL: ['🎪 Experimentales', '🎭 Rol dual', '⚡ Habilidad activa', '📋 Cambio de rol'],
 };
 
 export function statusTokens(id) {

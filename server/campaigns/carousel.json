@@ -1,0 +1,396 @@
+{
+  "id": "carousel",
+  "name": "The Carousel",
+  "name_es": "El Carrusel",
+  "description": "Experimental roles from The Carousel edition",
+  "description_es": "Roles experimentales de la edición El Carrusel",
+  "author": "Pandemonium Institute",
+  "roles": {
+    "aldeanos": [
+      {
+        "id": "acrobat",
+        "name_en": "Acrobat",
+        "name_es": "Acróbata",
+        "ability_en": "Each night*, choose a player: if they are or become drunk or poisoned tonight, you die.",
+        "ability_es": "Cada noche*: elige un jugador. Si está o se vuelve borracho o envenenado esta noche, mueres."
+      },
+      {
+        "id": "alchemist",
+        "name_en": "Alchemist",
+        "name_es": "Alquimista",
+        "ability_en": "You have a Minion ability. When using this, the Storyteller may prompt you to choose differently.",
+        "ability_es": "Tienes una habilidad de Esbirro. Cuando la uses, el Narrador puede pedirte que elijas diferente."
+      },
+      {
+        "id": "amnesiac",
+        "name_en": "Amnesiac",
+        "name_es": "Amnésico",
+        "ability_en": "You do not know what your ability is. Each day, privately guess what it is: you learn how accurate you are.",
+        "ability_es": "No sabes cuál es tu habilidad. Cada día, adivina en privado cuál es: aprendes qué tan preciso eres."
+      },
+      {
+        "id": "atheist",
+        "name_en": "Atheist",
+        "name_es": "Ateo",
+        "ability_en": "All players are good. Good wins if the Storyteller is executed.",
+        "ability_es": "Todos los jugadores son buenos. Los buenos ganan si el Narrador es ejecutado."
+      },
+      {
+        "id": "balloonist",
+        "name_en": "Balloonist",
+        "name_es": "Aeronauta",
+        "ability_en": "Each night, you learn a player of a different character type than last night.",
+        "ability_es": "Cada noche: aprendes un jugador de tipo diferente al de anoche."
+      },
+      {
+        "id": "banshee",
+        "name_en": "Banshee",
+        "name_es": "Banshee",
+        "ability_en": "If the Demon kills you, all players learn this. From now on, you may nominate twice per day.",
+        "ability_es": "Si el Demonio te mata, todos lo aprenden. De ahora en adelante, puedes nominar dos veces por día."
+      },
+      {
+        "id": "bounty-hunter",
+        "name_en": "Bounty Hunter",
+        "name_es": "Cazarrecompensas",
+        "ability_en": "You start knowing 1 evil player. If the player you know dies, you learn another evil player tonight.",
+        "ability_es": "Comienzas sabiendo 1 jugador malo. Si el que conoces muere, aprendes otro jugador malo esta noche."
+      },
+      {
+        "id": "cannibal",
+        "name_en": "Cannibal",
+        "name_es": "Caníbal",
+        "ability_en": "You have the ability of the recently killed executee. If they are evil, you are poisoned.",
+        "ability_es": "Tienes la habilidad del ejecutado recientemente. Si es malo, te envenenan."
+      },
+      {
+        "id": "choirboy",
+        "name_en": "Choirboy",
+        "name_es": "Niño Coro",
+        "ability_en": "If the Demon kills the King, you learn which player is the Demon.",
+        "ability_es": "Si el Demonio mata al Rey, aprendes cuál es el Demonio."
+      },
+      {
+        "id": "cult-leader",
+        "name_en": "Cult Leader",
+        "name_es": "Líder Cultista",
+        "ability_en": "Each night, you become the alignment of an alive neighbor. If all good players join your cult, your team wins.",
+        "ability_es": "Cada noche, tomas la alineación de un vecino vivo. Si todos los buenos se unen a tu culto, tu equipo gana."
+      },
+      {
+        "id": "engineer",
+        "name_en": "Engineer",
+        "name_es": "Ingeniero",
+        "ability_en": "Once per game, at night, choose which Minions or which Demon is in play.",
+        "ability_es": "Una vez por partida, en la noche, elige qué Esbirros o qué Demonio está en juego."
+      },
+      {
+        "id": "farmer",
+        "name_en": "Farmer",
+        "name_es": "Granjero",
+        "ability_en": "When you die at night, an alive good player becomes a Farmer.",
+        "ability_es": "Cuando mueres de noche, un jugador bueno vivo se convierte en Granjero."
+      },
+      {
+        "id": "fisherman",
+        "name_en": "Fisherman",
+        "name_es": "Pescador",
+        "ability_en": "Once per game, during the day, visit the Storyteller for advice to help your team win.",
+        "ability_es": "Una vez por partida, durante el día, visita al Narrador para obtener consejo."
+      },
+      {
+        "id": "general",
+        "name_en": "General",
+        "name_es": "General",
+        "ability_en": "Each night, you learn which alignment the Storyteller believes is winning.",
+        "ability_es": "Cada noche, aprendes qué alineación cree el Narrador que está ganando."
+      },
+      {
+        "id": "high-priestess",
+        "name_en": "High Priestess",
+        "name_es": "Sacerdotisa Mayor",
+        "ability_en": "Each night, learn which player the Storyteller believes you should talk to most.",
+        "ability_es": "Cada noche, aprende cuál jugador cree el Narrador que deberías conocer."
+      },
+      {
+        "id": "huntsman",
+        "name_en": "Huntsman",
+        "name_es": "Cazador",
+        "ability_en": "Once per game, at night, choose a living player: the Damsel becomes a not-in-play Townsfolk.",
+        "ability_es": "Una vez por partida, elige un jugador: la Damisela se convierte en un Aldeano que no está en juego."
+      },
+      {
+        "id": "king",
+        "name_en": "King",
+        "name_es": "Rey",
+        "ability_en": "Each night, if the dead equal or outnumber the living, you learn 1 alive character.",
+        "ability_es": "Cada noche, si los muertos igualan o superan a los vivos, aprendes un personaje vivo."
+      },
+      {
+        "id": "knight",
+        "name_en": "Knight",
+        "name_es": "Caballero",
+        "ability_en": "You start knowing 2 players that are not the Demon.",
+        "ability_es": "Comienzas sabiendo 2 jugadores que no son el Demonio."
+      },
+      {
+        "id": "lycanthrope",
+        "name_en": "Lycanthrope",
+        "name_es": "Licántropo",
+        "ability_en": "Each night*, choose an alive player. If good, they die & the Demon doesn't kill tonight.",
+        "ability_es": "Cada noche*: elige un jugador. Si es bueno, muere y el Demonio no mata esta noche."
+      },
+      {
+        "id": "magician",
+        "name_en": "Magician",
+        "name_es": "Mago",
+        "ability_en": "The Demon thinks you are a Minion. Minions think you are a Demon.",
+        "ability_es": "El Demonio cree que eres un Esbirro. Los Esbirros creen que eres un Demonio."
+      },
+      {
+        "id": "nightwatchman",
+        "name_en": "Nightwatchman",
+        "name_es": "Guardián Nocturno",
+        "ability_en": "Once per game, at night, choose a player: they learn you are the Nightwatchman.",
+        "ability_es": "Una vez por partida, elige un jugador: aprenden que eres el Guardián Nocturno."
+      },
+      {
+        "id": "noble",
+        "name_en": "Noble",
+        "name_es": "Noble",
+        "ability_en": "You start knowing 3 players, 1 and only 1 of which is evil.",
+        "ability_es": "Comienzas conociendo 3 jugadores, exactamente 1 de los cuales es malo."
+      },
+      {
+        "id": "poppy-grower",
+        "name_en": "Poppy Grower",
+        "name_es": "Cultivador de Adormidera",
+        "ability_en": "Minions & Demons do not know each other. If you die, they learn who each other are that night.",
+        "ability_es": "Los Esbirros y Demonios no se conocen. Si mueres, se conocen esa noche."
+      },
+      {
+        "id": "preacher",
+        "name_en": "Preacher",
+        "name_es": "Predicador",
+        "ability_en": "Each night, choose a player: a Minion, if chosen, learns this. All chosen Minions have no ability.",
+        "ability_es": "Cada noche, elige un jugador: si es Esbirro, lo aprendes. Todos los Esbirros elegidos pierden habilidad."
+      }
+    ],
+    "forasteros": [
+      {
+        "id": "damsel",
+        "name_en": "Damsel",
+        "name_es": "Damisela",
+        "ability_en": "All Minions know a Damsel is in play. If a Minion guesses you, your team loses.",
+        "ability_es": "Todos los Esbirros saben que una Damisela está en juego. Si un Esbirro te adivina, pierdes."
+      },
+      {
+        "id": "golem",
+        "name_en": "Golem",
+        "name_es": "Gólem",
+        "ability_en": "You may only nominate once per game. When you do, if the nominee is not the Demon, they die.",
+        "ability_es": "Solo puedes nominar una vez. Si lo haces, si el nominado no es el Demonio, muere."
+      },
+      {
+        "id": "hatter",
+        "name_en": "Hatter",
+        "name_es": "Sombrerero",
+        "ability_en": "If you died today or tonight, the Minion & Demon players may choose new characters to be.",
+        "ability_es": "Si mueres hoy o esta noche, los Esbirros y Demonio pueden elegir nuevos personajes."
+      },
+      {
+        "id": "heretic",
+        "name_en": "Heretic",
+        "name_es": "Hereje",
+        "ability_en": "Whoever wins, loses & whoever loses, wins, even if you are dead.",
+        "ability_es": "Quien gana, pierde. Quien pierde, gana, incluso si estás muerto."
+      },
+      {
+        "id": "plague-doctor",
+        "name_en": "Plague Doctor",
+        "name_es": "Doctor de la Peste",
+        "ability_en": "When you die, the Storyteller gains a Minion ability.",
+        "ability_es": "Cuando mueres, el Narrador gana una habilidad de Esbirro."
+      },
+      {
+        "id": "politician",
+        "name_en": "Politician",
+        "name_es": "Político",
+        "ability_en": "If you were most responsible for your team losing, you change alignment & win.",
+        "ability_es": "Si fuiste responsable de que tu equipo pierda, cambias alineación y ganas."
+      },
+      {
+        "id": "puzzlemaster",
+        "name_en": "Puzzlemaster",
+        "name_es": "Maestro Acertijos",
+        "ability_en": "1 player is drunk. If you guess who, learn the Demon player.",
+        "ability_es": "1 jugador está borracho. Si adivinas quién, aprendes al Demonio."
+      },
+      {
+        "id": "snitch",
+        "name_en": "Snitch",
+        "name_es": "Soplón",
+        "ability_en": "Each Minion gets 3 bluffs.",
+        "ability_es": "Cada Esbirro recibe 3 bluffs."
+      }
+    ],
+    "esbirros": [
+      {
+        "id": "boomdandy",
+        "name_en": "Boomdandy",
+        "name_es": "Pólvora",
+        "ability_en": "If you are executed, all but 3 players die.",
+        "ability_es": "Si eres ejecutado, todos excepto 3 mueren."
+      },
+      {
+        "id": "fearmonger",
+        "name_en": "Fearmonger",
+        "name_es": "Sembrador de Miedo",
+        "ability_en": "Each night, choose a player: if you nominate & execute them, your team loses.",
+        "ability_es": "Cada noche, elige un jugador: si lo nominas y ejecutas, tu equipo pierde."
+      },
+      {
+        "id": "goblin",
+        "name_en": "Goblin",
+        "name_es": "Goblin",
+        "ability_en": "If you publicly claim to be the Goblin when nominated & are executed, your team wins.",
+        "ability_es": "Si públicamente reclamas ser el Goblin cuando te nominan y eres ejecutado, tu equipo gana."
+      },
+      {
+        "id": "harpy",
+        "name_en": "Harpy",
+        "name_es": "Arpía",
+        "ability_en": "Each night, choose 2 players: tomorrow, the 1st is mad the 2nd is evil.",
+        "ability_es": "Cada noche, elige 2 jugadores: mañana, el primero cree que el segundo es malo."
+      },
+      {
+        "id": "marionette",
+        "name_en": "Marionette",
+        "name_es": "Marioneta",
+        "ability_en": "You think you are good, but you are a Minion. The Demon knows who you are.",
+        "ability_es": "Crees que eres bueno, pero eres un Esbirro. El Demonio te conoce."
+      },
+      {
+        "id": "mezepheles",
+        "name_en": "Mezepheles",
+        "name_es": "Mezefeles",
+        "ability_en": "You start knowing a secret word. The 1st good player to say this word becomes evil.",
+        "ability_es": "Comienzas sabiendo una palabra secreta. El primer jugador bueno que la diga se vuelve malo."
+      },
+      {
+        "id": "organ-grinder",
+        "name_en": "Organ Grinder",
+        "name_es": "Organillero",
+        "ability_en": "All players keep eyes closed when voting. Each night, choose if you are drunk.",
+        "ability_es": "Todos cierran los ojos al votar. Cada noche, elige si estás borracho."
+      },
+      {
+        "id": "psychopath",
+        "name_en": "Psychopath",
+        "name_es": "Psicópata",
+        "ability_en": "Each day, before nominations, you may publicly choose a player: they die.",
+        "ability_es": "Cada día, antes de nominaciones, puedes elegir públicamente un jugador: muere."
+      },
+      {
+        "id": "shugenja",
+        "name_en": "Shugenja",
+        "name_es": "Shugenja",
+        "ability_en": "You have the ability of a not-in-play good character.",
+        "ability_es": "Tienes la habilidad de un personaje bueno que no está en juego."
+      },
+      {
+        "id": "steward",
+        "name_en": "Steward",
+        "name_es": "Mayordomo",
+        "ability_en": "You start knowing 2 of your 3 alive neighbours are evil or you are drunk.",
+        "ability_es": "Comienzas sabiendo que 2 de tus 3 vecinos vivos son malos o estás borracho."
+      },
+      {
+        "id": "summoner",
+        "name_en": "Summoner",
+        "name_es": "Invocador",
+        "ability_en": "You get 3 bluffs. On night 3, choose a player: they become an evil Demon.",
+        "ability_es": "Recibes 3 bluffs. En la noche 3, elige un jugador: se vuelve un Demonio malo."
+      },
+      {
+        "id": "vizier",
+        "name_en": "Vizier",
+        "name_es": "Visir",
+        "ability_en": "All players know you are the Vizier. You cannot die during the day.",
+        "ability_es": "Todos saben que eres el Visir. No puedes morir durante el día."
+      },
+      {
+        "id": "widow",
+        "name_en": "Widow",
+        "name_es": "Viuda",
+        "ability_en": "On your 1st night, look at the Grimoire & choose a player: they are poisoned.",
+        "ability_es": "En tu primera noche, mira el Grimorio y elige un jugador: se envenena."
+      },
+      {
+        "id": "yaggababble",
+        "name_en": "Yaggababble",
+        "name_es": "Yaggababble",
+        "ability_en": "You start knowing a secret phrase. For each time you said it publicly today, a player dies.",
+        "ability_es": "Comienzas sabiendo una frase secreta. Por cada vez que la dijiste hoy, un jugador muere."
+      }
+    ],
+    "demonios": [
+      {
+        "id": "al-hadikhia",
+        "name_en": "Al-Hadikhia",
+        "name_es": "Al-Hadikhia",
+        "ability_en": "Each night*, choose 3 players: each silently chooses to live or die.",
+        "ability_es": "Cada noche*: elige 3 jugadores que eligen silenciosamente vivir o morir."
+      },
+      {
+        "id": "kazali",
+        "name_en": "Kazali",
+        "name_es": "Kazali",
+        "ability_en": "Each night*, choose a player: they die. You choose which players are Minions.",
+        "ability_es": "Cada noche*: elige un jugador que muere. Tú eliges qué jugadores son Esbirros."
+      },
+      {
+        "id": "legion",
+        "name_en": "Legion",
+        "name_es": "Legión",
+        "ability_en": "Each night*, a player might die. Executions fail if only evil voted.",
+        "ability_es": "Cada noche*: un jugador puede morir. Las ejecuciones fallan si solo malignos votaron."
+      },
+      {
+        "id": "leviathan",
+        "name_en": "Leviathan",
+        "name_es": "Leviatán",
+        "ability_en": "If >1 good player executed, evil wins. After day 5, evil wins.",
+        "ability_es": "Si +1 buenos ejecutados, los malos ganan. Después del día 5, los malos ganan."
+      },
+      {
+        "id": "lil-monsta",
+        "name_en": "Lil' Monsta",
+        "name_es": "Pequeña Monsta",
+        "ability_en": "Each night, Minions choose who babysits & 'is the Demon'.",
+        "ability_es": "Cada noche, los Esbirros eligen quién cuida y es el 'Demonio'."
+      },
+      {
+        "id": "lleech",
+        "name_en": "Lleech",
+        "name_es": "Sangijuela",
+        "ability_en": "Each night*, choose a player: they die. You die if your poisoned host is dead.",
+        "ability_es": "Cada noche*: elige un jugador que muere. Mueres si tu anfitrión envenenado está muerto."
+      },
+      {
+        "id": "ojo",
+        "name_en": "Ojo",
+        "name_es": "Ojo",
+        "ability_en": "Each night*, choose a character: they die. If not in play, the Storyteller chooses.",
+        "ability_es": "Cada noche*: elige un personaje que muere. Si no está en juego, el Narrador elige."
+      },
+      {
+        "id": "riot",
+        "name_en": "Riot",
+        "name_es": "Motín",
+        "ability_en": "On day 3, Minions become Riot & nominees die immediately.",
+        "ability_es": "En el día 3, los Esbirros se vuelven Motín y los nominados mueren inmediatamente."
+      }
+    ]
+  }
+}

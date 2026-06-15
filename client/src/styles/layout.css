@@ -6,8 +6,8 @@
 
 :root {
   --ui-scale: 1;
-  --font-size-base: 13px;
-  --line-height-base: 1.5;
+  --font-size-base: 16px;
+  --line-height-base: 1.6;
 }
 
 html, body {
@@ -214,7 +214,10 @@ input, textarea { font-family: inherit; color: inherit; }
   );
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 16px;
+  gap: 18px;
   transition: background 1.4s ease, border-color 1.4s ease;
 }
 

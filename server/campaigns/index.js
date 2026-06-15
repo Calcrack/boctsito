@@ -2,11 +2,13 @@
 const troubleBrewing = require('./troubleBrewing');
 const badMoonRising  = require('./badMoonRising');
 const sectsViolets   = require('./sectsViolets');
+const carousel       = require('./carousel');
 
 const CAMPAIGNS = {
   [troubleBrewing.id]: troubleBrewing,
   [badMoonRising.id]:  badMoonRising,
   [sectsViolets.id]:   sectsViolets,
+  [carousel.id]:       carousel,
 };
 
 const DEFAULT_CAMPAIGN = troubleBrewing.id;

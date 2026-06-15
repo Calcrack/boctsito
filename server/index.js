@@ -1417,7 +1417,7 @@ async function startup() {
       console.log('[DB] Partida restaurada');
     }
   } catch (e) {
-    console.error('[DB] Error:', e.message);
+    console.error('[DB] Error:', e.message, e.stack);
   }
 
   server.listen(PORT, () => {

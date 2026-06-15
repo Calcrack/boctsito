@@ -36,6 +36,7 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
   const { game } = state;
   const [idx, setIdx] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
+  const [completed, setCompleted] = useState(new Set());
 
   useEffect(() => { setIdx(0); }, [game?.nightNumber]);
 
@@ -69,8 +70,8 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
   const demons = game.players.filter(p => p.type === 'demon');
 
   const containerStyle = embedded
-    ? { width: '100%', background: 'rgba(8,9,16,0.7)', border: '1px solid var(--gold)', borderRadius: 10, overflow: 'hidden' }
-    : { position: 'fixed', top: 56, left: '50%', transform: 'translateX(-50%)', zIndex: 250, width: 'min(560px, 94vw)',
+    ? { width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '60vh', background: 'rgba(8,9,16,0.7)', border: '1px solid var(--gold)', borderRadius: 10, overflow: 'hidden', flexShrink: 0 }
+    : { position: 'fixed', top: 56, left: '50%', transform: 'translateX(-50%)', zIndex: 250, width: 'min(560px, 94vw)', display: 'flex', flexDirection: 'column', maxHeight: '85vh',
         background: 'rgba(8,9,16,0.96)', border: '1px solid var(--gold)', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', overflow: 'hidden' };
 
   return (
@@ -84,7 +85,7 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
         {!embedded && <button onClick={() => setCollapsed(true)} className="btn-night" style={{ fontSize: 9 }}>Ocultar</button>}
       </div>
 
-      <div style={{ padding: '14px 16px' }}>
+      <div style={{ padding: '14px 16px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {!step ? (
           <p style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-400)', fontStyle: 'italic', textAlign: 'center' }}>
             No hay roles que actúen esta noche.
@@ -121,6 +122,16 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
       <div style={{ display: 'flex', gap: 8, padding: '10px 16px', borderTop: 'var(--hairline)' }}>
         <button onClick={() => setIdx(Math.max(0, current - 1))} disabled={current <= 0}
           className="btn-action" style={{ flex: 1, opacity: current <= 0 ? 0.35 : 1 }}>← Anterior</button>
+        {step?.type === 'role' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--bone-300)', whiteSpace: 'nowrap', cursor: 'pointer', marginRight: 'auto' }}>
+            <input type="checkbox" checked={completed.has(current)} onChange={e => {
+              const c = new Set(completed);
+              if (e.target.checked) c.add(current); else c.delete(current);
+              setCompleted(c);
+            }} />
+            Desperté
+          </label>
+        )}
         {step?.type === 'role' && step.actor.discordId && (
           <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: step.actor.id })}
             className="btn-action primary" style={{ flex: 1.4 }}>🚪 Ir a su habitación</button>

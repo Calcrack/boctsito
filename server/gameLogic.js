@@ -40,6 +40,7 @@ function createGame(narratorId, gameId) {
     pendingNightAfterNomination: false,
     nightReadyPlayers: [],
     statusLog: [],
+    deferredEffects: [],
   };
   games.set(id, game);
   return game;
@@ -69,7 +70,7 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     slayerUsed: false, virginUsed: false,
     showRole: false,
     nightInfo: null,
-    accusation: null,
+    accusations: [],
     drunkAs: null,
     pendingRavenkeeper: false,
     bluffRole: null,
@@ -718,6 +719,78 @@ function syncStatusFlags(game) {
   }
 }
 
+// ── Asistente: efectos diferidos / condicionales (data-driven) ────────
+// Cada demonio declara su regla; añadir uno nuevo = añadir un dato, no código.
+const DEFERRED_RULES = {
+  PO:         { trigger: 'noKill', dueOffset: 1, label: '⚠ El Po no mató anoche → esta noche debe elegir 3 jugadores.' },
+  PUKKA:      { trigger: 'poison', dueOffset: 1, label: '⚠ El jugador envenenado por el Pukka muere esta noche; el veneno pasa a otro.' },
+  SHABALOTH:  { trigger: 'kill2',  dueOffset: 1, label: '🔁 El Shabaloth puede regurgitar (revivir) a uno de los que mató anoche.' },
+  ZOMBUUL:    { trigger: 'cond',   dueOffset: 0, label: 'ℹ El Zombuul solo mata de noche si NADIE murió durante el día.' },
+  GODFATHER:  { trigger: 'outsiderDied', dueOffset: 0, label: '🎯 Si murió un Forastero hoy, el Padrino elige un jugador esta noche: muere.' },
+};
+
+function deferredOptionsFor(game) {
+  // Reglas de los demonios/esbirros presentes, para ofrecer el botón correcto.
+  const out = [];
+  const seen = new Set();
+  for (const p of game.players) {
+    const rule = DEFERRED_RULES[p.role];
+    if (rule && !seen.has(p.role)) {
+      seen.add(p.role);
+      out.push({ role: p.role, roleName: ROLES[p.role]?.name || p.role, sourcePlayerId: p.id, ...rule });
+    }
+  }
+  return out;
+}
+
+function addDeferred(game, { label, dueNight, sourcePlayerId, severity = 'warn', role = null }) {
+  if (!Array.isArray(game.deferredEffects)) game.deferredEffects = [];
+  game.deferredEffects.push({ id: uuidv4(), label, dueNight, sourcePlayerId, severity, role, createdNight: game.nightNumber, resolved: false });
+  logStatus(game, `🗓 Pendiente registrado: ${label}`);
+}
+
+// Consejos proactivos según el estado actual de la partida.
+function computeAdvice(game) {
+  const advice = [];
+  const alive = game.players.filter(p => p.alive);
+  const isNight = ['first_night', 'night'].includes(game.phase);
+
+  // Pendientes diferidos que vencen ahora.
+  for (const d of (game.deferredEffects || [])) {
+    if (!d.resolved && d.dueNight <= game.nightNumber) {
+      let txt = d.label;
+      // Po: si debía matar 3 pero hay menos vivos, ajusta el aviso.
+      if (d.role === 'PO' && txt.includes('3') && alive.length < 3) {
+        txt = `⚠ El Po debía matar 3, pero solo quedan ${alive.length} vivos → mata a quién pueda.`;
+      }
+      advice.push({ severity: d.severity || 'warn', text: txt, deferredId: d.id });
+    }
+  }
+
+  // Envenenados hoy → info falsa.
+  for (const p of game.players) {
+    if (p.alive && p.poisoned) advice.push({ severity: 'warn', text: `🧪 ${p.name} está envenenado: cualquier información que dé o reciba debe ser FALSA.` });
+  }
+
+  // 3 vivos → aviso victoria del mal.
+  if (alive.length === 3) advice.push({ severity: 'info', text: 'Quedan 3 jugadores vivos: si baja a 2, gana el Mal (los viajeros no cuentan).' });
+
+  // Espía despierto esta noche.
+  if (isNight && game.players.some(p => p.alive && p.role === 'SPY')) {
+    advice.push({ severity: 'info', text: '🕵️ El Espía ve el Grimorio esta noche: recuerda mostrarle tu pantalla.' });
+  }
+
+  // Fichas que se limpian al próximo anochecer (veneno).
+  if (!isNight) {
+    for (const p of game.players) {
+      const t = (p.tokens || []).find(x => (x.expiry || []).includes('UNTIL_NEXT_DUSK'));
+      if (t) advice.push({ severity: 'info', text: `⏳ La ficha "${t.label}" de ${p.name} se limpia al anochecer.` });
+    }
+  }
+
+  return advice;
+}
+
 // Log de auditoría de estados.
 function logStatus(game, message) {
   if (!Array.isArray(game.statusLog)) game.statusLog = [];
@@ -1300,7 +1373,10 @@ function getPublicState(game, viewerId, isNarrator) {
       // Modo manual: SOLO el narrador ve la info de noche (la transmite por voz).
       // Modo automático: el jugador la ve en su panel.
       nightInfo:   isNarrator ? p.nightInfo : (game.autoMode && isMe ? p.nightInfo : null),
-      accusation:  (isNarrator || (viewerId && p.accusation?.accuserId === viewerId)) ? p.accusation : null,
+      // Sospechas: el narrador ve todas; un jugador solo la suya.
+      accusations: isNarrator
+        ? (p.accusations || [])
+        : (p.accusations || []).filter(a => a.accuserId === viewerId),
       slayerUsed:  p.slayerUsed,
       impShotUsed: (isMe && p.type === 'demon') || isNarrator ? p.impShotUsed : false,
       pendingRavenkeeper: isNarrator ? p.pendingRavenkeeper : (isMe ? p.pendingRavenkeeper : false),
@@ -1353,6 +1429,9 @@ function getPublicState(game, viewerId, isNarrator) {
     }),
     activeNomination, winner,
     statusLog: isNarrator ? (game.statusLog || []) : undefined,
+    advice: isNarrator ? computeAdvice(game) : undefined,
+    deferredEffects: isNarrator ? (game.deferredEffects || []).filter(d => !d.resolved) : undefined,
+    deferredOptions: isNarrator ? deferredOptionsFor(game) : undefined,
     executedToday: game.executedToday,
     nightDeaths:   game.nightDeaths,
     smokeScreenPlayerId: isNarrator ? smokeScreenPlayerId : null,
@@ -1398,5 +1477,6 @@ module.exports = {
   startDay, startNight, openNominations,
   checkWinCondition, mayorWin,
   killPlayer, revivePlayer,
+  addDeferred,
   getPublicState,
 };

@@ -75,6 +75,8 @@ export default function NarratorPanel() {
   const [showReorder, setShowReorder] = useState(false);
   const [reorderList, setReorderList] = useState([]);
   const [showAutoMode, setShowAutoMode] = useState(false);
+  const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
+  const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
 
   useEffect(() => {
     if (tab === 'setup') { send('GET_DISCORD_MEMBERS', {}); send('GET_CAMPAIGNS', {}); }
@@ -133,6 +135,10 @@ export default function NarratorPanel() {
         </div>
 
         <div className="topbar-right">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginRight: 6 }} title="Tamaño de texto del narrador">
+            <button onClick={() => changeScale(-0.1)} className="btn-night" style={{ fontSize: 11, padding: '2px 7px' }}>A−</button>
+            <button onClick={() => changeScale(0.1)} className="btn-night" style={{ fontSize: 13, padding: '2px 7px' }}>A+</button>
+          </div>
           {showResetConfirm ? (
             <>
               <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--blood-hi)' }}>¿Resetear?</span>
@@ -146,7 +152,7 @@ export default function NarratorPanel() {
       </header>
 
       {/* ── Left panel ── */}
-      <aside className="left-panel">
+      <aside className="left-panel" style={{ zoom: uiScale }}>
         {tab === 'setup' && (
           <>
             {/* Campaign selector (oficiales + personalizadas del servidor) */}
@@ -629,7 +635,13 @@ export default function NarratorPanel() {
       </main>
 
       {/* ── Right panel ── */}
-      <aside className="right-panel" style={{ padding: '18px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <aside className="right-panel" style={{ padding: '18px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, zoom: uiScale }}>
+        {/* Asistente: consejos + pendientes diferidos (Po, Pukka…) */}
+        <AssistantPanel game={game} send={send} />
+
+        {/* Mapa de sospechas (agregado) */}
+        <SuspicionMap players={players} />
+
         {/* Orden de noche — centro de mando del narrador */}
         {isNight && <NightWalkthrough embedded onActiveActor={setActiveNightActorId} />}
 
@@ -920,6 +932,85 @@ function ManualNominateCard({ game, send }) {
         style={{ width: '100%', marginTop: 8, opacity: (busy || !nominatorId || !nomineeId || nominatorId === nomineeId) ? 0.4 : 1 }}>
         {busy ? 'Resuelve la votación activa primero' : '⚖ Nominar'}
       </button>
+    </div>
+  );
+}
+
+// Asistente del narrador: consejos proactivos + pendientes diferidos.
+function AssistantPanel({ game, send }) {
+  const advice = game.advice || [];
+  const deferred = game.deferredEffects || [];
+  const options = game.deferredOptions || [];
+  const sevColor = s => s === 'warn' ? 'var(--blood-hi)' : s === 'danger' ? 'var(--blood-hi)' : 'var(--moon)';
+
+  if (advice.length === 0 && deferred.length === 0 && options.length === 0) return null;
+
+  return (
+    <div style={{ border: '1px solid rgba(201,162,74,0.35)', borderRadius: 6, overflow: 'hidden', background: 'rgba(201,162,74,0.05)' }}>
+      <div style={{ padding: '7px 10px', background: 'rgba(201,162,74,0.1)', borderBottom: 'var(--hairline)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)' }}>🧠 Asistente</span>
+      </div>
+      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+        {advice.map((a, i) => (
+          <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 12.5, color: sevColor(a.severity), margin: 0, lineHeight: 1.4 }}>{a.text}</p>
+        ))}
+
+        {/* Pendientes registrados */}
+        {deferred.map(d => (
+          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(168,58,45,0.1)', borderRadius: 4, padding: '5px 7px' }}>
+            <span style={{ flex: 1, fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }}>{d.label}</span>
+            <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9 }}>✓ Hecho</button>
+          </div>
+        ))}
+
+        {/* Registrar pendiente de un demonio presente */}
+        {options.length > 0 && (
+          <div style={{ borderTop: 'var(--hairline-bone)', paddingTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {options.map(o => (
+              <button key={o.role}
+                onClick={() => send('ADD_DEFERRED', { label: o.label, dueNight: game.nightNumber + (o.dueOffset || 1), sourcePlayerId: o.sourcePlayerId, role: o.role, severity: 'warn' })}
+                className="btn-night" style={{ fontSize: 9 }}
+                title={o.label}>
+                + {o.roleName}: {o.trigger}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Mapa de sospechas agregado (todas las sospechas privadas en un vistazo).
+function SuspicionMap({ players }) {
+  const [open, setOpen] = useState(false);
+  const withSusp = players.filter(p => (p.accusations || []).length > 0);
+  if (withSusp.length === 0) return null;
+  const total = withSusp.reduce((n, p) => n + p.accusations.length, 0);
+
+  return (
+    <div style={{ border: 'var(--hairline-bone)', borderRadius: 4, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', cursor: 'pointer', background: 'rgba(0,0,0,0.2)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--moon)' }}>👁 Mapa de sospechas ({total})</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ maxHeight: 220, overflowY: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {withSusp.map(p => (
+            <div key={p.id}>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', margin: '0 0 2px', fontWeight: 600 }}>{p.name} <span style={{ color: 'var(--moon)', fontSize: 10 }}>👁 {p.accusations.length}</span></p>
+              {p.accusations.map((a, i) => {
+                const sr = ALL_ROLES.find(r => r.id === a.roleId);
+                return (
+                  <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-400)', margin: '0 0 0 8px' }}>
+                    {a.accuserName} → {sr?.name || a.roleId}
+                  </p>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

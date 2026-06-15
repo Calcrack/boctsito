@@ -4,12 +4,20 @@
 
 * { box-sizing: border-box; }
 
+:root {
+  --ui-scale: 1;
+  --font-size-base: 13px;
+  --line-height-base: 1.5;
+}
+
 html, body {
   margin: 0; padding: 0;
   background: var(--ink-900);
   color: var(--bone-100);
   font-family: var(--serif);
   font-weight: 400;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   height: 100%;

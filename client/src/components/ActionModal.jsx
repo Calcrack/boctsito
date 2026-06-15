@@ -2,6 +2,27 @@ import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { ALL_ROLES, ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
+import StatusChips from './StatusChips';
+
+// Explicación de cada efecto/ficha y su caducidad, para el panel de detalle.
+const TOKEN_EXPLAIN = {
+  POISONED:   'Su habilidad e información son FALSAS. Se limpia al próximo anochecer.',
+  PROTECTED:  'Protegido del Demonio esta noche. Se limpia al amanecer.',
+  DRUNK_NIGHT:'Borracho esta noche: su habilidad no funciona. Se limpia al anochecer.',
+  DIES:       'Marcado para morir esta noche.',
+  MASTER:     'Es el Amo del Mayordomo (solo vota si el Amo vota).',
+  SAFE_TONIGHT:'No puede morir esta noche.',
+  EXECUTED_TODAY:'Ejecutado hoy: el Enterrador aprende su personaje esta noche.',
+};
+function expiryLabel(t) {
+  const e = t.expiry || [];
+  if (t.manual) return 'manual (no caduca sola)';
+  if (e.includes('PERMANENT')) return 'permanente';
+  if (e.includes('UNTIL_NEXT_DUSK')) return 'hasta el próximo anochecer';
+  if (e.includes('AT_DAWN')) return 'se limpia al amanecer';
+  if (e.includes('ONE_DAY')) return 'dura el día de hoy';
+  return t.temp ? 'temporal' : 'permanente';
+}
 
 export default function ActionModal({ target, onClose, isNarrator }) {
   const { state, send } = useGame();
@@ -87,12 +108,53 @@ export default function ActionModal({ target, onClose, isNarrator }) {
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleRevealRole} className="btn-action primary" style={{ flex: 1 }}>Mostrar Rol</button>
+                <button onClick={handleRevealRole} className="btn-action primary" style={{ flex: 1 }}>Revelar personaje</button>
                 {target.alive
-                  ? <button onClick={handleNarratorKill}   className="btn-action danger" style={{ flex: 1 }}>Matar</button>
-                  : <button onClick={handleNarratorRevive} className="btn-action"        style={{ flex: 1 }}>Revivir</button>
+                  ? <button onClick={handleNarratorKill}   className="btn-action danger" style={{ flex: 1 }}>Matar jugador</button>
+                  : <button onClick={handleNarratorRevive} className="btn-action"        style={{ flex: 1 }}>Revivir jugador</button>
                 }
               </div>
+
+              {/* Fichas y estados activos del jugador, con explicación */}
+              <div style={{ marginTop: 12 }}>
+                <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>Fichas y estados</p>
+                {(target.tokens && target.tokens.length > 0) ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
+                    {target.tokens.map(t => {
+                      const tRole = ROLE_BY_ID[t.roleId];
+                      return (
+                        <div key={t.instanceId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(0,0,0,0.25)', borderRadius: 4, padding: '6px 8px' }}>
+                          {tRole?.img && <img src={tRole.img} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />}
+                          <div>
+                            <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', margin: 0, fontWeight: 600 }}>{t.label} <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>· {expiryLabel(t)}</span></p>
+                            {TOKEN_EXPLAIN[t.type] && <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', margin: '2px 0 0', fontStyle: 'italic' }}>{TOKEN_EXPLAIN[t.type]}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-500)', fontStyle: 'italic', marginBottom: 8 }}>Sin fichas activas.</p>
+                )}
+                <StatusChips player={target} />
+              </div>
+
+              {/* Sospechas sobre este jugador (privadas) */}
+              {Array.isArray(target.accusations) && target.accusations.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--moon)', marginBottom: 6 }}>👁 Sospechas ({target.accusations.length})</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {target.accusations.map((a, i) => {
+                      const sr = ROLE_BY_ID[a.roleId];
+                      return (
+                        <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-300)', margin: 0 }}>
+                          <strong style={{ color: 'var(--bone-100)' }}>{a.accuserName}</strong> cree que su personaje es <strong style={{ color: 'var(--gold-hot)' }}>{sr?.name || a.roleId}</strong>
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -144,11 +206,14 @@ export default function ActionModal({ target, onClose, isNarrator }) {
                   Sospecha
                 </button>
               </div>
-              {target.accusation && (
-                <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', fontStyle: 'italic', marginTop: 6 }}>
-                  Tu sospecha: {ROLE_BY_ID[target.accusation.roleId]?.name}
-                </p>
-              )}
+              {(() => {
+                const mine = (target.accusations || [])[0]; // el servidor solo me envía la mía
+                return mine ? (
+                  <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', fontStyle: 'italic', marginTop: 6 }}>
+                    Tu sospecha: su personaje es {ROLE_BY_ID[mine.roleId]?.name}
+                  </p>
+                ) : null;
+              })()}
             </div>
           )}
 

@@ -10,13 +10,14 @@ const {
   distributeRoles, nominate, vote, resolveVote, executeNominationWinner, slayerAction,
   applyNightAction, advanceNightQueue,
   startDay, startNight, openNominations,
-  mayorWin, killPlayer, revivePlayer, getPublicState,
+  mayorWin, killPlayer, revivePlayer, addDeferred, getPublicState,
 } = require('./gameLogic');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
+const { initDB, saveGame, loadGame, logGameEvent } = require('./persistence');
 
 // Carga campañas personalizadas persistidas y las registra en el motor.
 try {
@@ -117,6 +118,8 @@ function broadcastGame() {
     state.hasNarrator = hasNarrator;
     sendTo(session.ws, 'GAME_STATE', state);
   });
+  // Auto-save sin bloquear
+  saveGame(MAIN_GAME_ID, game).catch(err => console.error('[DB] Save error:', err.message));
 }
 
 function broadcastToAll(type, payload) {
@@ -246,10 +249,12 @@ function handleMessage(type, payload, session) {
         p.role = null; p.alignment = null; p.type = null;
         p.alive = true; p.poisoned = false; p.protected = false; p.safeTonight = false;
         p.hasVotedDead = false; p.showRole = false; p.nightInfo = null;
-        p.accusation = null; p.slayerUsed = false; p.virginUsed = false;
+        p.accusations = []; p.slayerUsed = false; p.virginUsed = false;
         p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
-        p.statuses = [];
+        p.statuses = []; p.tokens = [];
       });
+      game.deferredEffects = [];
+      game.statusLog = [];
       setPlazaChannelPermission(true).catch(() => {});
       broadcastGame();
       break;
@@ -698,9 +703,38 @@ function handleMessage(type, payload, session) {
       const target = game.players.find(p => p.id === payload.targetId);
       const accuser = game.players.find(p => p.id === session.playerId);
       if (target && accuser) {
-        target.accusation = { roleId: payload.accusedRole, accuserId: session.playerId, accuserName: accuser.name };
+        if (!Array.isArray(target.accusations)) target.accusations = [];
+        // Una sospecha por acusador (reemplaza la suya previa).
+        target.accusations = target.accusations.filter(a => a.accuserId !== session.playerId);
+        if (payload.accusedRole) {
+          target.accusations.push({ roleId: payload.accusedRole, accuserId: session.playerId, accuserName: accuser.name, atDay: game.dayNumber });
+        }
         broadcastGame();
       }
+      break;
+    }
+
+    // ── Asistente: pendientes diferidos (Po, Pukka, etc.) ──
+    case 'ADD_DEFERRED': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      addDeferred(game, {
+        label: payload.label,
+        dueNight: payload.dueNight ?? (game.nightNumber + 1),
+        sourcePlayerId: payload.sourcePlayerId || null,
+        severity: payload.severity || 'warn',
+        role: payload.role || null,
+      });
+      broadcastGame();
+      break;
+    }
+
+    case 'RESOLVE_DEFERRED': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const d = (game.deferredEffects || []).find(x => x.id === payload.id);
+      if (d) d.resolved = true;
+      broadcastGame();
       break;
     }
 
@@ -1370,29 +1404,51 @@ app.get('*', (req, res) => {
 
 // ── Start ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`[Server] http://localhost:${PORT}`);
-  console.log(`[Server] WebSocket: ws://localhost:${PORT}`);
-  initRankings();
-  initBot();
 
-  // Sync Discord voice state → game state
-  setVoiceStateCallback((discordUserId, channelKey) => {
-    const game = getGame(MAIN_GAME_ID);
-    if (!game) return;
-    const player = game.players.find(p => p.discordId === discordUserId);
-    if (!player) return;
-    const newChannel = (channelKey && channelKey !== 'PLAZA' && channelKey !== 'CONFESIONARIO') ? channelKey : null;
-    if (player.discordChannel !== newChannel) {
-      player.discordChannel = newChannel;
-      broadcastGame();
+async function startup() {
+  // Init BD
+  try {
+    await initDB();
+    console.log('[DB] Inicializada');
+    // Load partida persistida
+    const saved = await loadGame(MAIN_GAME_ID);
+    if (saved) {
+      Object.assign(mainGame, saved);
+      console.log('[DB] Partida restaurada');
+    }
+  } catch (e) {
+    console.error('[DB] Error:', e.message);
+  }
+
+  server.listen(PORT, () => {
+    console.log(`[Server] http://localhost:${PORT}`);
+    console.log(`[Server] WebSocket: ws://localhost:${PORT}`);
+    initRankings();
+    initBot();
+
+    // Sync Discord voice state → game state
+    setVoiceStateCallback((discordUserId, channelKey) => {
+      const game = getGame(MAIN_GAME_ID);
+      if (!game) return;
+      const player = game.players.find(p => p.discordId === discordUserId);
+      if (!player) return;
+      const newChannel = (channelKey && channelKey !== 'PLAZA' && channelKey !== 'CONFESIONARIO') ? channelKey : null;
+      if (player.discordChannel !== newChannel) {
+        player.discordChannel = newChannel;
+        broadcastGame();
+      }
+    });
+
+    // Auto-tunnel when TUNNEL env var is set
+    if (process.env.TUNNEL) {
+      startTunnel(PORT);
     }
   });
+}
 
-  // Auto-tunnel when TUNNEL env var is set
-  if (process.env.TUNNEL) {
-    startTunnel(PORT);
-  }
+startup().catch(err => {
+  console.error('[Startup] Fatal error:', err);
+  process.exit(1);
 });
 
 async function startTunnel(port) {

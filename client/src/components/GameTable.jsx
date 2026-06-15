@@ -90,7 +90,11 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
   const role = player.role ? ROLE_BY_ID[player.role] : null;
   const isDead = !player.alive;
   const sz = seatSize;
-  const tokens = isNarrator ? (player.tokens || []) : [];
+  // Contadores discretos (la capa limpia no vuelca contenido sobre el círculo).
+  const tokenCount = isNarrator
+    ? ((player.tokens || []).length + (player.isMaster ? 1 : 0) + (player.isSmokeScreen ? 1 : 0))
+    : 0;
+  const suspicionCount = (player.accusations || []).length;
 
   const classes = [
     'seat',
@@ -142,22 +146,17 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
             onError={e => { e.target.style.display = 'none'; }} />
         )}
 
-        <div className="seat-states">
-          {player.poisoned && isNarrator && (
-            <div className="state-chip poisoned" title="Envenenado">
-              <img src="/assets/estados/estado - envenenado.png"
-                style={{ width: 12, height: 12, borderRadius: '50%', objectFit: 'cover' }}
-                onError={e => { e.target.style.display = 'none'; }} />
-            </div>
-          )}
-          {player.protected && isNarrator && (
-            <div className="state-chip" title="Protegido">
-              <img src="/assets/estados/estado -  a salvo.png"
-                style={{ width: 12, height: 12, borderRadius: '50%', objectFit: 'cover' }}
-                onError={e => { e.target.style.display = 'none'; }} />
-            </div>
-          )}
-        </div>
+        {/* Contadores discretos (capa limpia): fichas y sospechas. Detalle al click. */}
+        {(tokenCount > 0 || suspicionCount > 0) && (
+          <div className="seat-counters">
+            {tokenCount > 0 && (
+              <span className="seat-counter tokens" title={`${tokenCount} ficha(s) de efecto — clic para ver`}>● {tokenCount}</span>
+            )}
+            {suspicionCount > 0 && (
+              <span className="seat-counter suspicions" title={`${suspicionCount} sospecha(s) — clic para ver`}>👁 {suspicionCount}</span>
+            )}
+          </div>
+        )}
 
         {isDead && !player.deadVoteNominationId && (
           <div className="dead-vote-token">
@@ -174,20 +173,6 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
         </div>
       )}
 
-      {/* Status token overlay (smoke screen, master) */}
-      {isNarrator && (player.isMaster || player.isSmokeScreen) && (
-        <div className="token-overlay">
-          {player.isMaster && (
-            <img src="/assets/estados/estado - amo.png" title="Amo"
-              onError={e => { e.target.style.display = 'none'; }} />
-          )}
-          {player.isSmokeScreen && (
-            <img src="/assets/estados/estado - cortina de humo.png" title="Cortina de Humo"
-              onError={e => { e.target.style.display = 'none'; }} />
-          )}
-        </div>
-      )}
-
       <div className="seat-nameplate">
         <div className="seat-name">{player.name}</div>
         {(isNarrator || isMe) && role && (
@@ -196,33 +181,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
             {role.name}
           </div>
         )}
-        {player.accusation && (() => {
-          const sr = ROLE_BY_ID[player.accusation.roleId];
-          return sr ? (
-            <div className="seat-role-label" style={{ color: 'var(--gold)', fontSize: 8 }}>
-              ~{sr.name}{isNarrator && player.accusation.accuserName ? ` (${player.accusation.accuserName})` : ''}
-            </div>
-          ) : null;
-        })()}
       </div>
-
-      {/* Fichas recordatorias colocadas por el narrador (arte del rol + texto) */}
-      {tokens.length > 0 && (
-        <div className="seat-tokens">
-          {tokens.map(t => {
-            const tRole = ROLE_BY_ID[t.roleId];
-            const temp = t.temp ?? (t.duration === 'night' || t.duration === 'day');
-            return (
-              <div key={t.instanceId} className={`seat-token${temp ? ' temp' : ''}`} title={t.label}>
-                <span className="seat-token-art">
-                  {tRole?.img && <img src={tRole.img} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                </span>
-                <span className="seat-token-label">{t.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

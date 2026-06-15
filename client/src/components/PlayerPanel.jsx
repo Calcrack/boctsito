@@ -239,6 +239,7 @@ function NominationCard({ nom, game }) {
 export default function PlayerPanel() {
   const { state, send, logout } = useGame();
   const { game, playerId, error } = state;
+  const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
 
   usePhaseSound(game?.phase);
 
@@ -283,7 +284,7 @@ export default function PlayerPanel() {
       </header>
 
       {/* ── Left panel ── */}
-      <aside className="left-panel">
+      <aside className="left-panel" style={{ zoom: uiScale }}>
         {error && (
           <div style={{ background: 'rgba(168,58,45,0.12)', border: '1px solid var(--blood-dim)', borderRadius: 3, padding: '10px 14px', fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--blood-hi)' }}>
             {error}

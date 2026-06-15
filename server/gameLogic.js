@@ -39,6 +39,7 @@ function createGame(narratorId, gameId) {
     autoVotes: { skipDay: [], skipNom: [], extend: [], skipNight: [] },
     pendingNightAfterNomination: false,
     nightReadyPlayers: [],
+    statusLog: [],
   };
   games.set(id, game);
   return game;
@@ -148,7 +149,7 @@ function generateNightInfo(game) {
   const { players } = game;
 
   players.forEach(p => {
-    p.poisoned = false;
+    // p.poisoned ya NO se resetea aquí: lo gestiona el motor de fichas (anochecer).
     p.pendingRavenkeeper = false;
     const roleCheck = p.role === 'DRUNK' ? p.drunkAs : p.role;
     if (isFirstNight || !FIRST_NIGHT_ONLY_ROLES.has(roleCheck)) {
@@ -652,15 +653,76 @@ function countEvilNeighborPairs(living, game = null) {
   return pairs;
 }
 
-// Coloca automáticamente una ficha recordatoria (arte del rol que actúa)
-// sobre el jugador afectado, para guiar al narrador.
-function placeToken(target, ownerRole, tokenId, label, duration) {
-  if (!target || !ownerRole) return;
+// ── Motor de fichas con ciclo de vida (BotC reminder tokens) ──────────
+// Caducidades (expiry): 'PERMANENT' | 'UNTIL_NEXT_DUSK' | 'AT_DAWN'
+//                       'ONE_DAY' | 'ON_REPLACE' | 'ON_BEARER_DEATH'
+const DUSK_EXPIRY = new Set(['UNTIL_NEXT_DUSK', 'ONE_DAY']);
+
+// Coloca una ficha sobre el portador. Aplica ON_REPLACE (una por fuente,
+// incluso si la fuente la tenía sobre OTRO jugador). Registra en el log.
+function placeToken(target, opts, game = null) {
+  if (!target) return;
+  const { type, roleId, label, expiry = ['PERMANENT'], sourceRole = null, sourcePlayerId = null, manual = false } = opts;
   if (!Array.isArray(target.tokens)) target.tokens = [];
-  const instanceId = `${ownerRole}:${tokenId}`;
-  if (!target.tokens.some(t => t.instanceId === instanceId)) {
-    target.tokens.push({ instanceId, tokenId, roleId: ownerRole, label, duration });
+
+  if (expiry.includes('ON_REPLACE') && sourcePlayerId) {
+    // La misma fuente solo mantiene 1 ficha de este tipo: quítala de cualquier portador.
+    const players = game ? game.players : [target];
+    for (const p of players) {
+      if (Array.isArray(p.tokens)) p.tokens = p.tokens.filter(t => !(t.type === type && t.sourcePlayerId === sourcePlayerId));
+    }
   }
+
+  const temp = !manual && !expiry.includes('PERMANENT');
+  const instanceId = `${type}:${sourcePlayerId || roleId || 'x'}:${manual ? 'm' : 'a'}`;
+  if (!target.tokens.some(t => t.instanceId === instanceId)) {
+    target.tokens.push({
+      instanceId, type, tokenId: type,
+      roleId: roleId || sourceRole || null,
+      label, expiry, sourceRole, sourcePlayerId, manual, temp,
+      nightApplied: game?.nightNumber ?? null,
+      dayApplied: game?.dayNumber ?? null,
+    });
+    if (game) logStatus(game, `🟡 ${label} → ${target.name}${sourceRole ? ` (por ${ROLES[sourceRole]?.name || sourceRole})` : ''}`);
+  }
+}
+
+// Limpia fichas que caducan en este momento de fase. Nunca toca las manuales.
+function clearExpiringTokens(game, when) {
+  for (const p of game.players) {
+    if (!Array.isArray(p.tokens) || p.tokens.length === 0) continue;
+    const before = p.tokens.length;
+    p.tokens = p.tokens.filter(t => {
+      if (t.manual) return true;
+      const exp = t.expiry || [];
+      if (when === 'dawn') return !exp.includes('AT_DAWN');
+      if (when === 'dusk') return !exp.some(e => DUSK_EXPIRY.has(e));
+      return true;
+    });
+    if (p.tokens.length !== before) logStatus(game, `🧹 ${when === 'dawn' ? 'Amanecer' : 'Anochecer'}: fichas caducadas de ${p.name}`);
+  }
+}
+
+// Al morir el portador: quita fichas con ON_BEARER_DEATH (salvo manuales).
+function clearBearerDeathTokens(player) {
+  if (!Array.isArray(player.tokens)) return;
+  player.tokens = player.tokens.filter(t => t.manual || !(t.expiry || []).includes('ON_BEARER_DEATH'));
+}
+
+// Recalcula banderas derivadas que el resto del motor consulta.
+function syncStatusFlags(game) {
+  for (const p of game.players) {
+    const toks = p.tokens || [];
+    p.poisoned  = toks.some(t => t.type === 'POISONED' || t.type === 'DRUNK_NIGHT');
+    p.protected = toks.some(t => t.type === 'PROTECTED');
+  }
+}
+
+// Log de auditoría de estados.
+function logStatus(game, message) {
+  if (!Array.isArray(game.statusLog)) game.statusLog = [];
+  game.statusLog.push({ t: Date.now(), night: game.nightNumber, day: game.dayNumber, message });
+  if (game.statusLog.length > 200) game.statusLog.shift();
 }
 
 function applyNightAction(game, actionType, actorId, targetIds) {
@@ -673,17 +735,23 @@ function applyNightAction(game, actionType, actorId, targetIds) {
     case 'POISON':
     case 'POISONER_ACTION':
       if (targets[0]) {
-        targets[0].poisoned = true;
-        placeToken(targets[0], artRole || 'POISONER', 'POISONED', 'Envenenado', 'night');
+        // Veneno: dura esta noche y el día siguiente; se limpia al próximo anochecer.
+        // Una sola persona envenenada por este Envenenador a la vez (ON_REPLACE).
+        placeToken(targets[0], {
+          type: 'POISONED', roleId: artRole || 'POISONER', label: 'Envenenado',
+          expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: artRole || 'POISONER', sourcePlayerId: actorId,
+        }, game);
       }
       break;
 
     case 'PROTECT':
     case 'MONK_PROTECT':
-      game.players.forEach(p => p.protected = false);
       if (targets[0] && !actor?.poisoned) {
-        targets[0].protected = true;
-        placeToken(targets[0], artRole || 'MONK', 'SAFE', 'A salvo', 'night');
+        // Protección del Monje: solo esta noche; se limpia al amanecer.
+        placeToken(targets[0], {
+          type: 'PROTECTED', roleId: artRole || 'MONK', label: 'A salvo',
+          expiry: ['AT_DAWN', 'ON_REPLACE'], sourceRole: artRole || 'MONK', sourcePlayerId: actorId,
+        }, game);
       }
       break;
 
@@ -701,8 +769,9 @@ function applyNightAction(game, actionType, actorId, targetIds) {
           // blocked
         } else {
           target.alive = false;
+          clearBearerDeathTokens(target);
           game.nightDeaths.push(target.id);
-          placeToken(target, artRole || 'IMP', 'DIES', 'Muere', 'night');
+          placeToken(target, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
           const minion = game.players.find(p => p.type === 'minion' && p.alive);
           if (minion) {
             minion.role = 'IMP'; minion.type = 'demon';
@@ -717,8 +786,9 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         if (pool.length > 0) {
           const redirectTarget = pool[Math.floor(Math.random() * pool.length)];
           redirectTarget.alive = false;
+          clearBearerDeathTokens(redirectTarget);
           game.nightDeaths.push(redirectTarget.id);
-          placeToken(redirectTarget, artRole || 'IMP', 'DIES', 'Muere', 'night');
+          placeToken(redirectTarget, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
           const isRealRaven = redirectTarget.role === 'RAVENKEEPER' && !redirectTarget.poisoned;
           const isDrunkRaven = redirectTarget.role === 'DRUNK' && redirectTarget.drunkAs === 'RAVENKEEPER';
           if (isRealRaven || isDrunkRaven) {
@@ -731,8 +801,9 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         // pool vacío (solo Alcalde + Demonio vivos) → Alcalde sobrevive
       } else {
         target.alive = false;
+        clearBearerDeathTokens(target);
         game.nightDeaths.push(target.id);
-        placeToken(target, artRole || 'IMP', 'DIES', 'Muere', 'night');
+        placeToken(target, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
         const isRealRaven = target.role === 'RAVENKEEPER' && !target.poisoned;
         const isDrunkRaven = target.role === 'DRUNK' && target.drunkAs === 'RAVENKEEPER';
         if (isRealRaven || isDrunkRaven) {
@@ -769,9 +840,11 @@ function applyNightAction(game, actionType, actorId, targetIds) {
     case 'BUTLER_MASTER':
       if (actor && targets[0]) {
         actor.butlerMaster = targets[0].id;
-        // Limpia el Amo anterior antes de marcar el nuevo.
-        game.players.forEach(p => { p.tokens = (p.tokens || []).filter(t => t.instanceId !== 'BUTLER:MASTER'); });
-        placeToken(targets[0], 'BUTLER', 'MASTER', 'Es el Amo', 'permanent');
+        // Amo: persiste hasta que el Mayordomo elija otro (ON_REPLACE por fuente).
+        placeToken(targets[0], {
+          type: 'MASTER', roleId: 'BUTLER', label: 'Es el Amo',
+          expiry: ['ON_REPLACE'], sourceRole: 'BUTLER', sourcePlayerId: actorId,
+        }, game);
       }
       break;
 
@@ -810,19 +883,27 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         if (!t || !t.alive) continue;
         if (t.protected || t.safeTonight) continue;
         t.alive = false;
+        clearBearerDeathTokens(t);
         game.nightDeaths.push(t.id);
-        placeToken(t, artRole || 'IMP', 'DIES', 'Muere', 'night');
+        placeToken(t, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
         checkScarletWoman(game, actor);
       }
       break;
     }
 
     case 'MAKE_DRUNK':
-      for (const t of targets) if (t) { t.poisoned = true; placeToken(t, artRole, 'DRUNK', 'Borracho', 'night'); }
+      // Borracho de una noche (≈ envenenado): se limpia al próximo anochecer.
+      for (const t of targets) if (t) placeToken(t, {
+        type: 'DRUNK_NIGHT', roleId: artRole, label: 'Borracho',
+        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: artRole, sourcePlayerId: actorId,
+      }, game);
       break;
 
     case 'SAFE':
-      for (const t of targets) if (t) { t.safeTonight = true; placeToken(t, artRole, 'SAFE', 'A salvo', 'night'); }
+      for (const t of targets) if (t) { t.safeTonight = true; placeToken(t, {
+        type: 'SAFE_TONIGHT', roleId: artRole, label: 'A salvo',
+        expiry: ['AT_DAWN', 'ON_REPLACE'], sourceRole: artRole, sourcePlayerId: actorId,
+      }, game); }
       break;
 
     case 'REVIVE':
@@ -835,9 +916,10 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
 
     case 'CLEAR_STATUS':
-      for (const t of targets) { if (t) { t.poisoned = false; t.protected = false; t.safeTonight = false; t.tokens = []; } }
+      for (const t of targets) { if (t) { t.safeTonight = false; t.tokens = (t.tokens || []).filter(x => x.manual); } }
       break;
   }
+  syncStatusFlags(game);
   return game;
 }
 
@@ -999,6 +1081,9 @@ function executeNominationWinner(game) {
   winner.executed = true;
   game.executedToday = nominee.id;
   nominee.alive = false;
+  clearBearerDeathTokens(nominee);
+  // Ficha "Murió hoy" para el Enterrador: dura el día y se lee esa noche.
+  placeToken(nominee, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
 
   if (nominee.role === 'SAINT' && !nominee.poisoned) {
     game.winner = 'evil'; game.phase = 'game_over';
@@ -1061,11 +1146,11 @@ function startDay(game) {
   game.executedToday = null;
   game.pendingNightAfterNomination = false;
   game.autoVotes = { skipDay: [], skipNom: [], extend: [] };
-  game.players.forEach(p => {
-    p.discordChannel = null;
-    // Purgar fichas temporales de noche; permanentes y de un uso persisten.
-    p.tokens = (p.tokens || []).filter(t => t.duration !== 'night');
-  });
+  game.players.forEach(p => { p.discordChannel = null; });
+  // AMANECER: limpia solo fichas AT_DAWN (protección Monje, marca "Muere").
+  // El veneno (UNTIL_NEXT_DUSK) PERSISTE durante el día. Manuales intactas.
+  clearExpiringTokens(game, 'dawn');
+  syncStatusFlags(game);
   checkWinCondition(game);
   return game;
 }
@@ -1073,7 +1158,11 @@ function startDay(game) {
 function startNight(game) {
   game.phase = game.nightNumber === 0 ? 'first_night' : 'night';
   game.nightNumber++;
-  game.players.forEach(p => { p.protected = false; p.safeTonight = false; });
+  // ANOCHECER: limpia fichas UNTIL_NEXT_DUSK / ONE_DAY (veneno previo, etc.)
+  // ANTES de que actúen los roles, para que el Envenenador re-aplique limpio.
+  clearExpiringTokens(game, 'dusk');
+  game.players.forEach(p => { p.safeTonight = false; });
+  syncStatusFlags(game);
   game.players.filter(p => p.alive && p.role === 'BUTLER').forEach(p => { p.butlerMaster = null; });
   
   // FIX: Determinar si el Recluso registra como malvado esta noche (50% probabilidad)
@@ -1228,9 +1317,18 @@ function getPublicState(game, viewerId, isNarrator) {
   });
   const submittedCount = aliveQueue.filter(pid => game.nightSubmissions?.[pid]).length;
 
+  const activeCampaign = getCampaign(game.campaignId);
   return {
     id: game.id, phase, dayNumber, nightNumber,
     campaignId: game.campaignId,
+    campaignName: activeCampaign.name,
+    campaignIsCustom: !!activeCampaign.isCustom,
+    campaignRoles: Object.values(activeCampaign.roles || {}).map(r => ({
+      id: r.id, name: r.name, type: r.type, alignment: r.alignment,
+      ability: r.ability, image: r.image || null, homebrew: !!r.homebrew,
+    })),
+    campaignSetupNotes: isNarrator ? (activeCampaign.setupNotes || []) : undefined,
+    campaignWarnings: isNarrator ? (activeCampaign.warnings || []) : undefined,
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);
@@ -1254,6 +1352,7 @@ function getPublicState(game, viewerId, isNarrator) {
       };
     }),
     activeNomination, winner,
+    statusLog: isNarrator ? (game.statusLog || []) : undefined,
     executedToday: game.executedToday,
     nightDeaths:   game.nightDeaths,
     smokeScreenPlayerId: isNarrator ? smokeScreenPlayerId : null,

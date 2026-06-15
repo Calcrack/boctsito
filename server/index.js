@@ -14,7 +14,17 @@ const {
 } = require('./gameLogic');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
+const { registerCampaign, listCampaigns } = require('./campaigns');
+const { buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
+
+// Carga campañas personalizadas persistidas y las registra en el motor.
+try {
+  const custom = loadCustomCampaigns();
+  for (const c of Object.values(custom)) registerCampaign(c);
+  const n = Object.keys(custom).length;
+  if (n) console.log(`✓ ${n} campaña(s) personalizada(s) cargada(s)`);
+} catch (e) { console.error('Error cargando campañas personalizadas:', e.message); }
 
 const SAVE_PATH = path.join(__dirname, 'game-save.json');
 
@@ -289,6 +299,47 @@ function handleMessage(type, payload, session) {
       const cid = payload.campaignId;
       if (!CAMPAIGNS[cid]) throw new Error('Campaña desconocida');
       game.campaignId = cid;
+      broadcastGame();
+      break;
+    }
+
+    // ── Campañas personalizadas ──────────────────────────────────────
+    case 'IMPORT_CAMPAIGN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      let campaign;
+      try {
+        campaign = buildCampaign(payload.json, payload.name || 'Campaña personalizada');
+      } catch (e) {
+        sendTo(ws, 'IMPORT_RESULT', { ok: false, error: e.message });
+        break;
+      }
+      registerCampaign(campaign);
+      saveCustomCampaign(campaign);
+      sendTo(ws, 'IMPORT_RESULT', {
+        ok: true, id: campaign.id, name: campaign.name,
+        roleCount: Object.keys(campaign.roles).length,
+        warnings: campaign.warnings, setupNotes: campaign.setupNotes,
+      });
+      sendTo(ws, 'CAMPAIGN_LIST', { campaigns: listCampaigns() });
+      break;
+    }
+
+    case 'GET_CAMPAIGNS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      sendTo(ws, 'CAMPAIGN_LIST', { campaigns: listCampaigns() });
+      break;
+    }
+
+    case 'DELETE_CAMPAIGN': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const cid = payload.campaignId;
+      if (cid && CAMPAIGNS[cid] && CAMPAIGNS[cid].isCustom) {
+        delete CAMPAIGNS[cid];
+        deleteCustomCampaign(cid);
+        const game = getGame(MAIN_GAME_ID);
+        if (game.campaignId === cid) game.campaignId = DEFAULT_CAMPAIGN;
+      }
+      sendTo(ws, 'CAMPAIGN_LIST', { campaigns: listCampaigns() });
       broadcastGame();
       break;
     }
@@ -802,10 +853,11 @@ function handleMessage(type, payload, session) {
       if (p && payload.token) {
         if (!Array.isArray(p.tokens)) p.tokens = [];
         const t = payload.token; // { tokenId, roleId, label, duration }
-        const instanceId = `${t.roleId}:${t.tokenId}`;
+        const instanceId = `manual:${t.roleId}:${t.tokenId}`;
         const existing = p.tokens.findIndex(x => x.instanceId === instanceId);
         if (existing >= 0) p.tokens.splice(existing, 1); // toggle off
-        else p.tokens.push({ instanceId, tokenId: t.tokenId, roleId: t.roleId, label: t.label, duration: t.duration || 'permanent' });
+        // manual:true → el motor de caducidad NUNCA la auto-borra.
+        else p.tokens.push({ instanceId, type: t.tokenId, tokenId: t.tokenId, roleId: t.roleId, label: t.label, duration: t.duration || 'permanent', manual: true, temp: t.duration === 'night' || t.duration === 'day' });
       }
       broadcastGame();
       break;

@@ -63,7 +63,7 @@ const TAB_LABELS = { setup: 'Config', mesa: 'Mesa', ranking: '🏆' };
 
 export default function NarratorPanel() {
   const { state, send } = useGame();
-  const { game, discordMembers, rankings } = state;
+  const { game, discordMembers, rankings, campaigns: serverCampaigns, importResult } = state;
   const [tab, setTab] = useState('setup');
   const [activeNightActorId, setActiveNightActorId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -77,7 +77,7 @@ export default function NarratorPanel() {
   const [showAutoMode, setShowAutoMode] = useState(false);
 
   useEffect(() => {
-    if (tab === 'setup') send('GET_DISCORD_MEMBERS', {});
+    if (tab === 'setup') { send('GET_DISCORD_MEMBERS', {}); send('GET_CAMPAIGNS', {}); }
     if (tab === 'ranking') send('GET_RANKINGS', {});
   }, [tab]);
 
@@ -93,7 +93,10 @@ export default function NarratorPanel() {
   const { players, phase, nominations, activeNomination, nightDeaths } = game;
   const isNight = ['first_night', 'night'].includes(phase);
   const campaign = getCampaign(game.campaignId);
-  const campaignRoleList = campaign.roles;
+  // Para campañas personalizadas usamos los roles que envía el servidor.
+  const campaignRoleList = (game.campaignRoles && game.campaignRoles.length)
+    ? game.campaignRoles
+    : campaign.roles;
 
   const addPlayer = () => {
     if (!newPlayerName.trim()) return;
@@ -146,27 +149,33 @@ export default function NarratorPanel() {
       <aside className="left-panel">
         {tab === 'setup' && (
           <>
-            {/* Campaign selector */}
+            {/* Campaign selector (oficiales + personalizadas del servidor) */}
             <div>
               <p className="panel-label">Campaña</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {CAMPAIGN_LIST.map(c => {
+                {(serverCampaigns && serverCampaigns.length ? serverCampaigns : CAMPAIGN_LIST).map(c => {
                   const active = game.campaignId === c.id;
                   const locked = phase !== 'lobby';
                   return (
-                    <button key={c.id}
-                      disabled={locked && !active}
-                      onClick={() => { if (!locked) send('SET_CAMPAIGN', { campaignId: c.id }); }}
-                      className="btn-night"
-                      style={{
-                        textAlign: 'left', padding: '8px 10px',
-                        borderColor: active ? 'var(--gold)' : undefined,
-                        color: active ? 'var(--gold-hot)' : undefined,
-                        opacity: (locked && !active) ? 0.35 : 1,
-                        cursor: locked ? 'default' : 'pointer',
-                      }}>
-                      {active ? '◆ ' : ''}{c.name}
-                    </button>
+                    <div key={c.id} style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        disabled={locked && !active}
+                        onClick={() => { if (!locked) send('SET_CAMPAIGN', { campaignId: c.id }); }}
+                        className="btn-night"
+                        style={{
+                          flex: 1, textAlign: 'left', padding: '8px 10px',
+                          borderColor: active ? 'var(--gold)' : undefined,
+                          color: active ? 'var(--gold-hot)' : undefined,
+                          opacity: (locked && !active) ? 0.35 : 1,
+                          cursor: locked ? 'default' : 'pointer',
+                        }}>
+                        {active ? '◆ ' : ''}{c.name}{c.isCustom ? ' ✦' : ''}
+                      </button>
+                      {c.isCustom && !locked && (
+                        <button onClick={() => { if (confirm(`¿Eliminar campaña "${c.name}"?`)) send('DELETE_CAMPAIGN', { campaignId: c.id }); }}
+                          className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }} title="Eliminar">✕</button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -175,6 +184,7 @@ export default function NarratorPanel() {
                   Resetea la partida para cambiar de campaña.
                 </p>
               )}
+              {phase === 'lobby' && <ImportCampaignBox send={send} importResult={importResult} />}
             </div>
 
             {/* Discord member quick-picker */}
@@ -623,6 +633,9 @@ export default function NarratorPanel() {
         {/* Orden de noche — centro de mando del narrador */}
         {isNight && <NightWalkthrough embedded onActiveActor={setActiveNightActorId} />}
 
+        {/* Log de auditoría de estados/fichas */}
+        {Array.isArray(game.statusLog) && game.statusLog.length > 0 && <StatusLogPanel log={game.statusLog} />}
+
         {/* Night deaths summary */}
         {nightDeaths.length > 0 && (
           <div>
@@ -907,6 +920,78 @@ function ManualNominateCard({ game, send }) {
         style={{ width: '100%', marginTop: 8, opacity: (busy || !nominatorId || !nomineeId || nominatorId === nomineeId) ? 0.4 : 1 }}>
         {busy ? 'Resuelve la votación activa primero' : '⚖ Nominar'}
       </button>
+    </div>
+  );
+}
+
+// Log de auditoría de fichas/estados (aplicación y limpieza).
+function StatusLogPanel({ log }) {
+  const [open, setOpen] = useState(false);
+  const recent = log.slice(-40).reverse();
+  return (
+    <div style={{ border: 'var(--hairline-bone)', borderRadius: 4, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', cursor: 'pointer', background: 'rgba(0,0,0,0.2)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-300)' }}>📜 Log de estados ({log.length})</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ maxHeight: 200, overflowY: 'auto', padding: '6px 10px' }}>
+          {recent.map((e, i) => (
+            <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', margin: '2px 0' }}>
+              <span style={{ color: 'var(--bone-600)', fontFamily: 'var(--mono)', fontSize: 9 }}>N{e.night}/D{e.day} </span>{e.message}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Importar campaña personalizada: pegar JSON del script (formato BotC).
+function ImportCampaignBox({ send, importResult }) {
+  const [open, setOpen] = useState(false);
+  const [json, setJson] = useState('');
+  const [name, setName] = useState('');
+
+  const doImport = () => {
+    if (!json.trim()) return;
+    send('IMPORT_CAMPAIGN', { json: json.trim(), name: name.trim() || undefined });
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button onClick={() => setOpen(o => !o)} className="btn-night" style={{ width: '100%', fontSize: 10 }}>
+        {open ? 'Cerrar' : '＋ Importar campaña (JSON)'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 6, padding: '8px 10px', background: 'rgba(0,0,0,0.25)', border: 'var(--hairline-bone)', borderRadius: 4 }}>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre (opcional)"
+            style={{ width: '100%', marginBottom: 6, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '5px 7px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
+          <textarea value={json} onChange={e => setJson(e.target.value)} rows={5}
+            placeholder='Pega el script: [{"id":"_meta","name":"..."},"washerwoman",...]'
+            style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-100)', resize: 'vertical' }} />
+          <button onClick={doImport} disabled={!json.trim()} className="btn-action primary" style={{ width: '100%', marginTop: 6, opacity: json.trim() ? 1 : 0.4 }}>
+            Importar
+          </button>
+          {importResult && (
+            <div style={{ marginTop: 8, fontSize: 11, fontFamily: 'var(--serif)' }}>
+              {importResult.ok ? (
+                <>
+                  <p style={{ color: 'var(--good)', margin: '0 0 4px' }}>✓ {importResult.name} — {importResult.roleCount} roles</p>
+                  {(importResult.warnings || []).map((w, i) => (
+                    <p key={i} style={{ color: 'var(--gold)', margin: '2px 0', fontStyle: 'italic' }}>{w}</p>
+                  ))}
+                  {(importResult.setupNotes || []).map((s, i) => (
+                    <p key={`s${i}`} style={{ color: 'var(--bone-400)', margin: '2px 0' }}>· {s}</p>
+                  ))}
+                </>
+              ) : (
+                <p style={{ color: 'var(--blood-hi)', margin: 0 }}>✕ {importResult.error}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

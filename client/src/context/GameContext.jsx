@@ -56,6 +56,10 @@ function reducer(state, action) {
       return { ...state, error: null };
     case 'SET_RANKINGS':
       return { ...state, rankings: action.payload };
+    case 'SET_CAMPAIGNS':
+      return { ...state, campaigns: action.payload.campaigns };
+    case 'SET_IMPORT_RESULT':
+      return { ...state, importResult: action.payload };
     case 'LOGOUT':
       return { ...initialState, connected: state.connected, socketId: state.socketId };
     default:
@@ -167,6 +171,12 @@ export function GameProvider({ children }) {
         }
         case 'RANKINGS':
           dispatch({ type: 'SET_RANKINGS', payload });
+          break;
+        case 'CAMPAIGN_LIST':
+          dispatch({ type: 'SET_CAMPAIGNS', payload });
+          break;
+        case 'IMPORT_RESULT':
+          dispatch({ type: 'SET_IMPORT_RESULT', payload });
           break;
         case 'KICKED_SESSION': {
           // Another tab/device joined as same player — rejoin immediately

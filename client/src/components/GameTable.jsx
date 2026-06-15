@@ -211,7 +211,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
         <div className="seat-tokens">
           {tokens.map(t => {
             const tRole = ROLE_BY_ID[t.roleId];
-            const temp = t.duration === 'night' || t.duration === 'day';
+            const temp = t.temp ?? (t.duration === 'night' || t.duration === 'day');
             return (
               <div key={t.instanceId} className={`seat-token${temp ? ' temp' : ''}`} title={t.label}>
                 <span className="seat-token-art">

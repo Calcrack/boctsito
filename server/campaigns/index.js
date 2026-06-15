@@ -23,4 +23,18 @@ for (const c of Object.values(CAMPAIGNS)) {
   }
 }
 
-module.exports = { CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign, ALL_ROLES };
+// Registro dinámico de campañas personalizadas (mutando los objetos compartidos
+// para que getCampaign y ROLES[id] sigan resolviendo en caliente).
+function registerCampaign(campaign) {
+  if (!campaign || !campaign.id) return;
+  CAMPAIGNS[campaign.id] = campaign;
+  for (const [id, role] of Object.entries(campaign.roles || {})) {
+    if (!ALL_ROLES[id]) ALL_ROLES[id] = role; // no piso roles oficiales globales
+  }
+}
+
+function listCampaigns() {
+  return Object.values(CAMPAIGNS).map(c => ({ id: c.id, name: c.name, isCustom: !!c.isCustom, author: c.author || null }));
+}
+
+module.exports = { CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign, ALL_ROLES, registerCampaign, listCampaigns };

@@ -28,9 +28,10 @@ export default function StatusChips({ player, compact = false }) {
       {/* Fichas colocadas (con arte de rol) */}
       {tokens.map(t => {
         const role = ROLE_BY_ID[t.roleId];
+        const dur = t.duration || (t.temp ? 'night' : 'permanent');
         return (
-          <button key={t.instanceId} onClick={() => removeToken(t.instanceId)} title={`${t.label} — quitar`}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontFamily: 'var(--serif)', fontSize: compact ? 9 : 11, background: 'rgba(0,0,0,0.3)', border: `1px solid ${durColor(t.duration)}`, color: 'var(--bone-100)', borderRadius: 10, padding: '1px 6px 1px 2px', cursor: 'pointer' }}>
+          <button key={t.instanceId} onClick={() => removeToken(t.instanceId)} title={`${t.label}${t.manual ? ' (manual)' : ''} — quitar`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontFamily: 'var(--serif)', fontSize: compact ? 9 : 11, background: 'rgba(0,0,0,0.3)', border: `1px solid ${durColor(dur)}`, color: 'var(--bone-100)', borderRadius: 10, padding: '1px 6px 1px 2px', cursor: 'pointer' }}>
             {role?.img && <img src={role.img} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />}
             {t.label} ✕
           </button>

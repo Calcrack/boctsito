@@ -26,8 +26,8 @@ export default function SetupWizard({ game, send }) {
   // El "saco" = roles disponibles para asignar. Arranca de lo ya asignado.
   const [bag, setBag] = useState(() => new Set(Object.values(assignments)));
 
-  const seatOrder = (setup.seatOrder && setup.seatOrder.length)
-    ? setup.seatOrder : players.map(p => p.id);
+  const baseOrder = (setup.seatOrder && setup.seatOrder.length) ? setup.seatOrder : players.map(p => p.id);
+  const seatOrder = [...baseOrder, ...players.filter(p => !baseOrder.includes(p.id)).map(p => p.id)];
   const seats = seatOrder.map(id => players.find(p => p.id === id)).filter(Boolean);
 
   const dist = (game.campaignDistribution || {})[players.length] || null;

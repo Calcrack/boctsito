@@ -106,7 +106,11 @@ function autoSelectRoles(playerCount, campaignId) {
 // ── Montaje (wizard) helpers ───────────────────────────────────────
 function ensureSetup(game) {
   if (!game.setup) game.setup = { locked: false, seatOrder: [], assignments: {}, decisions: [] };
-  if (!game.setup.seatOrder?.length) game.setup.seatOrder = game.players.map(p => p.id);
+  const ids = new Set(game.players.map(p => p.id));
+  // Mantén seatOrder coherente con los jugadores actuales (altas/bajas).
+  game.setup.seatOrder = (game.setup.seatOrder || []).filter(id => ids.has(id));
+  for (const p of game.players) if (!game.setup.seatOrder.includes(p.id)) game.setup.seatOrder.push(p.id);
+  for (const seatId of Object.keys(game.setup.assignments || {})) if (!ids.has(seatId)) delete game.setup.assignments[seatId];
   return game.setup;
 }
 function recomputeSetup(game) {
@@ -283,6 +287,7 @@ function handleMessage(type, payload, session) {
       const game = getGame(MAIN_GAME_ID);
       const { name, discordId, discordTag, avatar } = payload;
       const player = addPlayer(game, { name, discordId, discordTag, avatar });
+      ensureSetup(game);
       broadcastGame();
       sendTo(ws, 'PLAYER_ADDED', { player });
       sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
@@ -295,6 +300,7 @@ function handleMessage(type, payload, session) {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
       removePlayer(game, payload.playerId);
+      ensureSetup(game);
       broadcastGame();
       sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
         players: game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
@@ -322,6 +328,10 @@ function handleMessage(type, payload, session) {
       const cid = payload.campaignId;
       if (!CAMPAIGNS[cid]) throw new Error('Campaña desconocida');
       game.campaignId = cid;
+      // Los roles de la campaña anterior ya no aplican: limpia el montaje.
+      game.setup = { locked: false, seatOrder: game.players.map(p => p.id), assignments: {}, decisions: [] };
+      game.setupResolved = null;
+      game.narratorDrunkAs = null; game.narratorRolesForImp = []; game.smokeScreenPlayerId = null;
       broadcastGame();
       break;
     }

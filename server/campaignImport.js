@@ -2,7 +2,7 @@
 // Soporta formato (a) lista de IDs + _meta, y (b) definiciones homebrew.
 const fs = require('fs');
 const path = require('path');
-const { ALL_ROLES } = require('./campaigns');
+const { ALL_ROLES, getCampaign } = require('./campaigns');
 
 const CUSTOM_PATH = path.join(__dirname, 'campaigns-custom.json');
 
@@ -264,6 +264,7 @@ function buildCampaign(input, fallbackName) {
     setupNotes: parsed.setupNotes,
     warnings: parsed.warnings,
     queueFirst, queueOther,
+    distribution: getCampaign('TROUBLE_BREWING')?.distribution || {},
   };
 }
 

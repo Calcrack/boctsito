@@ -235,7 +235,7 @@ function DecisionsStep({ decisions, seats, assignments, roleList, send }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {decisions.map(d => (
           <DecisionCard key={d.id} d={d} goodNotInPlay={goodNotInPlay} demonsInCampaign={demonsInCampaign}
-            goodSeats={goodSeats} outsidersInPlay={outsidersInPlay} seats={seats} assignments={assignments}
+            outsidersInPlay={outsidersInPlay} seats={seats} assignments={assignments}
             nameOf={nameOf} setDec={setDec} suggest={suggest} />
         ))}
       </div>
@@ -243,7 +243,7 @@ function DecisionsStep({ decisions, seats, assignments, roleList, send }) {
   );
 }
 
-function DecisionCard({ d, goodNotInPlay, demonsInCampaign, goodSeats, outsidersInPlay, seats, assignments, nameOf, setDec, suggest }) {
+function DecisionCard({ d, goodNotInPlay, demonsInCampaign, outsidersInPlay, seats, assignments, nameOf, setDec, suggest }) {
   const resolved = isResolved(d);
   const sel = (value, onChange, opts, placeholder) => (
     <select value={value || ''} onChange={e => onChange(e.target.value || null)}

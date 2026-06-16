@@ -13,6 +13,7 @@ function buildSteps(game) {
   const pendingRaven = players.find(p => p.role === 'RAVENKEEPER' && p.pendingRavenkeeper);
   const steps = [];
   let infoShown = false;
+  const rolesInOrder = new Set(order.filter(id => !INFO_MARKERS.has(id)));
   for (const roleId of order) {
     if (INFO_MARKERS.has(roleId)) {
       if (infoShown) continue;
@@ -24,7 +25,9 @@ function buildSteps(game) {
     if (!role) continue;
     const isPending = roleId === 'RAVENKEEPER' && !!pendingRaven;
     const actors = players.filter(p =>
-      (p.role === roleId || (p.role === 'DRUNK' && p.drunkAs === roleId)) &&
+      (p.role === roleId ||
+       (p.role === 'DRUNK' && p.drunkAs === roleId) ||
+       (p.believedRole === roleId && !rolesInOrder.has(p.role))) &&
       (isPending ? true : p.alive)
     );
     for (const actor of actors) steps.push({ type: 'role', role, actor });
@@ -34,6 +37,7 @@ function buildSteps(game) {
 
 // ── Patrón de acción del Narrador por rol ───────────────────────────────
 const NIGHT_ROLE_PATTERN = {
+  // ── TB ──────────────────────────────────────────────────────────────────
   WASHERWOMAN:    { kind: 'P2', targetType: 'townfolk', emoji: '🧺' },
   LIBRARIAN:      { kind: 'P2', targetType: 'outsider', emoji: '📚' },
   INVESTIGATOR:   { kind: 'P2', targetType: 'minion',   emoji: '🔍' },
@@ -45,6 +49,34 @@ const NIGHT_ROLE_PATTERN = {
   IMP:            { kind: 'P3', effect: 'IMP_KILL',        emoji: '👹', label: 'Atacar a',    notSelf: false },
   BUTLER:         { kind: 'P3', effect: 'BUTLER_MASTER',   emoji: '🤵', label: 'Amo de',      notSelf: true  },
   FORTUNE_TELLER: { kind: 'P4', emoji: '🔮' },
+  // ── BMR demons ──────────────────────────────────────────────────────────
+  PUKKA:    { kind: 'P3', effect: 'PUKKA_POISON',    emoji: '🕸️', label: 'Envenenar a', notSelf: false,
+              note: 'Primero: el envenenado de anoche muere ahora. Luego elige a quién envenenar esta noche.' },
+  ZOMBUUL:  { kind: 'P3', effect: 'ZOMBUUL_KILL',    emoji: '🧟', label: 'Atacar a',    notSelf: false,
+              note: 'Solo actúa si nadie murió de día. Su 1ª "muerte" lo deja muerto-vivo (sigue activo).' },
+  PO:       { kind: 'P3', effect: 'PO_KILL',         emoji: '💀', label: 'Atacar a',    notSelf: false,
+              note: 'Si anoche no atacó (marcador 3 ataques): esta noche elige 3 objetivos en lugar de 1.' },
+  SHABALOTH:{ kind: 'P3x2', effect: 'SHABALOTH_KILL', emoji: '👁️',
+              note: 'Elige 2 objetivos. Puede revivir a 1 muerto de la noche anterior.' },
+  // ── S&V demons ──────────────────────────────────────────────────────────
+  FANG_GU:     { kind: 'P3', effect: 'FANG_GU_KILL',    emoji: '🌿', label: 'Atacar a', notSelf: false,
+                 note: '1er Forastero que mata → ese Forastero se vuelve Fang Gu (malo); Fang Gu muere.' },
+  NO_DASHII:   { kind: 'P3', effect: 'NO_DASHII_KILL',  emoji: '🐲', label: 'Atacar a', notSelf: false,
+                 note: 'Sus 2 Aldeanos vecinos vivos están envenenados. Recalcular al morir alguien.' },
+  VORTOX:      { kind: 'P3', effect: 'VORTOX_KILL',     emoji: '🌀', label: 'Atacar a', notSelf: false,
+                 note: 'Toda info de Aldeanos es FALSA. Sin ejecución hoy → el Mal gana.' },
+  VIGORMORTIS: { kind: 'P3', effect: 'VIGORMORTIS_KILL',emoji: '🦴', label: 'Atacar a', notSelf: false,
+                 note: 'Esbirros que mata conservan habilidad y envenenan a 1 Aldeano vecino.' },
+  // ── Carousel demons ─────────────────────────────────────────────────────
+  KAZALI:      { kind: 'P3', effect: 'KAZALI_KILL',      emoji: '👑', label: 'Atacar a',           notSelf: false },
+  LLEECH:      { kind: 'P3', effect: 'LLEECH_KILL',      emoji: '🩸', label: 'Atacar a',           notSelf: false,
+                 note: 'Muere si su anfitrión (primer jugador elegido) muere envenenado.' },
+  OJO:         { kind: 'P3', effect: 'OJO_KILL',         emoji: '👁️', label: 'Elige personaje',    notSelf: false,
+                 note: 'Elige un personaje (no jugador): muere quien lo tenga. Si nadie, el Narrador elige.' },
+  LEGION:      { kind: 'P3', effect: 'LEGION_KILL',      emoji: '⚔️', label: 'Atacar a',           notSelf: false,
+                 note: 'Ejecuciones fallan si solo votaron malignos. Mayoría de jugadores son Legión.' },
+  AL_HADIKHIA: { kind: 'P3', effect: 'AL_HADIKHIA_KILL', emoji: '🏛️', label: 'Elige 3 jugadores',  notSelf: false,
+                 note: 'Elige 3; cada uno decide silenciosamente (pulgar arriba/abajo) vivir o morir.' },
 };
 
 function calcEvilNeighbors(game, playerId) {
@@ -225,18 +257,22 @@ function RoleStepView({ step, game, send }) {
 
 // ── Dispatcher: elige el panel correcto según el patrón del rol ──────────
 function NarratorActionPanel({ actor, role, trueRole, game, send }) {
-  const p = NIGHT_ROLE_PATTERN[trueRole.id];
+  const isMisperc = actor.believedRole && actor.believedRole !== actor.role;
+  // For misperception (Marionette/Lunatic): show believed role's panel so narrator goes through the motions
+  const p = NIGHT_ROLE_PATTERN[isMisperc ? role.id : trueRole.id];
   if (!p) return null;
   const isFirstNight = game.nightNumber === 1;
   if (p.kind === 'P2' && !isFirstNight) return null;
-  if (p.kind === 'P3' && trueRole.id === 'MONK' && isFirstNight) return null;
+  if ((p.kind === 'P3' || p.kind === 'P3x2') && trueRole.id === 'MONK' && isFirstNight) return null;
   if (p.kind === 'P1' && p.what === 'executedRole' && !game.executedToday) return null;
+  const roleName = role.name;
   switch (p.kind) {
-    case 'P2': return <P2Panel actor={actor} pattern={p} game={game} send={send} />;
-    case 'P1': return <P1Panel actor={actor} pattern={p} game={game} send={send} />;
-    case 'P3': return <P3Panel actor={actor} pattern={p} game={game} send={send} />;
-    case 'P4': return <P4Panel actor={actor} pattern={p} game={game} send={send} />;
-    default:   return null;
+    case 'P2':   return <P2Panel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P1':   return <P1Panel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P3':   return <P3Panel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P3x2': return <P3x2Panel actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P4':   return <P4Panel   actor={actor} pattern={p} game={game} send={send} />;
+    default:     return null;
   }
 }
 
@@ -247,7 +283,7 @@ const btnPrimary = { width: '100%', fontSize: 11, padding: '6px 0' };
 const poisonNote = <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: '#4ade80', fontStyle: 'italic', margin: '0 0 6px' }}>🧪 Envenenado: elige libremente (info FALSA).</p>;
 
 // P2 — par verdadero + señuelo + personaje (Lavandera, Bibliotecario, Investigador)
-function P2Panel({ actor, pattern, game, send }) {
+function P2Panel({ actor, pattern, game, send, roleName }) {
   const [trueSeat,  setTrueSeat]  = useState('');
   const [decoySeat, setDecoySeat] = useState('');
   const [shownRole, setShownRole] = useState('');
@@ -262,7 +298,7 @@ function P2Panel({ actor, pattern, game, send }) {
   const trueName  = game.players.find(p => p.id === trueSeat)?.name;
   const decoyName = game.players.find(p => p.id === decoySeat)?.name;
   const can = trueSeat && decoySeat && trueSeat !== decoySeat && shownRole;
-  const info = can ? `${pattern.emoji} ${ROLE_BY_ID[actor.role]?.name || ''}\nEntre ${trueName} y ${decoyName} hay un/una ${shownRole}.` : null;
+  const info = can ? `${pattern.emoji} ${roleName || ROLE_BY_ID[actor.role]?.name || ''}\nEntre ${trueName} y ${decoyName} hay un/una ${shownRole}.` : null;
 
   const confirm = () => {
     if (!info) return;
@@ -292,15 +328,15 @@ function P2Panel({ actor, pattern, game, send }) {
 }
 
 // P1 — número calculado + override (Empática, Cocinero, Sepulturero)
-function P1Panel({ actor, pattern, game, send }) {
+function P1Panel({ actor, pattern, game, send, roleName }) {
   const [val, setVal] = useState('');
   const [ok,  setOk]  = useState(false);
 
   if (pattern.what === 'executedRole') {
     const exec = game.players.find(p => p.id === game.executedToday);
     if (!exec) return null;
-    const roleName = ROLE_BY_ID[exec.role]?.name || '?';
-    const info = `${pattern.emoji} Sepulturero\nEl ejecutado (${exec.name}) era: ${roleName}.`;
+    const execRoleName = ROLE_BY_ID[exec.role]?.name || '?';
+    const info = `${pattern.emoji} Sepulturero\nEl ejecutado (${exec.name}) era: ${execRoleName}.`;
     return (
       <div style={panelStyle}>
         <p style={labelStyle}>{ok ? '✓ Confirmado' : 'Sepulturero'}</p>
@@ -313,7 +349,7 @@ function P1Panel({ actor, pattern, game, send }) {
 
   const auto = pattern.what === 'evilNeighbors' ? calcEvilNeighbors(game, actor.id) : calcEvilPairs(game);
   const maxV = pattern.what === 'evilNeighbors' ? 2 : Math.min(4, Math.floor(game.players.length / 2));
-  const infoStr = val !== '' ? `${pattern.emoji} ${ROLE_BY_ID[actor.role]?.name || ''}\nTienes ${val} ${pattern.label}.` : null;
+  const infoStr = val !== '' ? `${pattern.emoji} ${roleName || ROLE_BY_ID[actor.role]?.name || ''}\nTienes ${val} ${pattern.label}.` : null;
 
   return (
     <div style={panelStyle}>
@@ -341,8 +377,8 @@ function P1Panel({ actor, pattern, game, send }) {
   );
 }
 
-// P3 — elegir 1 jugador (Envenenador, Monje, Mayordomo, Imp)
-function P3Panel({ actor, pattern, game, send }) {
+// P3 — elegir 1 jugador (Envenenador, Monje, Mayordomo, Imp, y todos los Demonios no-TB)
+function P3Panel({ actor, pattern, game, send, roleName }) {
   const [targetId, setTargetId] = useState('');
   const [ok, setOk] = useState(false);
 
@@ -357,19 +393,64 @@ function P3Panel({ actor, pattern, game, send }) {
   const confirm = () => {
     if (!targetId) return;
     const name = game.players.find(p => p.id === targetId)?.name;
-    const nightInfo = (infoLabels[pattern.effect] || (n => n))(name);
+    const fallback = n => `${pattern.emoji} ${roleName || ''}\n${pattern.label} ${n} esta noche.`;
+    const nightInfo = (infoLabels[pattern.effect] || fallback)(name);
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [targetId], nightInfo });
     setOk(true);
   };
   return (
     <div style={panelStyle}>
-      <p style={labelStyle}>{ok ? '✓ Acción aplicada' : pattern.label}</p>
+      <p style={labelStyle}>{ok ? '✓ Acción aplicada' : pattern.label || roleName}</p>
+      {pattern.note && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', fontStyle: 'italic', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 6, lineHeight: 1.4 }}>
+          ⚠ {pattern.note}
+        </p>
+      )}
       <select style={selStyle} value={targetId} onChange={e => { setTargetId(e.target.value); setOk(false); }}>
-        <option value="">{pattern.label}…</option>
+        <option value="">{pattern.label || 'Elegir jugador'}…</option>
         {living.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
       <button onClick={confirm} disabled={!targetId} className="btn-action primary"
         style={{ ...btnPrimary, opacity: targetId ? 1 : 0.4 }}>{pattern.emoji} Aplicar</button>
+    </div>
+  );
+}
+
+// P3x2 — elegir 2 jugadores (Shabaloth)
+function P3x2Panel({ actor, pattern, game, send, roleName }) {
+  const [t1, setT1] = useState('');
+  const [t2, setT2] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const living = game.players.filter(p => p.alive);
+  const can = t1 && t2 && t1 !== t2;
+
+  const confirm = () => {
+    if (!can) return;
+    const n1 = game.players.find(p => p.id === t1)?.name;
+    const n2 = game.players.find(p => p.id === t2)?.name;
+    const nightInfo = `${pattern.emoji} ${roleName}\nAtacaste a ${n1} y ${n2} esta noche.`;
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [t1, t2], nightInfo });
+    setOk(true);
+  };
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Acción aplicada' : `${roleName} — 2 objetivos`}</p>
+      {pattern.note && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', fontStyle: 'italic', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 6, lineHeight: 1.4 }}>
+          ⚠ {pattern.note}
+        </p>
+      )}
+      <select style={selStyle} value={t1} onChange={e => { setT1(e.target.value); setOk(false); }}>
+        <option value="">Objetivo 1…</option>
+        {living.filter(p => p.id !== t2).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <select style={selStyle} value={t2} onChange={e => { setT2(e.target.value); setOk(false); }}>
+        <option value="">Objetivo 2…</option>
+        {living.filter(p => p.id !== t1).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <button onClick={confirm} disabled={!can} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: can ? 1 : 0.4 }}>{pattern.emoji} Aplicar 2 ataques</button>
     </div>
   );
 }

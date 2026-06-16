@@ -77,6 +77,7 @@ export default function NarratorPanel() {
   const [showReorder, setShowReorder] = useState(false);
   const [reorderList, setReorderList] = useState([]);
   const [showAutoMode, setShowAutoMode] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(true);
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
   const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
@@ -241,7 +242,16 @@ export default function NarratorPanel() {
             </div>
 
             {/* Asistente de montaje — el Narrador decide TODO (cero azar) */}
-            {phase === 'lobby' && <SetupWizard game={game} send={send} />}
+            {phase === 'lobby' && (
+              <button onClick={() => setWizardOpen(true)} className="btn-action primary"
+                disabled={players.length < 1}
+                style={{ width: '100%', padding: '14px 0', fontSize: 14, opacity: players.length < 1 ? 0.4 : 1 }}>
+                🎬 Montar partida (asistente)
+              </button>
+            )}
+            {phase === 'lobby' && wizardOpen && (
+              <SetupWizard game={game} send={send} onClose={() => setWizardOpen(false)} />
+            )}
 
             {/* Partida sin narrador (modo automático: reparto aleatorio permitido) */}
             <div>

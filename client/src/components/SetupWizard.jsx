@@ -14,7 +14,7 @@ const TYPES = [
 ];
 const STEPS = ['Saco', 'Asientos', 'Decisiones', 'Revisar'];
 
-export default function SetupWizard({ game, send }) {
+export default function SetupWizard({ game, send, onClose }) {
   const setup = game.setup || { seatOrder: [], assignments: {}, decisions: [] };
   const players = game.players;
   const roleList = (game.campaignRoles && game.campaignRoles.length)
@@ -68,46 +68,53 @@ export default function SetupWizard({ game, send }) {
   };
 
   return (
-    <div style={{ border: '1px solid var(--gold)', borderRadius: 8, overflow: 'hidden', background: 'rgba(201,162,74,0.04)' }}>
-      {/* Cabecera + barra de pasos */}
-      <div style={{ padding: '8px 12px', background: 'rgba(201,162,74,0.1)', borderBottom: 'var(--hairline)' }}>
-        <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)', margin: 0 }}>
-          🎬 Asistente de montaje
-        </p>
-        <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-          {STEPS.map((s, i) => (
-            <button key={s} onClick={() => setStep(i)}
-              className="btn-night"
-              style={{ flex: 1, fontSize: 9, borderColor: step === i ? 'var(--gold)' : undefined, color: step === i ? 'var(--gold-hot)' : undefined }}>
-              {i + 1}. {s}
-            </button>
-          ))}
+    <div className="wizard-overlay" onClick={onClose}>
+      <div className="wizard-card" onClick={e => e.stopPropagation()}>
+        {/* Cabecera + barra de pasos (fija) */}
+        <div className="wizard-head">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ fontFamily: 'var(--mono)', fontSize: 13, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)', margin: 0 }}>
+              🎬 Asistente de montaje
+            </p>
+            <button onClick={onClose} className="btn-night" style={{ fontSize: 13, padding: '3px 10px' }} title="Cerrar (volver al lobby)">✕</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            {STEPS.map((s, i) => (
+              <button key={s} onClick={() => setStep(i)}
+                className="btn-night"
+                style={{ flex: 1, fontSize: 12, padding: '7px 4px', borderColor: step === i ? 'var(--gold)' : undefined, color: step === i ? 'var(--gold-hot)' : undefined }}>
+                {i + 1}. {s}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div style={{ padding: '12px' }}>
-        {step === 0 && (
-          <BagStep roleList={roleList} bag={bag} toggleBag={toggleBag} needed={needed} playerCount={players.length} />
-        )}
-        {step === 1 && (
-          <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList}
-            moveSeat={moveSeat} assignSeat={assignSeat} />
-        )}
-        {step === 2 && (
-          <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} send={send} />
-        )}
-        {step === 3 && (
-          <ReviewStep seats={seats} assignments={assignments} decisions={decisions}
-            allAssigned={allAssigned} unresolved={unresolved} send={send} />
-        )}
-      </div>
+        {/* Cuerpo con scroll propio */}
+        <div className="wizard-body">
+          {step === 0 && (
+            <BagStep roleList={roleList} bag={bag} toggleBag={toggleBag} needed={needed} playerCount={players.length} />
+          )}
+          {step === 1 && (
+            <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList}
+              moveSeat={moveSeat} assignSeat={assignSeat} />
+          )}
+          {step === 2 && (
+            <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} send={send} />
+          )}
+          {step === 3 && (
+            <ReviewStep seats={seats} assignments={assignments} decisions={decisions}
+              allAssigned={allAssigned} unresolved={unresolved} send={send} />
+          )}
+        </div>
 
-      {/* Navegación */}
-      <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: 'var(--hairline)' }}>
-        <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}
-          className="btn-action" style={{ flex: 1, opacity: step === 0 ? 0.35 : 1 }}>← Atrás</button>
-        <button onClick={() => setStep(s => Math.min(STEPS.length - 1, s + 1))} disabled={step === STEPS.length - 1}
-          className="btn-action primary" style={{ flex: 1, opacity: step === STEPS.length - 1 ? 0.35 : 1 }}>Siguiente →</button>
+        {/* Navegación (fija) */}
+        <div className="wizard-nav">
+          <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}
+            className="btn-action" style={{ flex: 1, opacity: step === 0 ? 0.35 : 1 }}>← Atrás</button>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-500)', whiteSpace: 'nowrap' }}>{step + 1}/{STEPS.length}</span>
+          <button onClick={() => setStep(s => Math.min(STEPS.length - 1, s + 1))} disabled={step === STEPS.length - 1}
+            className="btn-action primary" style={{ flex: 1, opacity: step === STEPS.length - 1 ? 0.35 : 1 }}>Siguiente →</button>
+        </div>
       </div>
     </div>
   );

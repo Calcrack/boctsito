@@ -92,34 +92,7 @@ function computeRequiredDecisions(game) {
       keep(dec);
     }
 
-    // 2) Bluffs del Demonio
-    if (s.demonBluffs) {
-      keep({
-        id: `bluffsDemonio:${seat.id}`, kind: 'bluffsDemonio', seat: seat.id, seatName: seat.name,
-        count: s.demonBluffs, chosen: [],
-        consequence: `El Demonio (${seat.name}) fingirá ser uno de estos ${s.demonBluffs} roles buenos no en juego.`,
-      });
-    }
-
-    // 3) Falso positivo de la Adivina (red herring)
-    if (s.redHerring) {
-      keep({
-        id: `falsoPositivoAdivina:${seat.id}`, kind: 'falsoPositivoAdivina', seat: seat.id, seatName: seat.name,
-        targetSeat: null,
-        consequence: 'Ese jugador bueno registrará como Demonio para la Adivina (cortina de humo).',
-      });
-    }
-
-    // 4) Veneno inicial (Envenenador/Pukka/Widow)
-    if (s.initialPoison) {
-      keep({
-        id: `venenoInicial:${seat.id}`, kind: 'venenoInicial', seat: seat.id, seatName: seat.name,
-        source: role.id, targetSeat: null,
-        consequence: 'El objetivo queda envenenado la primera noche: su información será falsa.',
-      });
-    }
-
-    // 5) Forasteros (Barón/Padrino/Fang Gu/Vigormortis)
+    // 2) Forasteros (Barón/Padrino/Fang Gu/Vigormortis)
     if (typeof s.outsiderModifier === 'number') {
       const base = ctx.campaign.distribution[ctx.seats.length]?.outsiders ?? 0;
       keep({
@@ -152,65 +125,10 @@ function computeRequiredDecisions(game) {
       });
     }
 
-    // 8) Info de primera noche (Lavandera, Bibliotecario, Relojero, Abuela…)
-    if (info.firstNight) {
-      const mustBeFalse = mustBeFalseFor(ctx, seat.id);
-      keep({
-        id: `infoPrimeraNoche:${seat.id}`, kind: 'infoPrimeraNoche', seat: seat.id, seatName: seat.name,
-        role: role.id, infoKind: info.kind, params: stripKind(info),
-        options: computeInfoOptions(ctx, seat, info, mustBeFalse),
-        chosen: null, mustBeFalse,
-        consequence: mustBeFalse
-          ? `${seat.name} recibe info FALSA (envenenado/borracho/Vortox): elige libremente qué decirle.`
-          : `Elige exactamente qué información ve ${seat.name}.`,
-      });
-    }
-  }
-  // Post-proceso: si un asiento es objetivo del veneno inicial, su info de 1ª noche va FALSA.
-  const poisonTargets = new Set(out.filter(d => d.kind === 'venenoInicial' && d.targetSeat).map(d => d.targetSeat));
-  for (const d of out) {
-    if (d.kind === 'infoPrimeraNoche' && poisonTargets.has(d.seat)) d.mustBeFalse = true;
   }
   return out;
 }
 
-// Opciones válidas que la app calcula; el Narrador elige una.
-function computeInfoOptions(ctx, seat, info, mustBeFalse) {
-  switch (info.kind) {
-    case 'pairOfType': {
-      // 2 jugadores, uno de los cuales es del tipo `targetType` (o falso).
-      const trueCandidates = mustBeFalse
-        ? seatsExcept(ctx, [seat.id])
-        : rolesByTypeInPlay(ctx, info.targetType).filter(s => s.id !== seat.id);
-      return {
-        validTrue: trueCandidates.map(s => ({ id: s.id, name: s.name, role: ROLES[ctx.assignments[s.id]]?.name })),
-        validDecoy: seatsExcept(ctx, [seat.id]).map(s => ({ id: s.id, name: s.name })),
-        // si es falso, también puede elegir qué ROL mostrar
-        roleChoices: roleNamesOfType(ctx.campaign, info.targetType),
-        targetType: info.targetType,
-      };
-    }
-    case 'count': {
-      const max = info.what === 'evilNeighbors' ? 2 : Math.min(3, Math.floor(ctx.seats.length / 2));
-      return { range: Array.from({ length: max + 1 }, (_, i) => i), what: info.what };
-    }
-    case 'clockmaker':
-      return { range: Array.from({ length: Math.max(1, Math.floor(ctx.seats.length / 2)) + 1 }, (_, i) => i) };
-    case 'knowGoodPlayer':
-      return { players: rolesByTypeInPlay(ctx, 'townfolk').concat(rolesByTypeInPlay(ctx, 'outsider'))
-        .filter(s => s.id !== seat.id).map(s => ({ id: s.id, name: s.name, role: ROLES[ctx.assignments[s.id]]?.name })) };
-    case 'knowEvilPlayer':
-      return { players: ctx.seats.filter(s => ROLES[ctx.assignments[s.id]]?.alignment === 'evil')
-        .map(s => ({ id: s.id, name: s.name, role: ROLES[ctx.assignments[s.id]]?.name })) };
-    case 'knowOutsiders':
-      return { outsiders: rolesByTypeInPlay(ctx, 'outsider').map(s => ROLES[ctx.assignments[s.id]]?.name) };
-    case 'stewardNeighbors':
-      return { neighbors: neighbors(ctx, seat.id).map(s => ({ id: s.id, name: s.name })) };
-    default:
-      // Genérico: texto libre que el Narrador escribe.
-      return { freeText: true };
-  }
-}
 
 // ── suggestDecision(decision, game) → decision con valor por defecto ──
 // Atajo opcional: replica la lógica aleatoria histórica como SUGERENCIA.
@@ -237,19 +155,6 @@ function suggestDecision(decision, game) {
       }
       break;
     }
-    case 'bluffsDemonio':
-      d.chosen = sample(goodRolesNotInPlay(ctx), d.count);
-      break;
-    case 'falsoPositivoAdivina': {
-      const goods = ctx.seats.filter(s => ROLES[ctx.assignments[s.id]]?.alignment === 'good');
-      d.targetSeat = pick(goods.map(s => s.id));
-      break;
-    }
-    case 'venenoInicial': {
-      const others = seatsExcept(ctx, [d.seat]).filter(s => ROLES[ctx.assignments[s.id]]?.alignment === 'good');
-      d.targetSeat = pick((others.length ? others : seatsExcept(ctx, [d.seat])).map(s => s.id));
-      break;
-    }
     case 'forasteros':
       d.chosen = rolesByTypeInPlay(ctx, 'outsider').map(s => ctx.assignments[s.id]);
       break;
@@ -262,36 +167,8 @@ function suggestDecision(decision, game) {
         d.targetSeat = pick(opp.map(s => s.id));
       }
       break;
-    case 'infoPrimeraNoche':
-      d.chosen = suggestInfo(ctx, d);
-      break;
   }
   return d;
-}
-
-function suggestInfo(ctx, d) {
-  const o = d.options || {};
-  switch (d.infoKind) {
-    case 'pairOfType': {
-      const t = pick(o.validTrue || []);
-      const decoy = pick((o.validDecoy || []).filter(x => x.id !== t?.id));
-      return t ? { trueSeat: t.id, decoySeat: decoy?.id || null, shownRole: t.role } : null;
-    }
-    case 'count':
-    case 'clockmaker':
-      return { value: pick(o.range || [0]) };
-    case 'knowGoodPlayer':
-    case 'knowEvilPlayer': {
-      const p = pick(o.players || []);
-      return p ? { seat: p.id, role: p.role } : null;
-    }
-    case 'knowOutsiders':
-      return { outsiders: o.outsiders || [] };
-    case 'stewardNeighbors':
-      return { neighbors: (o.neighbors || []).map(n => n.id) };
-    default:
-      return { text: '' };
-  }
 }
 
 // ── isSetupComplete(decisions) → boolean ─────────────────────────────
@@ -301,13 +178,9 @@ function isDecisionResolved(d) {
     case 'identidadFalsa':
       if (d.role === 'lunatic') return !!d.lunatic?.perceivedDemon;
       return !!d.chosenGoodRole;
-    case 'bluffsDemonio':   return Array.isArray(d.chosen) && d.chosen.length === d.count;
-    case 'falsoPositivoAdivina': return !!d.targetSeat;
-    case 'venenoInicial':   return !!d.targetSeat;
     case 'forasteros':      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'registroInicial': return !!d.registersAs;
     case 'otroSecreto':     return d.secret !== 'evilTwin' || !!d.targetSeat;
-    case 'infoPrimeraNoche':return d.chosen != null;
     default: return true;
   }
 }
@@ -317,7 +190,6 @@ function isSetupComplete(decisions) {
 
 // ── utilidades internas ──────────────────────────────────────────────
 function indexById(arr) { const m = {}; for (const d of arr) m[d.id] = d; return m; }
-// Conserva sólo los campos "elegidos" de una decisión previa al recalcular.
 function pickChosen(prev) {
   const { chosenGoodRole, lunatic, chosen, targetSeat, registersAs } = prev;
   const out = {};
@@ -326,13 +198,7 @@ function pickChosen(prev) {
   if (chosen !== undefined) out.chosen = chosen;
   if (targetSeat !== undefined) out.targetSeat = targetSeat;
   if (registersAs !== undefined) out.registersAs = registersAs;
-  if (prev.chosenInfo !== undefined) out.chosen = prev.chosenInfo;
-  if (prev.kind === 'infoPrimeraNoche' && prev.chosen !== undefined) out.chosen = prev.chosen;
   return out;
-}
-function stripKind(info) { const { firstNight, everyNight, kind, ...rest } = info; return rest; }
-function roleNamesOfType(campaign, type) {
-  return Object.values(campaign.roles).filter(r => r.type === type).map(r => ({ id: r.id, name: r.name }));
 }
 
 // ── renderInfoString: convierte la decisión de info en el texto de voz ──

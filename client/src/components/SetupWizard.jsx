@@ -216,7 +216,6 @@ function SeatStep({ seats, assignments, bag, roleList, moveSeat, assignSeat }) {
 function DecisionsStep({ decisions, seats, assignments, roleList, send }) {
   const goodNotInPlay = roleList.filter(r => r.alignment === 'good' && !Object.values(assignments).includes(r.id) && !ROLE_BY_ID[r.id]?.misperception);
   const demonsInCampaign = roleList.filter(r => r.type === 'demon');
-  const goodSeats = seats.filter(s => ROLE_BY_ID[assignments[s.id]]?.alignment === 'good');
   const outsidersInPlay = seats.filter(s => ROLE_BY_ID[assignments[s.id]]?.type === 'outsider').map(s => assignments[s.id]);
 
   const setDec = (id, patch) => send('SETUP_SET_DECISION', { id, patch });
@@ -262,40 +261,13 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, goodSeats, outsiders
           <>
             {sel(d.lunatic?.perceivedDemon, v => setDec(d.id, { lunatic: { ...(d.lunatic || {}), perceivedDemon: v } }),
               demonsInCampaign.map(r => ({ v: r.id, l: r.name })), '¿Qué Demonio cree ser?')}
-            <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-500)', margin: '4px 0 0' }}>Usa “Sugerir” para Esbirros falsos, bluffs y la “muerte” de la 1ª noche.</p>
+            <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-500)', margin: '4px 0 0' }}>Esbirros falsos y bluffs: se eligen durante la primera noche.</p>
           </>
         );
       } else {
         control = sel(d.chosenGoodRole, v => setDec(d.id, { chosenGoodRole: v }),
           goodNotInPlay.map(r => ({ v: r.id, l: `${r.name} (${typeLabel(r.type)})` })), '¿Qué rol bueno cree ser?');
       }
-      break;
-    case 'bluffsDemonio': {
-      const chosen = d.chosen || [];
-      control = (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {goodNotInPlay.map(r => {
-            const on = chosen.includes(r.id);
-            const full = chosen.length >= d.count && !on;
-            return (
-              <button key={r.id} disabled={full} className="btn-night"
-                style={{ fontSize: 8, opacity: full ? 0.4 : 1, borderColor: on ? 'var(--blood-hi)' : undefined, color: on ? 'var(--blood-hi)' : undefined }}
-                onClick={() => setDec(d.id, { chosen: on ? chosen.filter(x => x !== r.id) : [...chosen, r.id] })}>
-                {r.name}
-              </button>
-            );
-          })}
-        </div>
-      );
-      break;
-    }
-    case 'falsoPositivoAdivina':
-      control = sel(d.targetSeat, v => setDec(d.id, { targetSeat: v }),
-        goodSeats.map(s => ({ v: s.id, l: s.name })), 'Jugador bueno (registra como Demonio)');
-      break;
-    case 'venenoInicial':
-      control = sel(d.targetSeat, v => setDec(d.id, { targetSeat: v }),
-        seats.filter(s => s.id !== d.seat).map(s => ({ v: s.id, l: s.name })), 'Objetivo del veneno (1ª noche)');
       break;
     case 'registroInicial':
       control = sel(d.registersAs, v => setDec(d.id, { registersAs: v }),
@@ -327,9 +299,6 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, goodSeats, outsiders
         control = <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-400)' }}>{d.secret}</p>;
       }
       break;
-    case 'infoPrimeraNoche':
-      control = <InfoControl d={d} seats={seats} setDec={setDec} />;
-      break;
     default:
       control = null;
   }
@@ -350,66 +319,6 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, goodSeats, outsiders
   );
 }
 
-function InfoControl({ d, seats, setDec }) {
-  const o = d.options || {};
-  const c = d.chosen || {};
-  const nameOpt = arr => (arr || []).map(x => ({ v: x.id, l: x.name + (x.role ? ` (${x.role})` : '') }));
-  const Sel = ({ value, onChange, opts, ph }) => (
-    <select value={value || ''} onChange={e => onChange(e.target.value || null)}
-      style={{ fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-100)', padding: '4px 6px', width: '100%', marginBottom: 4 }}>
-      <option value="">{ph}</option>
-      {opts.map(x => <option key={x.v} value={x.v}>{x.l}</option>)}
-    </select>
-  );
-  switch (d.infoKind) {
-    case 'pairOfType':
-      return (
-        <div>
-          {d.mustBeFalse && <FalseBanner />}
-          <Sel value={c.trueSeat} onChange={v => setDec(d.id, { chosen: { ...c, trueSeat: v } })} opts={nameOpt(o.validTrue)} ph="Jugador verdadero" />
-          <Sel value={c.decoySeat} onChange={v => setDec(d.id, { chosen: { ...c, decoySeat: v } })} opts={nameOpt(o.validDecoy)} ph="Señuelo (2º jugador)" />
-          {d.mustBeFalse && (
-            <Sel value={c.shownRole} onChange={v => setDec(d.id, { chosen: { ...c, shownRole: v } })} opts={(o.roleChoices || []).map(r => ({ v: r.name, l: r.name }))} ph="Rol a mostrar (falso)" />
-          )}
-        </div>
-      );
-    case 'count':
-    case 'clockmaker':
-      return (
-        <div>
-          {d.mustBeFalse && <FalseBanner />}
-          <Sel value={c.value != null ? String(c.value) : ''} onChange={v => setDec(d.id, { chosen: { value: v == null ? null : Number(v) } })}
-            opts={(o.range || []).map(n => ({ v: String(n), l: String(n) }))} ph="Número a decir" />
-        </div>
-      );
-    case 'knowGoodPlayer':
-    case 'knowEvilPlayer':
-      return (
-        <div>
-          {d.mustBeFalse && <FalseBanner />}
-          <Sel value={c.seat} onChange={v => { const pl = (o.players || []).find(x => x.id === v); setDec(d.id, { chosen: { seat: v, role: pl?.role } }); }}
-            opts={nameOpt(o.players)} ph="Jugador a mostrar" />
-        </div>
-      );
-    default:
-      return (
-        <div>
-          {d.mustBeFalse && <FalseBanner />}
-          <input value={c.text || ''} onChange={e => setDec(d.id, { chosen: { text: e.target.value } })}
-            placeholder="Texto exacto a decir"
-            style={{ fontSize: 11, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-100)', padding: '4px 6px', width: '100%' }} />
-        </div>
-      );
-  }
-}
-
-function FalseBanner() {
-  return (
-    <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: '#4ade80', fontStyle: 'italic', margin: '0 0 4px' }}>
-      🧪 Info FORZOSAMENTE falsa (envenenado/borracho/Vortox): elige libremente.
-    </p>
-  );
-}
 
 // ── Paso 4: revisar y bloquear ───────────────────────────────────────
 function ReviewStep({ seats, assignments, decisions, allAssigned, unresolved, send }) {
@@ -463,13 +372,9 @@ function ReviewStep({ seats, assignments, decisions, allAssigned, unresolved, se
 function isResolved(d) {
   switch (d.kind) {
     case 'identidadFalsa':  return d.role === 'lunatic' ? !!d.lunatic?.perceivedDemon : !!d.chosenGoodRole;
-    case 'bluffsDemonio':   return Array.isArray(d.chosen) && d.chosen.length === d.count;
-    case 'falsoPositivoAdivina': return !!d.targetSeat;
-    case 'venenoInicial':   return !!d.targetSeat;
     case 'forasteros':      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'registroInicial': return !!d.registersAs;
     case 'otroSecreto':     return d.secret !== 'evilTwin' || !!d.targetSeat;
-    case 'infoPrimeraNoche':return d.chosen != null && Object.keys(d.chosen).length > 0;
     default: return true;
   }
 }
@@ -477,13 +382,9 @@ function isResolved(d) {
 function titleFor(d) {
   switch (d.kind) {
     case 'identidadFalsa':  return `Identidad falsa de ${d.seatName}`;
-    case 'bluffsDemonio':   return `Bluffs del Demonio (${d.count})`;
-    case 'falsoPositivoAdivina': return 'Falso positivo de la Adivina';
-    case 'venenoInicial':   return `Veneno inicial (${d.seatName})`;
     case 'forasteros':      return `Forasteros (${d.seatName})`;
     case 'registroInicial': return `Registro de ${d.seatName}`;
     case 'otroSecreto':     return d.secret === 'evilTwin' ? 'Gemela Malvada' : d.secret;
-    case 'infoPrimeraNoche':return `Info 1ª noche · ${d.seatName}`;
     default: return d.kind;
   }
 }

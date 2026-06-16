@@ -198,7 +198,7 @@ function applySetup(game) {
     player.role = role.id; player.alignment = role.alignment; player.type = role.type;
     player.alive = true; player.poisoned = false; player.protected = false; player.safeTonight = false;
     player.believedRole = null; player.drunkAs = null; player.tokens = [];
-    player.nightInfo = null; player.setupNightInfo = null;
+    player.nightInfo = null;
     player.slayerUsed = false; player.virginUsed = false; player.impShotUsed = false;
     player.butlerMaster = null; player.bluffRole = null; player.statuses = [];
   }
@@ -206,8 +206,7 @@ function applySetup(game) {
   const allGood = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
   game.rolesNotInPlay = allGood.filter(r => !inPlay.has(r.id)).map(r => r.id);
 
-  // 2) Decisiones → campos deterministas existentes (sin Math.random)
-  game.setupResolved = { poison: null };
+  // 2) Decisiones → campos deterministas (solo lo que pertenece a la preparación)
   game.smokeScreenPlayerId = null;
   for (const d of decisions) {
     const seatP = game.players.find(p => p.id === d.seat);
@@ -221,23 +220,11 @@ function applySetup(game) {
           if (seatP.role === 'DRUNK') { seatP.drunkAs = d.chosenGoodRole || null; game.narratorDrunkAs = d.chosenGoodRole || null; }
         }
         break;
-      case 'bluffsDemonio':
-        game.narratorRolesForImp = Array.isArray(d.chosen) ? d.chosen : [];
-        break;
-      case 'falsoPositivoAdivina':
-        game.smokeScreenPlayerId = d.targetSeat || null;
-        break;
-      case 'venenoInicial':
-        game.setupResolved.poison = { sourceSeat: d.seat, targetSeat: d.targetSeat || null };
-        break;
       case 'registroInicial':
         if (seatP?.role === 'SPY') game.spyRegistersAs = d.registersAs === 'good' ? 'good' : null;
         if (seatP?.role === 'RECLUSE') game.recluseRegistersAs = (d.registersAs === 'minion' || d.registersAs === 'demon') ? d.registersAs : null;
         break;
-      case 'infoPrimeraNoche':
-        if (seatP) seatP.setupNightInfo = SETUP.renderInfoString(game, d);
-        break;
-      default: break; // forasteros / otroSecreto: aplicados vía asignación / informativos
+      default: break; // forasteros / otroSecreto: informativos; bluffs/veneno/info → noche
     }
   }
 
@@ -246,25 +233,27 @@ function applySetup(game) {
   return game;
 }
 
-// Noche 1: estampa la info pre-decidida sobre cualquier generación y aplica
-// el veneno inicial elegido. Garantiza que la noche se LEE, no se improvisa.
-function applySetupNightInfo(game) {
-  if (game.nightNumber !== 1) return;
-  for (const p of game.players) {
-    if (p.setupNightInfo) p.nightInfo = p.setupNightInfo;
-  }
-  const poison = game.setupResolved?.poison;
-  if (poison?.targetSeat) {
-    const target = game.players.find(p => p.id === poison.targetSeat);
-    const src = game.players.find(p => p.id === poison.sourceSeat);
-    if (target) {
-      placeToken(target, {
-        type: 'POISONED', roleId: src?.role || 'POISONER', label: 'Envenenado',
-        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: src?.role || 'POISONER', sourcePlayerId: poison.sourceSeat,
-      }, game);
-      syncStatusFlags(game);
-    }
-  }
+// Regenera el nightInfo del Demonio cuando el Narrador fija sus bluffs durante la noche.
+function regenDemonNightInfo(game) {
+  const players = game.players;
+  const wakingMinions = players.filter(p => p.type === 'minion' && !isNoWakeMisperception(p));
+  const hiddenMinions = players.filter(p => p.type === 'minion' && isNoWakeMisperception(p));
+  const demons = players.filter(p => p.type === 'demon');
+  demons.forEach(d => {
+    const minionNames = wakingMinions.map(x => `${x.name} (${ROLES[x.role]?.name})`);
+    const rolesPool = (game.narratorRolesForImp || []).filter(id => id !== 'DRUNK');
+    const notInPlay3 = rolesPool.slice(0, 3).map(id => ROLES[id]?.name || id);
+    const knownMario = hiddenMinions.filter(p => ROLES[p.role]?.misperception?.demonKnows).map(p => p.name);
+    const lines = [
+      `👹 Eres el Demonio (${ROLES[d.role]?.name}).`,
+      minionNames.length ? `Tus Esbirros: ${minionNames.join(', ')}.` : 'Sin Esbirros.',
+    ];
+    if (knownMario.length) lines.push(`🎭 Marioneta (cree ser bueno): ${knownMario.join(', ')}.`);
+    lines.push(notInPlay3.length
+      ? `Roles del Bien no en juego:\n${notInPlay3.map((r, i) => `\t${i + 1}. ${r}`).join('\n')}`
+      : '(Elige los bluffs durante la noche)');
+    d.nightInfo = lines.join('\n');
+  });
 }
 
 const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
@@ -1423,8 +1412,6 @@ function startNight(game) {
     game.players.filter(p => p.alive).forEach(p => generateSingleRoleInfo(game, p.id));
   }
   generateCurrentPassiveInfo(game);
-  // Noche 1: estampa la info pre-decidida en el montaje y aplica el veneno inicial.
-  applySetupNightInfo(game);
   return game;
 }
 
@@ -1638,6 +1625,6 @@ module.exports = {
   checkWinCondition, mayorWin,
   killPlayer, revivePlayer,
   addDeferred, assignBelievedRoles,
-  applySetup,
+  applySetup, regenDemonNightInfo,
   getPublicState,
 };

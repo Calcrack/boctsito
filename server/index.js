@@ -11,7 +11,7 @@ const {
   applyNightAction, advanceNightQueue,
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, addDeferred, getPublicState,
-  assignBelievedRoles, applySetup,
+  assignBelievedRoles, applySetup, regenDemonNightInfo,
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
@@ -1193,6 +1193,29 @@ function handleMessage(type, payload, session) {
       if (assignedCount < game.players.length) throw new Error('Faltan asientos por asignar un rol');
       if (!isSetupComplete(game.setup.decisions)) throw new Error('Faltan decisiones de montaje por resolver');
       applySetup(game);
+      broadcastGame();
+      break;
+    }
+
+    case 'NIGHT_NARRATOR_ACTION': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      if (!game || !['first_night', 'night'].includes(game.phase)) break;
+      const { actorId, nightInfo, bluffs, redHerringSeatId, actionType, targetIds } = payload;
+      if (nightInfo !== undefined && actorId) {
+        const actor = game.players.find(p => p.id === actorId);
+        if (actor) actor.nightInfo = nightInfo || null;
+      }
+      if (bluffs !== undefined) {
+        game.narratorRolesForImp = Array.isArray(bluffs) ? bluffs : [];
+        regenDemonNightInfo(game);
+      }
+      if (redHerringSeatId !== undefined) {
+        game.smokeScreenPlayerId = redHerringSeatId || null;
+      }
+      if (actionType && actorId && Array.isArray(targetIds)) {
+        applyNightAction(game, actionType, actorId, targetIds);
+      }
       broadcastGame();
       break;
     }

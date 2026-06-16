@@ -6,15 +6,91 @@ import StatusChips from './StatusChips';
 
 const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 
+// Orden global BotC (todas las ediciones combinadas, posiciones oficiales).
+// Usado para insertar roles cross-edition en el lugar correcto.
+const GLOBAL_FIRST_NIGHT_ORDER = [
+  'POPPY_GROWER','MAGICIAN',
+  'KAZALI','LEGION','LIL_MONSTA','RIOT','LEVIATHAN',
+  'LUNATIC','MARIONETTE','MEZEPHELES','WIDOW','SUMMONER','SHUGENJA','STEWARD',
+  'PHILOSOPHER',
+  'SAILOR','COURTIER','GODFATHER','DEVILS_ADVOCATE',
+  'PUKKA',
+  'SNAKE_CHARMER','EVIL_TWIN','WITCH','CERENOVUS',
+  'PUZZLEMASTER','ALCHEMIST','AMNESIAC',
+  'CLOCKMAKER','DREAMER','SEAMSTRESS','MATHEMATICIAN',
+  'WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','FORTUNE_TELLER',
+  'BUTLER','SPY',
+  'BOUNTY_HUNTER','KNIGHT','NOBLE','DAMSEL','SNITCH',
+  'GRANDMOTHER','CHAMBERMAID',
+  'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
+  'JUGGLER',
+];
+
+const GLOBAL_OTHER_NIGHT_ORDER = [
+  'POPPY_GROWER',
+  'LLEECH','KAZALI','LEGION','LIL_MONSTA','OJO','AL_HADIKHIA',
+  'WIDOW','MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER','SUMMONER','YAGGABABBLE',
+  'PHILOSOPHER','SAILOR','COURTIER','INNKEEPER','GAMBLER',
+  'POISONER','MONK',
+  'DEVILS_ADVOCATE','LUNATIC','EXORCIST',
+  'SNAKE_CHARMER','WITCH','CERENOVUS','PIT_HAG',
+  'ZOMBUUL','PUKKA','SHABALOTH','PO',
+  'FANG_GU','NO_DASHII','VORTOX','VIGORMORTIS',
+  'SCARLET_WOMAN','IMP','ASSASSIN','GODFATHER',
+  'PREACHER','LYCANTHROPE','HUNTSMAN','ENGINEER','ACROBAT',
+  'CANNIBAL','RAVENKEEPER',
+  'UNDERTAKER','EMPATH','FORTUNE_TELLER','BUTLER',
+  'SWEETHEART','SAGE','BARBER','DREAMER',
+  'FLOWERGIRL','TOWN_CRIER','ORACLE','SEAMSTRESS','MATHEMATICIAN',
+  'GOSSIP','PROFESSOR','MINSTREL','TEA_LADY','PACIFIST','FOOL','MOONCHILD',
+  'GRANDMOTHER','CHAMBERMAID',
+  'SPY',
+  'BOUNTY_HUNTER','CULT_LEADER',
+  'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
+];
+
 function buildSteps(game) {
-  const campaign = getCampaign(game.campaignId);
-  const order = game.nightNumber <= 1 ? campaign.firstNightOrder : campaign.otherNightOrder;
-  const players = game.players;
+  const campaign    = getCampaign(game.campaignId);
+  const isFirstNight = game.nightNumber <= 1;
+  const players     = game.players;
   const pendingRaven = players.find(p => p.role === 'RAVENKEEPER' && p.pendingRavenkeeper);
+
+  const campaignOrder = isFirstNight ? campaign.firstNightOrder : campaign.otherNightOrder;
+  const globalOrder   = isFirstNight ? GLOBAL_FIRST_NIGHT_ORDER : GLOBAL_OTHER_NIGHT_ORDER;
+
+  // All role IDs carried by players (role + believedRole + drunkAs)
+  const playerRoleIds = new Set(
+    players.flatMap(p => [p.role, p.believedRole, p.drunkAs].filter(Boolean))
+  );
+
+  // Roles already covered by the campaign's own night order
+  const campaignSet = new Set(campaignOrder.filter(id => !INFO_MARKERS.has(id)));
+
+  // Supplement: role IDs that players carry, have a pattern, but aren't in campaign order
+  const globalPos = new Map(globalOrder.map((id, i) => [id, i]));
+  const supplementSorted = [...new Set(
+    [...playerRoleIds].filter(id => !campaignSet.has(id) && NIGHT_ROLE_PATTERN[id])
+  )].sort((a, b) => (globalPos.get(a) ?? 9999) - (globalPos.get(b) ?? 9999));
+
+  // Build effective order: campaign order with supplements inserted at global positions
+  const effectiveOrder = [...campaignOrder];
+  for (const sid of supplementSorted) {
+    const spos = globalPos.get(sid) ?? 9999;
+    let insertAt = effectiveOrder.length;
+    for (let i = 0; i < effectiveOrder.length; i++) {
+      const eid = effectiveOrder[i];
+      if (INFO_MARKERS.has(eid)) continue;
+      if (spos < (globalPos.get(eid) ?? i * 1000)) { insertAt = i; break; }
+    }
+    effectiveOrder.splice(insertAt, 0, sid);
+  }
+
+  // Generate steps
   const steps = [];
   let infoShown = false;
-  const rolesInOrder = new Set(order.filter(id => !INFO_MARKERS.has(id)));
-  for (const roleId of order) {
+  const rolesInOrder = new Set(effectiveOrder.filter(id => !INFO_MARKERS.has(id)));
+
+  for (const roleId of effectiveOrder) {
     if (INFO_MARKERS.has(roleId)) {
       if (infoShown) continue;
       infoShown = true;

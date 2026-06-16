@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID, getCampaign } from '../data/roles';
+import { typeLabel, MASK } from '../utils/identity';
 import StatusChips from './StatusChips';
 
 const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
@@ -35,7 +36,6 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
   const { state, send } = useGame();
   const { game } = state;
   const [idx, setIdx] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
   const [completed, setCompleted] = useState(new Set());
 
   useEffect(() => { setIdx(0); }, [game?.nightNumber]);
@@ -55,25 +55,12 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
 
   if (!isNight) return null;
 
-  if (collapsed && !embedded) {
-    return (
-      <button onClick={() => setCollapsed(false)}
-        style={{ position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 250,
-          background: 'rgba(10,11,20,0.92)', border: '1px solid var(--gold)', borderRadius: 8, padding: '8px 16px',
-          fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gold-hot)', cursor: 'pointer' }}>
-        🌙 Orden de noche ({total})
-      </button>
-    );
-  }
-
   // La Marioneta (misperception sin despertar) NO se muestra con el mal: los Esbirros no la conocen.
   const minions = game.players.filter(p => p.type === 'minion' && ROLE_BY_ID[p.role]?.misperception?.wakesWithEvil !== false);
   const demons = game.players.filter(p => p.type === 'demon');
 
-  const containerStyle = embedded
-    ? { width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '60vh', background: 'rgba(8,9,16,0.7)', border: '1px solid var(--gold)', borderRadius: 10, overflow: 'hidden', flexShrink: 0 }
-    : { position: 'fixed', top: 56, left: '50%', transform: 'translateX(-50%)', zIndex: 250, width: 'min(560px, 94vw)', display: 'flex', flexDirection: 'column', maxHeight: '85vh',
-        background: 'rgba(8,9,16,0.96)', border: '1px solid var(--gold)', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', overflow: 'hidden' };
+  // Guía SIEMPRE embebida en el panel derecho (única fuente de instrucciones de noche).
+  const containerStyle = { width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '70vh', background: 'rgba(8,9,16,0.7)', border: '1px solid var(--gold)', borderRadius: 10, overflow: 'hidden', flexShrink: 0 };
 
   return (
     <div style={containerStyle}>
@@ -81,9 +68,8 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'rgba(201,162,74,0.08)', borderBottom: 'var(--hairline)' }}>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)' }}>
-          🌙 Orden de Noche {game.nightNumber} — {current + 1}/{total}
+          🌙 Guía · Noche {game.nightNumber} — paso {current + 1}/{total}
         </span>
-        {!embedded && <button onClick={() => setCollapsed(true)} className="btn-night" style={{ fontSize: 9 }}>Ocultar</button>}
       </div>
 
       <div style={{ padding: '14px 16px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
@@ -166,8 +152,19 @@ function RoleStepView({ step, send }) {
 
       {isMisperc && (
         <div style={{ background: 'rgba(168,58,45,0.14)', border: '1px solid var(--blood-dim)', borderRadius: 4, padding: '8px 10px', marginBottom: 10 }}>
+          <p className="identity-false" style={{ color: 'var(--blood-hi)', marginBottom: 4 }} title={`${actor.name} no conoce su rol real. Cree ser ${shown.name} y recibe información falsa.`}>
+            <span className="mask">{MASK}</span>&nbsp;<strong>Identidad falsa</strong>
+          </p>
           <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--blood-hi)', margin: 0, lineHeight: 1.5 }}>
-            ⚠ Cree ser <strong>{shown.name}</strong>, pero en realidad es <strong>{trueDef.name}</strong>. Su habilidad NO funciona — dale información <strong>FALSA</strong> y arbitraria coherente con {shown.name}.
+            {actor.name} — Real: <strong>{trueDef.name}</strong> ({typeLabel(trueDef.type)}) · Se cree: <strong>{shown.name}</strong> ({typeLabel(shown.type)}). Su habilidad NO funciona — dale información <strong>FALSA</strong> coherente con {shown.name}.
+          </p>
+        </div>
+      )}
+
+      {actor.poisoned && !isMisperc && (
+        <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.4)', borderRadius: 4, padding: '8px 10px', marginBottom: 10 }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: '#4ade80', margin: 0, lineHeight: 1.5 }}>
+            🧪 <strong>{actor.name} está envenenado</strong>: su habilidad NO funciona esta noche — dale información <strong>FALSA</strong>.
           </p>
         </div>
       )}

@@ -238,3 +238,37 @@ input, textarea { font-family: inherit; color: inherit; }
   transition: color 1.4s ease, border-color 1.4s ease;
 }
 .panel-label .count { color: var(--bone-400); font-size: 13px; }
+
+/* ── ALERTS BAR (abajo) — sólo visible cuando hay pendientes ────────── */
+.alerts-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(to top, rgba(168,58,45,0.22), rgba(8,9,16,0.97));
+  border-top: 1px solid var(--blood-dim);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 -6px 24px rgba(0,0,0,0.5);
+}
+.alerts-bar-tag {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--blood-hi); flex-shrink: 0;
+}
+.alerts-bar-items {
+  display: flex; align-items: center; gap: 16px;
+  overflow-x: auto; flex: 1; min-width: 0;
+}
+.alerts-bar-item {
+  font-family: var(--serif); font-size: 13px; color: var(--bone-100);
+  white-space: nowrap; display: inline-flex; align-items: center; flex-shrink: 0;
+}
+.alerts-bar-item.action { color: var(--bone-50); }
+
+/* Reserva espacio al pie sólo cuando la barra está presente (sin saltos) */
+.app-shell.has-alerts .left-panel,
+.app-shell.has-alerts .right-panel { padding-bottom: 56px; }
+.app-shell.has-alerts .stage { padding-bottom: 44px; }

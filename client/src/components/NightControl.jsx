@@ -42,7 +42,7 @@ export default function NightControl() {
 
       <div>
         <p className="panel-label">
-          {campaign.name} — Orden Noche {nightNumber} {isFirst ? '— Primera' : ''}
+          Acciones de Noche {nightNumber} {isFirst ? '— Primera' : ''}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -93,12 +93,7 @@ export default function NightControl() {
           </div>
         )}
 
-        <button onClick={() => {
-          const deaths = nightDeaths.map(id => players.find(p => p.id === id)?.name).filter(Boolean);
-          send('START_DAY', { nightDeaths: deaths });
-        }} className="btn-action primary" style={{ width: '100%', padding: '12px 0', marginTop: 16 }}>
-          Amanecer → Día {game.dayNumber + 1}
-        </button>
+        {/* El botón "Amanecer" vive SOLO en PhaseStepControl (una única fuente). */}
       </div>
 
       {nightDeaths.length > 0 && (

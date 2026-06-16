@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
+import { formatIdentity, MASK } from '../utils/identity';
 import ActionModal from './ActionModal';
 
 function getCirclePositions(count, radius) {
@@ -181,12 +182,15 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
             {role.name}
           </div>
         )}
-        {isNarrator && player.believedRole && ROLE_BY_ID[player.believedRole] && (
-          <div className="seat-role-label"
-            style={{ color: 'var(--moon)', fontStyle: 'italic', fontSize: '0.82em', opacity: 0.85 }}>
-            cree: {ROLE_BY_ID[player.believedRole].name}
-          </div>
-        )}
+        {isNarrator && (() => {
+          const id = formatIdentity(player);
+          if (!id.hasFalse) return null;
+          return (
+            <div className="identity-false" title={id.tooltip}>
+              <span className="mask">{MASK}</span> se cree {id.believedName}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

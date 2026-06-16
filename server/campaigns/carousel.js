@@ -314,12 +314,30 @@ const queueOther = [
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
 ];
 
+// ── Tags de montaje/info (vocabulario en troubleBrewing.js) — best-effort ──
+// Carousel es experimental: tags base para que TODO rol fluya por el wizard
+// (identidad falsa, bluffs, veneno inicial); la info bespoke de roles exóticos
+// se completa de forma incremental (P6).
+const SETUP = {
+  AL_HADIKHIA: { demonBluffs: 3 }, KAZALI: { demonBluffs: 3 }, LEGION: { demonBluffs: 3 },
+  LEVIATHAN: { demonBluffs: 3 }, LIL_MONSTA: { demonBluffs: 3 }, LLEECH: { demonBluffs: 3 },
+  OJO: { demonBluffs: 3 }, RIOT: { demonBluffs: 3 },
+  WIDOW: { initialPoison: true }, SUMMONER: { demonBluffs: 3 },
+};
+const INFO = {
+  BOUNTY_HUNTER: { firstNight: true, kind: 'knowEvilPlayer' }, // 1 jugador malo
+  STEWARD:       { firstNight: true, kind: 'stewardNeighbors' },
+};
+for (const [id, s] of Object.entries(SETUP)) if (roles[id]) roles[id].setup = s;
+for (const [id, n] of Object.entries(INFO))  if (roles[id]) roles[id].info  = n;
+
 module.exports = {
   id: 'CAROUSEL',
   name: 'The Carousel',
   name_es: 'El Carrusel',
   roles,
   distribution: BASE_DISTRIBUTION,
+  outsiderModifiers: {},
   queueFirst,
   queueOther,
 };

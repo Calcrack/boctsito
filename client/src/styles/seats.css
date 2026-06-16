@@ -299,6 +299,29 @@
   text-overflow: ellipsis;
 }
 
+/* ── IDENTIDAD FALSA ("se cree …") — capa 2, icono máscara, NUNCA truncar ── */
+.identity-false {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--moon);
+  line-height: 1.25;
+  /* nunca truncar: si no cabe, hace wrap (y además lleva tooltip) */
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+.identity-false .mask { font-style: normal; }
+/* En el asiento del grimorio: bajo el rol real, centrada y compacta */
+.seat-nameplate .identity-false {
+  font-size: 9px;
+  justify-content: center;
+  margin-top: 1px;
+}
+
 /* ── HAND RAISED / NIGHT MARK ─────────────────────────────── */
 
 .hand-raised {

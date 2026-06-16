@@ -134,6 +134,39 @@ const BASE_DISTRIBUTION = {
 const queueFirst  = ['POISONER', 'WASHERWOMAN', 'LIBRARIAN', 'INVESTIGATOR', 'COOK', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
 const queueOther  = ['POISONER', 'MONK', 'IMP', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
 
+// ── Tags de montaje/info (dirigen el motor de decisiones; ver server/setup.js) ──
+// VOCABULARIO CANÓNICO (compartido por todas las campañas):
+//   role.setup.* = qué decisión OCULTA fuerza el rol durante el montaje:
+//     falseIdentity            → elegir el rol bueno que CREE ser (también lo infiere role.misperception)
+//     lunaticExtras            → Demonio falso, Esbirros falsos, bluffs y "muerte" de 1ª noche
+//     demonBluffs:N            → el Demonio finge ser 1 de N roles buenos no en juego
+//     redHerring               → jugador bueno que registra como Demonio para la Adivina
+//     initialPoison            → objetivo de veneno de la 1ª noche (Envenenador/Pukka/Widow)
+//     outsiderModifier:±N      → confirma el conteo de Forasteros (Barón/Padrino/Fang Gu/Vigormortis)
+//     registersAs:'good'|'evilOptional' → registro por defecto (Espía/Recluso)
+//     otherSecret:'evilTwin'|'godfatherOutsiders'|... → otros secretos del guion
+//   role.info.* = info que el Narrador ELIGE entre opciones válidas que calcula la app:
+//     { firstNight?, everyNight?, kind, ...params }
+//     kind: 'pairOfType'(targetType) | 'count'(what:'evilPairs'|'evilNeighbors') | 'executedRole'
+const SETUP = {
+  POISONER:       { initialPoison: true },
+  FORTUNE_TELLER: { redHerring: true },
+  IMP:            { demonBluffs: 3 },
+  BARON:          { outsiderModifier: 2 },
+  SPY:            { registersAs: 'good' },
+  RECLUSE:        { registersAs: 'evilOptional' },
+};
+const INFO = {
+  WASHERWOMAN:  { firstNight: true, kind: 'pairOfType', targetType: 'townfolk' },
+  LIBRARIAN:    { firstNight: true, kind: 'pairOfType', targetType: 'outsider' },
+  INVESTIGATOR: { firstNight: true, kind: 'pairOfType', targetType: 'minion' },
+  COOK:         { firstNight: true, kind: 'count', what: 'evilPairs' },
+  EMPATH:       { firstNight: true, everyNight: true, kind: 'count', what: 'evilNeighbors' },
+  UNDERTAKER:   { everyNight: true, kind: 'executedRole' },
+};
+for (const [id, s] of Object.entries(SETUP)) if (roles[id]) roles[id].setup = s;
+for (const [id, n] of Object.entries(INFO))  if (roles[id]) roles[id].info  = n;
+
 module.exports = {
   id: 'TROUBLE_BREWING',
   name: 'Trouble Brewing',

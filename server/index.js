@@ -11,8 +11,9 @@ const {
   applyNightAction, advanceNightQueue,
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, addDeferred, getPublicState,
-  assignBelievedRoles,
+  assignBelievedRoles, applySetup,
 } = require('./gameLogic');
+const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
@@ -100,6 +101,17 @@ function autoSelectRoles(playerCount, campaignId) {
   const demons = shuffleLocal(demonPool).slice(0, dist.demons || 1);
 
   return [...townfolk, ...outsiders, ...minions, ...demons];
+}
+
+// ── Montaje (wizard) helpers ───────────────────────────────────────
+function ensureSetup(game) {
+  if (!game.setup) game.setup = { locked: false, seatOrder: [], assignments: {}, decisions: [] };
+  if (!game.setup.seatOrder?.length) game.setup.seatOrder = game.players.map(p => p.id);
+  return game.setup;
+}
+function recomputeSetup(game) {
+  ensureSetup(game);
+  game.setup.decisions = computeRequiredDecisions(game);
 }
 
 // ── WebSocket helpers ──────────────────────────────────────────────
@@ -256,6 +268,11 @@ function handleMessage(type, payload, session) {
       });
       game.deferredEffects = [];
       game.statusLog = [];
+      game.setup = { locked: false, seatOrder: game.players.map(p => p.id), assignments: {}, decisions: [] };
+      game.setupResolved = null;
+      game.narratorDrunkAs = null;
+      game.narratorRolesForImp = [];
+      game.smokeScreenPlayerId = null;
       setPlazaChannelPermission(true).catch(() => {});
       broadcastGame();
       break;
@@ -1089,6 +1106,83 @@ function handleMessage(type, payload, session) {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
       game.narratorRolesForImp = payload.roleIds || [];
+      broadcastGame();
+      break;
+    }
+
+    // ── Asistente de montaje (Addendum 2) ─────────────────────────────
+    case 'SETUP_SET_SEAT_ORDER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      ensureSetup(game);
+      const order = payload.seatOrder || [];
+      game.setup.seatOrder = order;
+      // Reordena los jugadores para que coincidan con el círculo elegido.
+      const reordered = order.map(id => game.players.find(p => p.id === id)).filter(Boolean);
+      const missing = game.players.filter(p => !order.includes(p.id));
+      game.players = [...reordered, ...missing];
+      recomputeSetup(game);
+      broadcastGame();
+      break;
+    }
+
+    case 'SETUP_SET_ASSIGNMENTS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      ensureSetup(game);
+      game.setup.assignments = payload.assignments || {};
+      recomputeSetup(game);
+      broadcastGame();
+      break;
+    }
+
+    case 'SETUP_ASSIGN_ROLE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      ensureSetup(game);
+      const { seatId, roleId } = payload;
+      if (roleId) game.setup.assignments[seatId] = roleId;
+      else delete game.setup.assignments[seatId];
+      recomputeSetup(game);
+      broadcastGame();
+      break;
+    }
+
+    case 'SETUP_SET_DECISION': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      ensureSetup(game);
+      const { id, patch } = payload;
+      const d = (game.setup.decisions || []).find(x => x.id === id);
+      if (d) Object.assign(d, patch || {});
+      broadcastGame();
+      break;
+    }
+
+    case 'SETUP_SUGGEST': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      ensureSetup(game);
+      const ds = game.setup.decisions || [];
+      if (payload.id) {
+        const i = ds.findIndex(x => x.id === payload.id);
+        if (i >= 0) ds[i] = suggestDecision(ds[i], game);
+      } else {
+        game.setup.decisions = ds.map(d => isDecisionResolved(d) ? d : suggestDecision(d, game));
+      }
+      broadcastGame();
+      break;
+    }
+
+    case 'SETUP_LOCK': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      ensureSetup(game);
+      recomputeSetup(game);
+      const assignedCount = Object.keys(game.setup.assignments).length;
+      if (assignedCount < game.players.length) throw new Error('Faltan asientos por asignar un rol');
+      if (!isSetupComplete(game.setup.decisions)) throw new Error('Faltan decisiones de montaje por resolver');
+      applySetup(game);
       broadcastGame();
       break;
     }

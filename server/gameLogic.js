@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { ROLES, getDistribution, getRolesByType, getCampaign, DEFAULT_CAMPAIGN } = require('./roles');
+const SETUP = require('./setup');
 
 // ── In-memory store ────────────────────────────────────────────────
 const games = new Map();
@@ -41,6 +42,9 @@ function createGame(narratorId, gameId) {
     nightReadyPlayers: [],
     statusLog: [],
     deferredEffects: [],
+    // ── Montaje (Addendum 2): el Narrador decide TODO antes de empezar ──
+    setup: { locked: false, seatOrder: [], assignments: {}, decisions: [] },
+    setupResolved: null,
   };
   games.set(id, game);
   return game;
@@ -177,6 +181,92 @@ function assignBelievedRoles(game) {
   return game;
 }
 
+// ── Aplicar el montaje (SETUP_LOCK): el Narrador ya decidió TODO ───────
+// Vuelca las decisiones del wizard en los campos deterministas del motor
+// (believedRole, smokeScreenPlayerId, narratorRolesForImp, registros…) y
+// pre-rellena la info de la 1ª noche. CERO azar en la ruta del Narrador.
+function applySetup(game) {
+  const setup = game.setup || {};
+  const decisions = setup.decisions || [];
+  const assignments = setup.assignments || {};
+
+  // 1) Roles reales por asiento
+  for (const [seatId, roleId] of Object.entries(assignments)) {
+    const player = game.players.find(p => p.id === seatId);
+    const role = ROLES[roleId];
+    if (!player || !role) continue;
+    player.role = role.id; player.alignment = role.alignment; player.type = role.type;
+    player.alive = true; player.poisoned = false; player.protected = false; player.safeTonight = false;
+    player.believedRole = null; player.drunkAs = null; player.tokens = [];
+    player.nightInfo = null; player.setupNightInfo = null;
+    player.slayerUsed = false; player.virginUsed = false; player.impShotUsed = false;
+    player.butlerMaster = null; player.bluffRole = null; player.statuses = [];
+  }
+  const inPlay = new Set(game.players.map(p => p.role));
+  const allGood = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
+  game.rolesNotInPlay = allGood.filter(r => !inPlay.has(r.id)).map(r => r.id);
+
+  // 2) Decisiones → campos deterministas existentes (sin Math.random)
+  game.setupResolved = { poison: null };
+  game.smokeScreenPlayerId = null;
+  for (const d of decisions) {
+    const seatP = game.players.find(p => p.id === d.seat);
+    switch (d.kind) {
+      case 'identidadFalsa':
+        if (!seatP) break;
+        if (d.role === 'lunatic') {
+          seatP.believedRole = d.lunatic?.perceivedDemon || null;
+        } else {
+          seatP.believedRole = d.chosenGoodRole || null;
+          if (seatP.role === 'DRUNK') { seatP.drunkAs = d.chosenGoodRole || null; game.narratorDrunkAs = d.chosenGoodRole || null; }
+        }
+        break;
+      case 'bluffsDemonio':
+        game.narratorRolesForImp = Array.isArray(d.chosen) ? d.chosen : [];
+        break;
+      case 'falsoPositivoAdivina':
+        game.smokeScreenPlayerId = d.targetSeat || null;
+        break;
+      case 'venenoInicial':
+        game.setupResolved.poison = { sourceSeat: d.seat, targetSeat: d.targetSeat || null };
+        break;
+      case 'registroInicial':
+        if (seatP?.role === 'SPY') game.spyRegistersAs = d.registersAs === 'good' ? 'good' : null;
+        if (seatP?.role === 'RECLUSE') game.recluseRegistersAs = (d.registersAs === 'minion' || d.registersAs === 'demon') ? d.registersAs : null;
+        break;
+      case 'infoPrimeraNoche':
+        if (seatP) seatP.setupNightInfo = SETUP.renderInfoString(game, d);
+        break;
+      default: break; // forasteros / otroSecreto: aplicados vía asignación / informativos
+    }
+  }
+
+  game.setup.locked = true;
+  game.phase = 'role_reveal';
+  return game;
+}
+
+// Noche 1: estampa la info pre-decidida sobre cualquier generación y aplica
+// el veneno inicial elegido. Garantiza que la noche se LEE, no se improvisa.
+function applySetupNightInfo(game) {
+  if (game.nightNumber !== 1) return;
+  for (const p of game.players) {
+    if (p.setupNightInfo) p.nightInfo = p.setupNightInfo;
+  }
+  const poison = game.setupResolved?.poison;
+  if (poison?.targetSeat) {
+    const target = game.players.find(p => p.id === poison.targetSeat);
+    const src = game.players.find(p => p.id === poison.sourceSeat);
+    if (target) {
+      placeToken(target, {
+        type: 'POISONED', roleId: src?.role || 'POISONER', label: 'Envenenado',
+        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: src?.role || 'POISONER', sourcePlayerId: poison.sourceSeat,
+      }, game);
+      syncStatusFlags(game);
+    }
+  }
+}
+
 const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
 const FIRST_NIGHT_ONLY_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK']);
 
@@ -216,8 +306,10 @@ function generateNightInfo(game) {
     });
     demons.forEach(d => {
       const minionNames = wakingMinions.map(x => `${x.name} (${ROLES[x.role]?.name})`);
-      const rolesPool = ((game.narratorRolesForImp?.length > 0) ? game.narratorRolesForImp : (game.rolesNotInPlay || [])).filter(id => id !== 'DRUNK');
-      const notInPlay3  = shuffle(rolesPool).slice(0, 3).map(id => ROLES[id]?.name || id);
+      const narratorSetBluffs = game.narratorRolesForImp?.length > 0;
+      const rolesPool = (narratorSetBluffs ? game.narratorRolesForImp : (game.rolesNotInPlay || [])).filter(id => id !== 'DRUNK');
+      // Narrador decidió los bluffs en el montaje → respeta su orden (sin azar). Auto → baraja.
+      const notInPlay3  = (narratorSetBluffs ? rolesPool : shuffle(rolesPool)).slice(0, 3).map(id => ROLES[id]?.name || id);
       const knownMarionettes = hiddenMinions.filter(p => ROLES[p.role]?.misperception?.demonKnows).map(p => p.name);
       const lines = [
         `👹 Eres el Demonio (${ROLES[d.role]?.name}).`,
@@ -1331,6 +1423,8 @@ function startNight(game) {
     game.players.filter(p => p.alive).forEach(p => generateSingleRoleInfo(game, p.id));
   }
   generateCurrentPassiveInfo(game);
+  // Noche 1: estampa la info pre-decidida en el montaje y aplica el veneno inicial.
+  applySetupNightInfo(game);
   return game;
 }
 
@@ -1468,6 +1562,8 @@ function getPublicState(game, viewerId, isNarrator) {
     })),
     campaignSetupNotes: isNarrator ? (activeCampaign.setupNotes || []) : undefined,
     campaignWarnings: isNarrator ? (activeCampaign.warnings || []) : undefined,
+    campaignDistribution: isNarrator ? (activeCampaign.distribution || {}) : undefined,
+    campaignOutsiderModifiers: isNarrator ? (activeCampaign.outsiderModifiers || {}) : undefined,
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);
@@ -1528,6 +1624,7 @@ function getPublicState(game, viewerId, isNarrator) {
     channelLimits: isNarrator ? (game.channelLimits || {}) : undefined,
     narratorDrunkAs: isNarrator ? game.narratorDrunkAs : undefined,
     narratorRolesForImp: isNarrator ? (game.narratorRolesForImp || []) : undefined,
+    setup: isNarrator ? (game.setup || { locked: false, seatOrder: [], assignments: {}, decisions: [] }) : undefined,
   };
 }
 
@@ -1541,5 +1638,6 @@ module.exports = {
   checkWinCondition, mayorWin,
   killPlayer, revivePlayer,
   addDeferred, assignBelievedRoles,
+  applySetup,
   getPublicState,
 };

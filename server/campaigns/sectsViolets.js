@@ -58,12 +58,30 @@ const roles = {
     ability: 'Cada noche*: elige un jugador: muere. Los Esbirros que mates conservan su habilidad y envenenan 1 Aldeano vecino. [-1 Forastero]', firstNight: false, otherNights: true },
 };
 
+// ── Tags de montaje/info (vocabulario en troubleBrewing.js) ──────────
+const SETUP = {
+  FANG_GU:     { outsiderModifier: 1, demonBluffs: 3 },
+  VIGORMORTIS: { outsiderModifier: -1, demonBluffs: 3 },
+  NO_DASHII:   { demonBluffs: 3 },
+  VORTOX:      { demonBluffs: 3 }, // el motor detecta Vortox → info de Aldeanos FORZOSAMENTE falsa
+  EVIL_TWIN:   { otherSecret: 'evilTwin' },
+};
+const INFO = {
+  CLOCKMAKER: { firstNight: true, kind: 'clockmaker' }, // distancia Demonio↔Esbirro más cercano
+};
+for (const [id, s] of Object.entries(SETUP)) if (roles[id]) roles[id].setup = s;
+for (const [id, n] of Object.entries(INFO))  if (roles[id]) roles[id].info  = n;
+
+// Colas interactivas del motor (espejo del orden de noche del cliente, sin marcadores *_INFO).
+const queueFirst = ['PHILOSOPHER', 'SNAKE_CHARMER', 'EVIL_TWIN', 'WITCH', 'CERENOVUS', 'CLOCKMAKER', 'DREAMER', 'SEAMSTRESS', 'MATHEMATICIAN'];
+const queueOther = ['PHILOSOPHER', 'SNAKE_CHARMER', 'WITCH', 'CERENOVUS', 'PIT_HAG', 'FANG_GU', 'NO_DASHII', 'VORTOX', 'VIGORMORTIS', 'SWEETHEART', 'SAGE', 'BARBER', 'DREAMER', 'FLOWERGIRL', 'TOWN_CRIER', 'ORACLE', 'SEAMSTRESS', 'MATHEMATICIAN'];
+
 module.exports = {
   id: 'SECTS_AND_VIOLETS',
   name: 'Sects & Violets',
   roles,
   distribution: tb.distribution,
-  outsiderModifiers: {},
-  queueFirst: [],
-  queueOther: [],
+  outsiderModifiers: { FANG_GU: 1, VIGORMORTIS: -1 },
+  queueFirst,
+  queueOther,
 };

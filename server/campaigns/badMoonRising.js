@@ -60,12 +60,32 @@ const roles = {
     ability: 'Cada noche*: puedes elegir un jugador: muere. Si anoche no elegiste a nadie, esta noche elige 3 jugadores.', firstNight: false, otherNights: true },
 };
 
+// ── Tags de montaje/info (vocabulario en troubleBrewing.js) ──────────
+const SETUP = {
+  GODFATHER: { outsiderModifier: 1, otherSecret: 'godfatherOutsiders' }, // ±1 Forastero, lo confirma el Narrador
+  PUKKA:     { initialPoison: true, demonBluffs: 3 },
+  LUNATIC:   { lunaticExtras: true }, // falseIdentity ya lo infiere misperception.believes='demon'
+  ZOMBUUL:   { demonBluffs: 3 },
+  SHABALOTH: { demonBluffs: 3 },
+  PO:        { demonBluffs: 3 },
+};
+const INFO = {
+  GRANDMOTHER: { firstNight: true, kind: 'knowGoodPlayer' },  // 1 jugador bueno + su personaje
+  GODFATHER:   { firstNight: true, kind: 'knowOutsiders' },   // qué Forasteros hay
+};
+for (const [id, s] of Object.entries(SETUP)) if (roles[id]) roles[id].setup = s;
+for (const [id, n] of Object.entries(INFO))  if (roles[id]) roles[id].info  = n;
+
+// Colas interactivas del motor (espejo del orden de noche del cliente, sin marcadores *_INFO).
+const queueFirst = ['LUNATIC', 'SAILOR', 'COURTIER', 'GODFATHER', 'DEVILS_ADVOCATE', 'PUKKA', 'GRANDMOTHER', 'CHAMBERMAID'];
+const queueOther = ['SAILOR', 'COURTIER', 'INNKEEPER', 'GAMBLER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
+
 module.exports = {
   id: 'BAD_MOON_RISING',
   name: 'Bad Moon Rising',
   roles,
   distribution: tb.distribution,
-  outsiderModifiers: {},
-  queueFirst: [],
-  queueOther: [],
+  outsiderModifiers: {}, // Padrino ±1 se confirma como decisión de montaje (forasteros)
+  queueFirst,
+  queueOther,
 };

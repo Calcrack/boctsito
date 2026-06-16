@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST, getCampaign } from '../data/roles';
+import { formatIdentity, MASK } from '../utils/identity';
+import SetupWizard from './SetupWizard';
 import NightControl from './NightControl';
 import NightWalkthrough from './NightWalkthrough';
 import StatusChips from './StatusChips';
@@ -75,6 +77,7 @@ export default function NarratorPanel() {
   const [showReorder, setShowReorder] = useState(false);
   const [reorderList, setReorderList] = useState([]);
   const [showAutoMode, setShowAutoMode] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(true);
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
   const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
 
@@ -89,6 +92,12 @@ export default function NarratorPanel() {
 
   // Al cambiar de campaña, los roles seleccionados ya no aplican.
   useEffect(() => { setSelectedRoles([]); }, [game?.campaignId]);
+
+  // Referencia (roster) colapsada por defecto durante la noche; se abre a demanda.
+  useEffect(() => {
+    const night = game && ['first_night', 'night'].includes(game.phase);
+    setRosterOpen(!night);
+  }, [game?.phase]);
 
   if (!game) return <div style={{ padding: 32, fontFamily: 'var(--serif)', color: 'var(--bone-400)' }}>Cargando...</div>;
 
@@ -107,8 +116,12 @@ export default function NarratorPanel() {
     setNewPlayerName('');
   };
 
+  // Barra de alertas (abajo): sólo cuando hay una decisión/consecuencia pendiente.
+  const pendingAdvice = (game.advice || []).filter(a => a.severity === 'warn' || a.severity === 'danger');
+  const hasAlerts = pendingAdvice.length > 0 || (game.deferredEffects || []).length > 0 || (game.deferredOptions || []).length > 0;
+
   return (
-    <div className={`app-shell ${isNight ? 'is-night' : 'is-day'}`}>
+    <div className={`app-shell ${isNight ? 'is-night' : 'is-day'}${hasAlerts ? ' has-alerts' : ''}`}>
 
 
       {/* ── Topbar ── */}
@@ -227,81 +240,12 @@ export default function NarratorPanel() {
               </div>
             </div>
 
-            {/* Role distribution */}
+            {/* Asistente de montaje — el Narrador decide TODO (cero azar) */}
+            {phase === 'lobby' && <SetupWizard game={game} send={send} />}
+
+            {/* Partida sin narrador (modo automático: reparto aleatorio permitido) */}
             <div>
-              <p className="panel-label">Roles en juego</p>
-              {['townfolk', 'outsider', 'minion', 'demon'].map(type => (
-                <div key={type} style={{ marginBottom: 10 }}>
-                  <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 5 }}>
-                    {type === 'townfolk' ? 'Aldeanos' : type === 'outsider' ? 'Forasteros' : type === 'minion' ? 'Esbirros' : 'Demonios'}
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {campaignRoleList.filter(r => r.type === type).map(r => (
-                      <button key={r.id}
-                        onClick={() => setSelectedRoles(prev => prev.includes(r.id) ? prev.filter(x => x !== r.id) : [...prev, r.id])}
-                        className="btn-night"
-                        style={{
-                          fontSize: 9,
-                          borderColor: selectedRoles.includes(r.id) ? 'var(--gold)' : undefined,
-                          color: selectedRoles.includes(r.id) ? 'var(--gold-hot)' : undefined,
-                        }}>
-                        {r.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* Distribution feedback */}
-              {(() => {
-                const needed = getNeeded(players.length, selectedRoles);
-                if (!needed) return <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-500)', fontStyle: 'italic' }}>5–15 jugadores necesarios</p>;
-                const have = {
-                  townfolk:  selectedRoles.filter(id => ROLE_BY_ID[id]?.type === 'townfolk').length,
-                  outsiders: selectedRoles.filter(id => ROLE_BY_ID[id]?.type === 'outsider').length,
-                  minions:   selectedRoles.filter(id => ROLE_BY_ID[id]?.type === 'minion').length,
-                  demons:    selectedRoles.filter(id => ROLE_BY_ID[id]?.type === 'demon').length,
-                };
-                const rows = [
-                  { k: 'townfolk', l: 'Aldeanos',   h: have.townfolk,  n: needed.townfolk },
-                  { k: 'outsiders',l: 'Forasteros', h: have.outsiders, n: needed.outsiders },
-                  { k: 'minions',  l: 'Esbirros',   h: have.minions,   n: needed.minions },
-                  { k: 'demons',   l: 'Demonios',   h: have.demons,    n: needed.demons },
-                ];
-                return (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, margin: '8px 0' }}>
-                    {rows.map(r => {
-                      const ok = r.h >= r.n;
-                      const over = r.h > r.n;
-                      return (
-                        <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 8px', borderRadius: 2, background: ok && !over ? 'rgba(109,140,184,0.1)' : over ? 'rgba(201,162,74,0.1)' : 'rgba(168,58,45,0.1)' }}>
-                          <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-300)' }}>{r.l}</span>
-                          <span style={{ fontFamily: 'var(--mono)', fontSize: 8, fontWeight: 600, color: ok && !over ? 'var(--good)' : over ? 'var(--gold)' : 'var(--blood-hi)' }}>{r.h}/{r.n}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
-              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <button onClick={() => send('DISTRIBUTE_ROLES', { selectedRoles })}
-                  disabled={selectedRoles.length === 0}
-                  className="btn-action primary"
-                  style={{ flex: 1, opacity: selectedRoles.length === 0 ? 0.35 : 1 }}>
-                  Distribuir (aleatorio)
-                </button>
-                <button
-                  disabled={selectedRoles.length === 0 || players.length === 0}
-                  className="btn-action"
-                  style={{ flex: 1, opacity: (selectedRoles.length === 0 || players.length === 0) ? 0.35 : 1 }}
-                  onClick={() => {
-                    setManualAssignments({});
-                    setShowManualAssign(true);
-                  }}>
-                  Asignar manual
-                </button>
-              </div>
+              <p className="panel-label">Sin narrador</p>
 
               {/* Auto mode (partida sin narrador) — oculto por defecto cuando hay narrador */}
               {game.autoMode ? null : (
@@ -364,147 +308,7 @@ export default function NarratorPanel() {
               </div>
               )}
 
-              {showManualAssign && (
-                <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: 4, border: 'var(--hairline)' }}>
-                  <p className="panel-label" style={{ marginBottom: 8 }}>Asignación manual de roles</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                    {players.map(p => {
-                      const usedRoles = new Set(Object.entries(manualAssignments).filter(([pid]) => pid !== p.id).map(([, rid]) => rid));
-                      return (
-                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                          <select
-                            value={manualAssignments[p.id] || ''}
-                            onChange={e => setManualAssignments(prev => ({ ...prev, [p.id]: e.target.value }))}
-                            style={{ fontSize: 10, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '3px 6px', maxWidth: 130 }}>
-                            <option value="">— sin asignar —</option>
-                            {selectedRoles.filter(rid => !usedRoles.has(rid)).map(rid => (
-                              <option key={rid} value={rid}>{ROLE_BY_ID[rid]?.name || rid}</option>
-                            ))}
-                            {manualAssignments[p.id] && usedRoles.has(manualAssignments[p.id]) ? null : null}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      className="btn-action primary"
-                      style={{ flex: 1 }}
-                      disabled={players.some(p => !manualAssignments[p.id])}
-                      onClick={() => {
-                        const assignments = players.map(p => ({ playerId: p.id, roleId: manualAssignments[p.id] }));
-                        send('ASSIGN_ROLES_MANUAL', { assignments });
-                        setShowManualAssign(false);
-                        setManualAssignments({});
-                      }}>
-                      Confirmar
-                    </button>
-                    <button className="btn-action" style={{ flex: 1 }} onClick={() => { setShowManualAssign(false); setManualAssignments({}); }}>
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
-
-            {/* Reorder seats */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <p className="panel-label" style={{ margin: 0 }}>Orden en la rueda</p>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn-night" style={{ fontSize: 9 }} onClick={() => {
-                    const shuffled = shuffleArr(players);
-                    send('REORDER_PLAYERS', { playerIds: shuffled.map(p => p.id) });
-                  }}>🔀 Aleatorizar</button>
-                  <button className="btn-night" style={{ fontSize: 9 }} onClick={() => {
-                    setReorderList([...players]);
-                    setShowReorder(!showReorder);
-                  }}>
-                    {showReorder ? 'Cerrar' : 'Reordenar'}
-                  </button>
-                </div>
-              </div>
-              {showReorder && (
-                <div style={{ padding: '8px 10px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, border: 'var(--hairline-bone)' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-                    {reorderList.map((p, i) => (
-                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', width: 14 }}>{i + 1}</span>
-                        <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                        <button
-                          disabled={i === 0}
-                          onClick={() => setReorderList(prev => { const a = [...prev]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; return a; })}
-                          style={{ background: 'none', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-300)', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1, padding: '2px 6px', fontSize: 11 }}>↑</button>
-                        <button
-                          disabled={i === reorderList.length - 1}
-                          onClick={() => setReorderList(prev => { const a = [...prev]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; return a; })}
-                          style={{ background: 'none', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-300)', cursor: i === reorderList.length - 1 ? 'default' : 'pointer', opacity: i === reorderList.length - 1 ? 0.3 : 1, padding: '2px 6px', fontSize: 11 }}>↓</button>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn-action primary" style={{ flex: 1 }} onClick={() => {
-                      send('REORDER_PLAYERS', { playerIds: reorderList.map(p => p.id) });
-                      setShowReorder(false);
-                    }}>Confirmar orden</button>
-                    <button className="btn-action" style={{ flex: 1 }} onClick={() => setShowReorder(false)}>Cancelar</button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Drunk fake role config */}
-            {selectedRoles.includes('DRUNK') && (
-              <div style={{ padding: '8px 10px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, border: 'var(--hairline-bone)' }}>
-                <p className="panel-label" style={{ margin: '0 0 6px' }}>Rol del Borracho (cree que es)</p>
-                <select
-                  value={game.narratorDrunkAs || ''}
-                  onChange={e => send('SET_DRUNK_AS', { roleId: e.target.value || null })}
-                  style={{ width: '100%', background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '4px 8px', fontFamily: 'var(--serif)', fontSize: 12 }}>
-                  <option value="">Aleatorio</option>
-                  {campaignRoleList.filter(r => r.type === 'townfolk').map(r => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Imp bluff roles config */}
-            {selectedRoles.some(id => ROLE_BY_ID[id]?.type === 'demon') && (
-              <div style={{ padding: '8px 10px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, border: 'var(--hairline-bone)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <p className="panel-label" style={{ margin: 0 }}>Roles libres del Diablillo</p>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--bone-400)' }}>
-                    {(game.narratorRolesForImp || []).length}/3 elegidos
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                  <button
-                    className="btn-night"
-                    style={{ fontSize: 8, borderColor: (game.narratorRolesForImp || []).length === 0 ? 'var(--gold)' : undefined }}
-                    onClick={() => send('SET_ROLES_FOR_IMP', { roleIds: [] })}>
-                    Automático
-                  </button>
-                  {campaignRoleList.filter(r => r.alignment === 'good').map(r => {
-                    const sel = (game.narratorRolesForImp || []).includes(r.id);
-                    const full = (game.narratorRolesForImp || []).length >= 3 && !sel;
-                    return (
-                      <button key={r.id}
-                        className="btn-night"
-                        disabled={full}
-                        style={{ fontSize: 8, opacity: full ? 0.4 : 1, borderColor: sel ? 'var(--blood-hi)' : undefined, color: sel ? 'var(--blood-hi)' : undefined }}
-                        onClick={() => {
-                          const cur = game.narratorRolesForImp || [];
-                          send('SET_ROLES_FOR_IMP', { roleIds: sel ? cur.filter(x => x !== r.id) : [...cur, r.id] });
-                        }}>
-                        {r.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* Channel capacity limits */}
             <ChannelLimitsControl game={game} send={send} />
@@ -594,7 +398,11 @@ export default function NarratorPanel() {
 
             {/* Jugadores: orden de rueda + roles + fichas/tokens + matar/revivir */}
             <div>
-              <p className="panel-label">Jugadores <span className="count">{players.filter(p => p.alive).length}/{players.length}</span></p>
+              <p className="panel-label" style={{ cursor: 'pointer' }} onClick={() => setRosterOpen(o => !o)}>
+                <span>Jugadores <span className="count">{players.filter(p => p.alive).length}/{players.length}</span></span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>{rosterOpen ? '▲' : '▼ ver'}</span>
+              </p>
+              {rosterOpen && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 320, overflowY: 'auto' }}>
                 {players.map((p, i) => {
                   const role = ALL_ROLES.find(r => r.id === p.role);
@@ -613,11 +421,17 @@ export default function NarratorPanel() {
                           {p.alive ? '☠' : '♻'}
                         </button>
                       </div>
+                      {(() => { const id = formatIdentity(p); return id.hasFalse ? (
+                        <div className="identity-false" style={{ fontSize: 10, paddingLeft: 20 }} title={id.tooltip}>
+                          <span className="mask">{MASK}</span>&nbsp;se cree {id.believedName} ({id.believedTypeLabel})
+                        </div>
+                      ) : null; })()}
                       <StatusChips player={p} compact />
                     </div>
                   );
                 })}
               </div>
+              )}
             </div>
 
             <ChannelControl players={players} send={send} />
@@ -634,16 +448,13 @@ export default function NarratorPanel() {
         <GameTable isNarrator={true} activeActorId={activeNightActorId} />
       </main>
 
-      {/* ── Right panel ── */}
+      {/* ── Right panel — "Guía" (única fuente de instrucciones de noche) ── */}
       <aside className="right-panel">
-        {/* Asistente: consejos + pendientes diferidos (Po, Pukka…) */}
-        <AssistantPanel game={game} send={send} />
+        {/* Guía: una acción a la vez, centro de mando del narrador */}
+        {isNight && <NightWalkthrough onActiveActor={setActiveNightActorId} />}
 
         {/* Mapa de sospechas (agregado) */}
         <SuspicionMap players={players} />
-
-        {/* Orden de noche — centro de mando del narrador */}
-        {isNight && <NightWalkthrough embedded onActiveActor={setActiveNightActorId} />}
 
         {/* Log de auditoría de estados/fichas */}
         {Array.isArray(game.statusLog) && game.statusLog.length > 0 && <StatusLogPanel log={game.statusLog} />}
@@ -669,6 +480,9 @@ export default function NarratorPanel() {
         )}
 
       </aside>
+
+      {/* ── Barra de alertas (abajo): sólo cuando hay decisión/consecuencia pendiente ── */}
+      <AlertsBar game={game} send={send} />
     </div>
   );
 }
@@ -936,46 +750,37 @@ function ManualNominateCard({ game, send }) {
   );
 }
 
-// Asistente del narrador: consejos proactivos + pendientes diferidos.
-function AssistantPanel({ game, send }) {
-  const advice = game.advice || [];
+// Barra de alertas (abajo): SÓLO aparece cuando hay una decisión/consecuencia pendiente.
+// Pendientes = avisos warn/danger + efectos diferidos (Po/Pukka…) + opciones de registro.
+// Las notas contextuales (info) se fusionan dentro del paso activo de la Guía.
+function AlertsBar({ game, send }) {
+  const advice = (game.advice || []).filter(a => a.severity === 'warn' || a.severity === 'danger');
   const deferred = game.deferredEffects || [];
   const options = game.deferredOptions || [];
-  const sevColor = s => s === 'warn' ? 'var(--blood-hi)' : s === 'danger' ? 'var(--blood-hi)' : 'var(--moon)';
 
   if (advice.length === 0 && deferred.length === 0 && options.length === 0) return null;
 
   return (
-    <div style={{ border: '1px solid rgba(201,162,74,0.35)', borderRadius: 6, overflow: 'hidden', background: 'rgba(201,162,74,0.05)' }}>
-      <div style={{ padding: '7px 10px', background: 'rgba(201,162,74,0.1)', borderBottom: 'var(--hairline)' }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)' }}>🧠 Asistente</span>
-      </div>
-      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+    <div className="alerts-bar">
+      <span className="alerts-bar-tag">⚠ Pendiente</span>
+      <div className="alerts-bar-items">
         {advice.map((a, i) => (
-          <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 12.5, color: sevColor(a.severity), margin: 0, lineHeight: 1.4 }}>{a.text}</p>
+          <span key={'a' + i} className="alerts-bar-item">{a.text}</span>
         ))}
-
-        {/* Pendientes registrados */}
         {deferred.map(d => (
-          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(168,58,45,0.1)', borderRadius: 4, padding: '5px 7px' }}>
-            <span style={{ flex: 1, fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }}>{d.label}</span>
-            <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9 }}>✓ Hecho</button>
-          </div>
+          <span key={d.id} className="alerts-bar-item action">
+            {d.label}
+            <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9, marginLeft: 6 }}>✓ Hecho</button>
+          </span>
         ))}
-
-        {/* Registrar pendiente de un demonio presente */}
-        {options.length > 0 && (
-          <div style={{ borderTop: 'var(--hairline-bone)', paddingTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {options.map(o => (
-              <button key={o.role}
-                onClick={() => send('ADD_DEFERRED', { label: o.label, dueNight: game.nightNumber + (o.dueOffset || 1), sourcePlayerId: o.sourcePlayerId, role: o.role, severity: 'warn' })}
-                className="btn-night" style={{ fontSize: 9 }}
-                title={o.label}>
-                + {o.roleName}: {o.trigger}
-              </button>
-            ))}
-          </div>
-        )}
+        {options.map(o => (
+          <button key={o.role}
+            onClick={() => send('ADD_DEFERRED', { label: o.label, dueNight: game.nightNumber + (o.dueOffset || 1), sourcePlayerId: o.sourcePlayerId, role: o.role, severity: 'warn' })}
+            className="btn-night" style={{ fontSize: 9, flexShrink: 0 }}
+            title={o.label}>
+            + {o.roleName}: {o.trigger}
+          </button>
+        ))}
       </div>
     </div>
   );

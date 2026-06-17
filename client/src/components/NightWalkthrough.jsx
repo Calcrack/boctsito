@@ -42,7 +42,7 @@ const GLOBAL_OTHER_NIGHT_ORDER = [
   'UNDERTAKER','EMPATH','FORTUNE_TELLER','BUTLER',
   'SWEETHEART','SAGE','BARBER','DREAMER',
   'FLOWERGIRL','TOWN_CRIER','ORACLE','SEAMSTRESS','MATHEMATICIAN',
-  'GOSSIP','PROFESSOR','MINSTREL','TEA_LADY','PACIFIST','FOOL','MOONCHILD',
+  'GOSSIP','PROFESSOR','MINSTREL','TEA_LADY','PACIFIST','FOOL','MOONCHILD','TINKER',
   'GRANDMOTHER','CHAMBERMAID',
   'SPY',
   'BOUNTY_HUNTER','CULT_LEADER',
@@ -161,8 +161,9 @@ const NIGHT_ROLE_PATTERN = {
   // ── BMR aldeanos ─────────────────────────────────────────────────────────
   LUNATIC:         { kind: 'P_INFO', emoji: '🌕',
                      note: 'El Lunático cree ser el Demonio. Despiértalo; deja que "elija" su objetivo. Tú decides quién muere de verdad (o nadie). Dale la misma info que recibiría el Demonio real.' },
-  MOONCHILD:       { kind: 'P_INFO', emoji: '🌙',
-                     note: 'Si el Lunático murió esta noche: elige qué jugador vivo muere al amanecer.' },
+  MOONCHILD:       { kind: 'P_MOONCHILD', emoji: '🌙' },
+  TINKER:          { kind: 'P_YESNO', emoji: '🔧', label: '¿Muere el Manitas esta noche?',
+                     yesLabel: '💀 Muere', noLabel: '✅ Vive esta noche' },
   GRANDMOTHER:     { kind: 'P3',     effect: 'GRANDMOTHER_INFO',          emoji: '👵', label: 'Nieto',               notSelf: true,  firstNightOnly: true },
   SAILOR:          { kind: 'P3',     effect: 'SAILOR_DRUNK',              emoji: '⚓', label: 'Emborrachar a',       notSelf: true,
                      note: 'Tú O el elegido quedáis borrachos (Narrador decide). Pierdes inmunidad si eres tú el borracho.' },
@@ -171,12 +172,9 @@ const NIGHT_ROLE_PATTERN = {
                      note: 'Si es el Demonio: informarle quién eres + suprimir su ataque. Si no: nada (no dar señal).' },
   INNKEEPER:       { kind: 'P3x2',   effect: 'INNKEEPER_PROTECT',         emoji: '🏨',
                      note: 'Ambos quedan protegidos de toda muerte nocturna. Narrador elige cuál de los 2 queda borracho.' },
-  GAMBLER:         { kind: 'P3',     effect: 'GAMBLER_GUESS',             emoji: '🎲', label: 'Apostar por',         notSelf: false,
-                     note: 'Si el Tahúr falla su adivinanza (o está envenenado), muere esta noche.' },
-  GOSSIP:          { kind: 'P_INFO', emoji: '💬',
-                     note: 'Si la declaración pública de hoy fue verdadera + Cotilla sana: elige quién muere esta noche.' },
-  COURTIER:        { kind: 'P_INFO', emoji: '🎴',
-                     note: 'Una vez por partida. Elige un personaje (no jugador): ese jugador queda borracho 3 noches + 3 días.' },
+  GAMBLER:         { kind: 'P_GAMBLER', emoji: '🎲' },
+  GOSSIP:          { kind: 'P_GOSSIP', emoji: '💬' },
+  COURTIER:        { kind: 'P_COURTIER', emoji: '🎴' },
   PROFESSOR:       { kind: 'P3',     effect: 'PROFESSOR_REVIVE',          emoji: '🎓', label: 'Revivir a',           notSelf: false,  deadOnly: true,
                      note: 'Solo jugadores muertos. Si es Aldeano: revive. Si no: nada (sin señal). Una sola vez.' },
   MINSTREL:        { kind: 'P_INFO', emoji: '🎻',
@@ -226,8 +224,9 @@ const NIGHT_ROLE_PATTERN = {
                      note: 'Tiene la habilidad de un Esbirro (fijada en setup). Actúa según esa habilidad esta noche.' },
   BALLOONIST:      { kind: 'P_INFO', emoji: '🎈',
                      note: 'Mostrar 1 jugador del tipo que corresponda esta noche (rotando: Aldeano/Forastero/Esbirro/Demonio).' },
-  BOUNTY_HUNTER:   { kind: 'P_INFO', emoji: '💰',
-                     note: 'Primera noche: mostrar 1 malvado. Al morir el revelado: esa noche mostrar a otro malvado.' },
+  BOUNTY_HUNTER:   { kind: 'P3', effect: 'BOUNTY_HUNTER_REVEAL', emoji: '💰', label: 'Revelar malvado a',
+                     evilOnly: true,
+                     note: 'Primera noche: mostrar 1 jugador malvado. Al morir el revelado: esa noche mostrar otro malvado.' },
   CANNIBAL:        { kind: 'P_INFO', emoji: '🍖',
                      note: 'Tiene la habilidad del último ejecutado bueno. Si era malo: info falsa esta noche.' },
   CULT_LEADER:     { kind: 'P_INFO', emoji: '✨',
@@ -246,8 +245,7 @@ const NIGHT_ROLE_PATTERN = {
                      note: 'Pasivo. El Demonio ve al Mago como Esbirro. Los Esbirros ven al Mago como Demonio (ajustado en info del mal).' },
   NIGHTWATCHMAN:   { kind: 'P3',     effect: 'NIGHTWATCHMAN',             emoji: '🔦', label: 'Elegir a',            notSelf: true,
                      note: 'Una sola vez. El elegido se despierta y aprende que eres el Guardián Nocturno. Marcar "usado".' },
-  NOBLE:           { kind: 'P_INFO', emoji: '🎭',
-                     note: 'Primera noche: mostrar 3 jugadores donde exactamente 1 sea malvado real.' },
+  NOBLE:           { kind: 'P_NOBLE', emoji: '🎭', firstNightOnly: true },
   POPPY_GROWER:    { kind: 'P_INFO', emoji: '🌺',
                      note: 'Pasivo. Info mutua del mal suprimida mientras viva. Al morir: activar sesión de info del mal esa misma noche.' },
   PREACHER:        { kind: 'P3',     effect: 'PREACHER',                  emoji: '⛪', label: 'Elegir a',            notSelf: true,
@@ -381,25 +379,29 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, padding: '10px 16px', borderTop: 'var(--hairline)' }}>
-        <button onClick={() => setIdx(Math.max(0, current - 1))} disabled={current <= 0}
-          className="btn-action" style={{ flex: 1, opacity: current <= 0 ? 0.35 : 1 }}>← Anterior</button>
+      <div style={{ padding: '8px 16px 10px', borderTop: 'var(--hairline)' }}>
         {step?.type === 'role' && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--bone-300)', whiteSpace: 'nowrap', cursor: 'pointer', marginRight: 'auto' }}>
-            <input type="checkbox" checked={completed.has(current)} onChange={e => {
-              const c = new Set(completed);
-              if (e.target.checked) c.add(current); else c.delete(current);
-              setCompleted(c);
-            }} />
-            Desperté
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--bone-300)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={completed.has(current)} onChange={e => {
+                const c = new Set(completed);
+                if (e.target.checked) c.add(current); else c.delete(current);
+                setCompleted(c);
+              }} />
+              Desperté
+            </label>
+            {step.actor.discordId && (
+              <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: step.actor.id })}
+                className="btn-action primary" style={{ fontSize: 11, padding: '4px 10px' }}>🚪 Ir a su habitación</button>
+            )}
+          </div>
         )}
-        {step?.type === 'role' && step.actor.discordId && (
-          <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: step.actor.id })}
-            className="btn-action primary" style={{ flex: 1.4 }}>🚪 Ir a su habitación</button>
-        )}
-        <button onClick={() => setIdx(Math.min(total - 1, current + 1))} disabled={current >= total - 1}
-          className="btn-action primary" style={{ flex: 1, opacity: current >= total - 1 ? 0.35 : 1 }}>Siguiente →</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setIdx(Math.max(0, current - 1))} disabled={current <= 0}
+            className="btn-action" style={{ flex: 1, opacity: current <= 0 ? 0.35 : 1 }}>← Anterior</button>
+          <button onClick={() => setIdx(Math.min(total - 1, current + 1))} disabled={current >= total - 1}
+            className="btn-action primary" style={{ flex: 1, opacity: current >= total - 1 ? 0.35 : 1 }}>Siguiente →</button>
+        </div>
       </div>
     </div>
   );
@@ -491,6 +493,12 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
     case 'P_CHAMBERMAID':return <ChambermaidPanel actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_PO':         return <POPanel          actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_PHILOSOPHER':return <PhilosopherPanel actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_YESNO':      return <YesNoPanel       actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_GAMBLER':    return <GamblerPanel     actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_GOSSIP':     return <GossipPanel      actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_COURTIER':   return <CourtierPanel    actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_MOONCHILD':  return <MoonchildPanel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_NOBLE':      return <NoblePanel       actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     default:             return null;
   }
 }
@@ -655,7 +663,11 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
 
   const pool = pattern.deadOnly
     ? game.players.filter(p => !p.alive)
-    : game.players.filter(p => p.alive && (pattern.notSelf ? p.id !== actor.id : true));
+    : game.players.filter(p =>
+        p.alive &&
+        (pattern.notSelf ? p.id !== actor.id : true) &&
+        (pattern.evilOnly && !actor.poisoned ? p.alignment === 'evil' : true)
+      );
 
   const infoLabels = {
     POISONER_ACTION:          n => `🧪 Envenenador\nEnvenenaste a ${n} esta noche.`,
@@ -684,6 +696,7 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
     PREACHER:                 n => `⛪ Predicador\nEligió a ${n} esta noche.`,
     NIGHTWATCHMAN:            n => `🔦 Guardián Nocturno\nInformó a ${n} de su identidad.`,
     HIGH_PRIESTESS:           n => `🌙 Alta Sacerdotisa\nJugador a mostrar al Rey esta noche: ${n}.`,
+    BOUNTY_HUNTER_REVEAL:     n => `💰 Cazarrecompensas\nRevela a ${n} como jugador malvado.`,
   };
 
   const confirm = () => {
@@ -1041,6 +1054,249 @@ function PhilosopherPanel({ actor, pattern, game, send, roleName }) {
         setOk(true);
       }} disabled={!roleId || ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: (roleId && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_YESNO — decisión binaria del Narrador (Manitas, etc.)
+function YesNoPanel({ actor, pattern, send, roleName }) {
+  const [val, setVal] = useState('');
+  const [ok, setOk] = useState(false);
+  const chosen = val === 'yes' ? (pattern.yesLabel || 'SÍ') : val === 'no' ? (pattern.noLabel || 'NO') : null;
+  const info = chosen ? `${pattern.emoji} ${roleName}\n${pattern.label}: ${chosen}.` : null;
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Anotado' : pattern.label}</p>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        <button onClick={() => { setVal('yes'); setOk(false); }} className="btn-night"
+          style={{ flex: 1, fontSize: 12, borderColor: val === 'yes' ? 'var(--blood-hi)' : undefined, color: val === 'yes' ? 'var(--blood-hi)' : undefined }}>
+          {pattern.yesLabel || 'SÍ'}
+        </button>
+        <button onClick={() => { setVal('no'); setOk(false); }} className="btn-night"
+          style={{ flex: 1, fontSize: 12, borderColor: val === 'no' ? 'var(--good)' : undefined, color: val === 'no' ? 'var(--good)' : undefined }}>
+          {pattern.noLabel || 'NO'}
+        </button>
+      </div>
+      <button onClick={() => { if (info) { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: info }); setOk(true); } }}
+        disabled={!info} className="btn-action primary" style={{ ...btnPrimary, opacity: info ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_GAMBLER — Tahúr: elige jugador + personaje, muestra si la apuesta es correcta
+function GamblerPanel({ actor, pattern, game, send, roleName }) {
+  const [targetId, setTargetId] = useState('');
+  const [guessRoleId, setGuessRoleId] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const pool = game.players.filter(p => p.alive && p.id !== actor.id);
+  // All roles in play (campaign + any cross-edition players bring)
+  const rolesInPlay = [];
+  const seen = new Set();
+  for (const pl of game.players) {
+    const def = ROLE_BY_ID[pl.role];
+    if (def && !seen.has(def.id)) { seen.add(def.id); rolesInPlay.push(def); }
+  }
+  // Also add campaign roles not in play for guessing
+  for (const r of (game.campaignRoles || [])) {
+    if (!seen.has(r.id)) { seen.add(r.id); rolesInPlay.push(r); }
+  }
+
+  const target = game.players.find(p => p.id === targetId);
+  const guessCorrect = target && guessRoleId && !actor.poisoned && target.role === guessRoleId;
+  const guessWrong   = target && guessRoleId && (actor.poisoned || target.role !== guessRoleId);
+  const can = targetId && guessRoleId;
+
+  const buildInfo = () => {
+    const rname = ROLE_BY_ID[guessRoleId]?.name || guessRoleId;
+    return `🎲 Tahúr\n${actor.name} apostó: ${target?.name} es ${rname}. ${guessCorrect ? 'CORRECTO — no muere.' : 'INCORRECTO — ¡muere esta noche!'}`;
+  };
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Resultado registrado' : 'Tahúr — apuesta de esta noche'}</p>
+      {actor.poisoned && poisonNote}
+      <select style={selStyle} value={targetId} onChange={e => { setTargetId(e.target.value); setGuessRoleId(''); setOk(false); }}>
+        <option value="">Jugador apostado…</option>
+        {pool.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <select style={selStyle} value={guessRoleId} onChange={e => { setGuessRoleId(e.target.value); setOk(false); }}>
+        <option value="">Personaje que adivina…</option>
+        {rolesInPlay.sort((a, b) => a.name.localeCompare(b.name)).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
+      {can && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 13, fontWeight: 700, textAlign: 'center', margin: '4px 0',
+            color: guessCorrect ? 'var(--good)' : 'var(--blood-hi)' }}>
+          {guessCorrect ? '✅ CORRECTO — el Tahúr no muere' : '💀 INCORRECTO — el Tahúr muere esta noche'}
+        </p>
+      )}
+      <button onClick={() => { if (!can) return; send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: buildInfo() }); setOk(true); }}
+        disabled={!can || ok} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_GOSSIP — Cotilla: ¿declaración verdadera? → si sí, elige quién muere
+function GossipPanel({ actor, pattern, game, send, roleName }) {
+  const [triggered, setTriggered] = useState(null);
+  const [targetId, setTargetId] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const pool = game.players.filter(p => p.alive && p.id !== actor.id);
+
+  const buildInfo = () => {
+    if (!triggered) return null;
+    if (triggered === 'no') return `💬 Cotilla\nDeclaración pública no verdadera (o Cotilla envenenada). No hay muerte.`;
+    const tname = game.players.find(p => p.id === targetId)?.name;
+    return `💬 Cotilla\nDeclaración verdadera — muere ${tname} esta noche.`;
+  };
+  const can = triggered === 'no' || (triggered === 'yes' && targetId);
+  const info = buildInfo();
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Anotado' : 'Cotilla — ¿se activa hoy?'}</p>
+      {actor.poisoned && poisonNote}
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '0 0 6px', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
+        ¿Algún jugador hizo una declaración pública verdadera hoy?
+      </p>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        {[['yes', '✅ SÍ — se activa'], ['no', '❌ NO — sin efecto']].map(([v, lbl]) => (
+          <button key={v} onClick={() => { setTriggered(v); setTargetId(''); setOk(false); }} className="btn-night"
+            style={{ flex: 1, fontSize: 11, borderColor: triggered === v ? 'var(--gold)' : undefined, color: triggered === v ? 'var(--gold-hot)' : undefined }}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+      {triggered === 'yes' && !actor.poisoned && (
+        <select style={selStyle} value={targetId} onChange={e => { setTargetId(e.target.value); setOk(false); }}>
+          <option value="">¿Quién muere esta noche?</option>
+          {pool.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+      <button onClick={() => { if (!can || !info) return; send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: info }); setOk(true); }}
+        disabled={!can || ok} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_COURTIER — Cortesano: elige un personaje (no jugador) que queda borracho 3 noches
+function CourtierPanel({ actor, pattern, game, send, roleName }) {
+  const [guessRoleId, setGuessRoleId] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const rolesInPlay = [];
+  const seen = new Set();
+  for (const pl of game.players) {
+    const def = ROLE_BY_ID[pl.role];
+    if (def && pl.id !== actor.id && !seen.has(def.id)) { seen.add(def.id); rolesInPlay.push(def); }
+  }
+
+  const targetPlayer = guessRoleId ? game.players.find(p => p.role === guessRoleId) : null;
+  const chosenDef = ROLE_BY_ID[guessRoleId];
+
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Registrado (una vez)' : 'Cortesano — elegir personaje a borrachar'}</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '0 0 6px', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
+        Una sola vez por partida. El personaje elegido queda borracho 3 noches + 3 días.
+      </p>
+      <select style={selStyle} value={guessRoleId} onChange={e => { setGuessRoleId(e.target.value); setOk(false); }}>
+        <option value="">Personaje elegido…</option>
+        {rolesInPlay.sort((a, b) => a.name.localeCompare(b.name)).map(r => <option key={r.id} value={r.id}>{r.name} ({game.players.find(p => p.role === r.id)?.name || '?'})</option>)}
+      </select>
+      {targetPlayer && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: '#fbbf24', margin: '4px 0' }}>
+          ⚠ {targetPlayer.name} ({chosenDef?.name}) queda borracho 3 noches + 3 días.
+        </p>
+      )}
+      <button onClick={() => {
+        if (!guessRoleId || !chosenDef) return;
+        const tp = targetPlayer?.name || '(desconocido)';
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🎴 Cortesano\nEligió: ${chosenDef.name} (${tp}). Borracho 3 noches + 3 días.` });
+        setOk(true);
+      }} disabled={!guessRoleId || ok} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: (guessRoleId && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_MOONCHILD — Lunático: si murió, elige quién muere al amanecer
+function MoonchildPanel({ actor, pattern, game, send, roleName }) {
+  const [died, setDied] = useState(null);
+  const [targetId, setTargetId] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const pool = game.players.filter(p => p.alive && p.id !== actor.id);
+  const can = died === false || (died === true && targetId);
+
+  const buildInfo = () => {
+    if (!died) return `🌙 Lunático\nNo murió esta noche — sin efecto.`;
+    const tname = game.players.find(p => p.id === targetId)?.name;
+    return `🌙 Lunático\nMurió esta noche. Al amanecer muere: ${tname}.`;
+  };
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Anotado' : 'Lunático — ¿murió esta noche?'}</p>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        {[[true, '💀 Sí murió'], [false, '✅ No murió']].map(([v, lbl]) => (
+          <button key={String(v)} onClick={() => { setDied(v); setTargetId(''); setOk(false); }} className="btn-night"
+            style={{ flex: 1, fontSize: 12, borderColor: died === v ? (v ? 'var(--blood-hi)' : 'var(--good)') : undefined, color: died === v ? (v ? 'var(--blood-hi)' : 'var(--good)') : undefined }}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+      {died === true && (
+        <select style={selStyle} value={targetId} onChange={e => { setTargetId(e.target.value); setOk(false); }}>
+          <option value="">¿Quién muere al amanecer?</option>
+          {pool.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+      <button onClick={() => {
+        if (!can) return;
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: buildInfo() });
+        setOk(true);
+      }} disabled={!can || ok} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_NOBLE — Noble: elige 3 jugadores donde exactamente 1 es malvado (primera noche)
+function NoblePanel({ actor, pattern, game, send, roleName }) {
+  const [t1, setT1] = useState('');
+  const [t2, setT2] = useState('');
+  const [t3, setT3] = useState('');
+  const [ok, setOk] = useState(false);
+
+  const pool = game.players.filter(p => p.alive && p.id !== actor.id);
+  const selected = [t1, t2, t3].filter(Boolean);
+  const can = t1 && t2 && t3 && new Set([t1, t2, t3]).size === 3;
+  const evilCount = selected.filter(id => game.players.find(p => p.id === id)?.alignment === 'evil').length;
+  const validCombo = actor.poisoned || evilCount === 1;
+
+  const n = id => game.players.find(p => p.id === id)?.name || '?';
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Info confirmada' : 'Noble — elegir 3 jugadores (1 malvado)'}</p>
+      {actor.poisoned && poisonNote}
+      {[['Jugador 1', t1, setT1, t2, t3], ['Jugador 2', t2, setT2, t1, t3], ['Jugador 3', t3, setT3, t1, t2]].map(([lbl, val, setter, ex1, ex2]) => (
+        <select key={lbl} style={selStyle} value={val} onChange={e => { setter(e.target.value); setOk(false); }}>
+          <option value="">{lbl}…</option>
+          {pool.filter(p => p.id !== ex1 && p.id !== ex2).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      ))}
+      {can && !actor.poisoned && !validCombo && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--blood-hi)', margin: '2px 0' }}>
+          ⚠ Selección inválida: debe haber exactamente 1 malvado entre los 3 ({evilCount} seleccionados).
+        </p>
+      )}
+      <button onClick={() => {
+        if (!can || !validCombo) return;
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🎭 Noble\nMostrados: ${n(t1)}, ${n(t2)}, ${n(t3)}. Exactamente 1 es malvado real.` });
+        setOk(true);
+      }} disabled={!can || !validCombo || ok} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: (can && validCombo && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
     </div>
   );
 }

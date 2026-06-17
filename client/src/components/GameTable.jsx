@@ -147,15 +147,10 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
             onError={e => { e.target.style.display = 'none'; }} />
         )}
 
-        {/* Contadores discretos (capa limpia): fichas y sospechas. Detalle al click. */}
-        {(tokenCount > 0 || suspicionCount > 0) && (
+        {/* Sospechas: contador pequeño */}
+        {suspicionCount > 0 && (
           <div className="seat-counters">
-            {tokenCount > 0 && (
-              <span className="seat-counter tokens" title={`${tokenCount} ficha(s) de efecto — clic para ver`}>● {tokenCount}</span>
-            )}
-            {suspicionCount > 0 && (
-              <span className="seat-counter suspicions" title={`${suspicionCount} sospecha(s) — clic para ver`}>👁 {suspicionCount}</span>
-            )}
+            <span className="seat-counter suspicions" title={`${suspicionCount} sospecha(s) — clic para ver`}>👁 {suspicionCount}</span>
           </div>
         )}
 
@@ -166,6 +161,22 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
           </div>
         )}
       </div>
+
+      {/* Fichas de efecto: íconos circulares bajo la foto */}
+      {isNarrator && (player.tokens || []).length > 0 && (
+        <div className="seat-token-row">
+          {(player.tokens || []).slice(0, 4).map((t, i) => {
+            const tImg = t.img || ROLE_BY_ID[t.roleId]?.img;
+            return tImg
+              ? <img key={i} src={tImg} className="seat-token-icon" title={t.label}
+                     onError={e => { e.target.style.display = 'none'; }} />
+              : <span key={i} className="seat-token-dot" title={t.label}>●</span>;
+          })}
+          {(player.tokens || []).length > 4 && (
+            <span className="seat-token-overflow">+{(player.tokens || []).length - 4}</span>
+          )}
+        </div>
+      )}
 
       {/* Role token mini-badge */}
       {role && (isNarrator || isMe) && (

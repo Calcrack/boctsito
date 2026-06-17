@@ -6,6 +6,32 @@ import StatusChips from './StatusChips';
 
 const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 
+// Auto-aplica fichas recordatorias al confirmar una acción nocturna.
+// Usa campaign.reminders[roleId] como fuente de verdad; si no hay reminders definidos → no-op.
+function fireAutoTokens(send, actor, targetIds, game) {
+  const campaign = getCampaign(game.campaignId);
+  const roleId = actor.role;
+  const reminders = campaign.reminders?.[roleId];
+  if (!reminders || reminders.length === 0) return;
+  const role = ROLE_BY_ID[roleId];
+  reminders.forEach((t, idx) => {
+    const pid = targetIds[idx] ?? targetIds[0];
+    if (!pid) return;
+    send('ADD_TOKEN', {
+      playerId: pid,
+      token: {
+        instanceId: `${roleId}:${t.id}:${Date.now() + idx}`,
+        tokenId: t.id,
+        roleId,
+        roleName: role?.name || roleId,
+        img: role?.img,
+        label: t.label,
+        duration: t.duration || 'night',
+      },
+    });
+  });
+}
+
 // Orden global BotC (todas las ediciones combinadas, posiciones oficiales).
 // Usado para insertar roles cross-edition en el lugar correcto.
 const GLOBAL_FIRST_NIGHT_ORDER = [
@@ -122,17 +148,17 @@ const NIGHT_ROLE_PATTERN = {
   COOK:           { kind: 'P1', what: 'evilPairs',      emoji: '🍳', label: 'pareja(s) de vecinos malvados' },
   EMPATH:         { kind: 'P1', what: 'evilNeighbors',  emoji: '💞', label: 'vecino(s) malvado(s) vivos' },
   UNDERTAKER:     { kind: 'P1', what: 'executedRole',   emoji: '⚰️' },
-  POISONER:       { kind: 'P3', effect: 'POISONER_ACTION', emoji: '🧪', label: 'Envenenar a', notSelf: false },
-  MONK:           { kind: 'P3', effect: 'MONK_PROTECT',    emoji: '🛡️', label: 'Proteger a',  notSelf: true  },
+  POISONER:       { kind: 'P3', effect: 'POISONER_ACTION', emoji: '🧪', label: 'Envenenar a', notSelf: false, autoToken: true },
+  MONK:           { kind: 'P3', effect: 'MONK_PROTECT',    emoji: '🛡️', label: 'Proteger a',  notSelf: true,  autoToken: true },
   IMP:            { kind: 'P3', effect: 'IMP_KILL',        emoji: '👹', label: 'Atacar a',    notSelf: false },
-  BUTLER:         { kind: 'P3', effect: 'BUTLER_MASTER',   emoji: '🤵', label: 'Amo de',      notSelf: true  },
+  BUTLER:         { kind: 'P3', effect: 'BUTLER_MASTER',   emoji: '🤵', label: 'Amo de',      notSelf: true,  autoToken: true },
   FORTUNE_TELLER: { kind: 'P4', emoji: '🔮' },
   SPY:            { kind: 'P_INFO', emoji: '🕵️',
                     note: 'Mostrar el Grimorio completo al Espía esta noche.' },
   SCARLET_WOMAN:  { kind: 'P_INFO', emoji: '💄',
                     note: '¿El Diablillo murió con ≥5 jugadores vivos? Si SÍ → esta jugadora se convierte automáticamente en el nuevo Diablillo.' },
   // ── BMR demons ──────────────────────────────────────────────────────────
-  PUKKA:    { kind: 'P3', effect: 'PUKKA_POISON',    emoji: '🕸️', label: 'Envenenar a', notSelf: false,
+  PUKKA:    { kind: 'P3', effect: 'PUKKA_POISON',    emoji: '🕸️', label: 'Envenenar a', notSelf: false, autoToken: true,
               note: 'Primero: el envenenado de anoche muere ahora. Luego elige a quién envenenar esta noche.' },
   ZOMBUUL:  { kind: 'P3', effect: 'ZOMBUUL_KILL',    emoji: '🧟', label: 'Atacar a',    notSelf: false,
               note: 'Solo actúa si nadie murió de día. Su 1ª "muerte" lo deja muerto-vivo (sigue activo).' },
@@ -165,12 +191,12 @@ const NIGHT_ROLE_PATTERN = {
   TINKER:          { kind: 'P_YESNO', emoji: '🔧', label: '¿Muere el Manitas esta noche?',
                      yesLabel: '💀 Muere', noLabel: '✅ Vive esta noche' },
   GRANDMOTHER:     { kind: 'P3',     effect: 'GRANDMOTHER_INFO',          emoji: '👵', label: 'Nieto',               notSelf: true,  firstNightOnly: true },
-  SAILOR:          { kind: 'P3',     effect: 'SAILOR_DRUNK',              emoji: '⚓', label: 'Emborrachar a',       notSelf: true,
+  SAILOR:          { kind: 'P3',     effect: 'SAILOR_DRUNK',              emoji: '⚓', label: 'Emborrachar a',       notSelf: true, autoToken: true,
                      note: 'Tú O el elegido quedáis borrachos (Narrador decide). Pierdes inmunidad si eres tú el borracho.' },
   CHAMBERMAID:     { kind: 'P_CHAMBERMAID', emoji: '🛎️' },
-  EXORCIST:        { kind: 'P3',     effect: 'EXORCIST_CHOOSE',           emoji: '✝️', label: 'Elegir a',            notSelf: true,
+  EXORCIST:        { kind: 'P3',     effect: 'EXORCIST_CHOOSE',           emoji: '✝️', label: 'Elegir a',            notSelf: true, autoToken: true,
                      note: 'Si es el Demonio: informarle quién eres + suprimir su ataque. Si no: nada (no dar señal).' },
-  INNKEEPER:       { kind: 'P3x2',   effect: 'INNKEEPER_PROTECT',         emoji: '🏨',
+  INNKEEPER:       { kind: 'P3x2',   effect: 'INNKEEPER_PROTECT',         emoji: '🏨', autoToken: true,
                      note: 'Ambos quedan protegidos de toda muerte nocturna. Narrador elige cuál de los 2 queda borracho.' },
   GAMBLER:         { kind: 'P_GAMBLER', emoji: '🎲' },
   GOSSIP:          { kind: 'P_GOSSIP', emoji: '💬' },
@@ -188,14 +214,14 @@ const NIGHT_ROLE_PATTERN = {
   // ── BMR esbirros ─────────────────────────────────────────────────────────
   GODFATHER:       { kind: 'P3',     effect: 'GODFATHER_KILL',            emoji: '🎩', label: 'Atacar a',            notSelf: false,
                      note: 'Solo actúa si murió un Forastero de día. Primera noche: ver Forasteros en el paso de info del mal.' },
-  DEVILS_ADVOCATE: { kind: 'P3',     effect: 'DEVILS_ADVOCATE_PROTECT',   emoji: '⚖️', label: 'Proteger ejecución a', notSelf: false,
+  DEVILS_ADVOCATE: { kind: 'P3',     effect: 'DEVILS_ADVOCATE_PROTECT',   emoji: '⚖️', label: 'Proteger ejecución a', notSelf: false, autoToken: true,
                      note: 'No puede repetir al mismo jugador de anoche. Token "Sobrevive ejecución" hasta el crepúsculo siguiente.' },
   ASSASSIN:        { kind: 'P3',     effect: 'ASSASSIN_KILL',             emoji: '🗡️', label: 'Matar a',             notSelf: false,
                      note: 'Una sola vez. Ignora TODA protección (Soldado, Monje, Posadero…). Marcar "usado".' },
   // ── S&V aldeanos ─────────────────────────────────────────────────────────
   CLOCKMAKER:      { kind: 'P1',     what: 'distance',   emoji: '⏰', label: 'asiento(s) entre el Demonio y su Esbirro más cercano' },
   DREAMER:         { kind: 'P_DREAMER', emoji: '💭' },
-  SNAKE_CHARMER:   { kind: 'P3',     effect: 'SNAKE_CHARMER',             emoji: '🐍', label: 'Elegir a',            notSelf: true,
+  SNAKE_CHARMER:   { kind: 'P3',     effect: 'SNAKE_CHARMER',             emoji: '🐍', label: 'Elegir a',            notSelf: true, autoToken: true,
                      note: 'Si es el Demonio: intercambian personaje + alineación. Encantador → Demonio (malo). Demonio → Encantador (envenenado). Si no: nada.' },
   MATHEMATICIAN:   { kind: 'P1',     what: 'abnormal',   emoji: '🧮', label: 'habilidad(es) que funcionaron de forma anormal esta noche' },
   FLOWERGIRL:      { kind: 'P1',     what: 'yesno',      emoji: '🌸', label: '¿Votó el Demonio hoy?' },
@@ -206,7 +232,7 @@ const NIGHT_ROLE_PATTERN = {
   PHILOSOPHER:     { kind: 'P_PHILOSOPHER', emoji: '📜' },
   JUGGLER:         { kind: 'P1',     what: 'abnormal',   emoji: '🤹', label: 'acierto(s) en las adivinanzas del día 1' },
   // ── S&V esbirros ─────────────────────────────────────────────────────────
-  WITCH:           { kind: 'P3',     effect: 'WITCH_CURSE',               emoji: '🧙‍♀️', label: 'Maldecir a',         notSelf: false,
+  WITCH:           { kind: 'P3',     effect: 'WITCH_CURSE',               emoji: '🧙‍♀️', label: 'Maldecir a',         notSelf: false, autoToken: true,
                      note: 'Si nomina mañana, muere inmediatamente. Con ≤3 vivos: habilidad desactivada.' },
   CERENOVUS:       { kind: 'P_INFO', emoji: '🧠',
                      note: 'Elige jugador + personaje bueno. Mañana debe actuar como ese personaje, so pena de ejecución por el Narrador.' },
@@ -248,7 +274,7 @@ const NIGHT_ROLE_PATTERN = {
   NOBLE:           { kind: 'P_NOBLE', emoji: '🎭', firstNightOnly: true },
   POPPY_GROWER:    { kind: 'P_INFO', emoji: '🌺',
                      note: 'Pasivo. Info mutua del mal suprimida mientras viva. Al morir: activar sesión de info del mal esa misma noche.' },
-  PREACHER:        { kind: 'P3',     effect: 'PREACHER',                  emoji: '⛪', label: 'Elegir a',            notSelf: true,
+  PREACHER:        { kind: 'P3',     effect: 'PREACHER',                  emoji: '⛪', label: 'Elegir a',            notSelf: true, autoToken: true,
                      note: 'Si es Esbirro: responder SÍ + desactivar su habilidad mientras el Predicador viva.' },
   // ── Carousel forasteros con paso nocturno ────────────────────────────────
   PUZZLEMASTER:    { kind: 'P_INFO', emoji: '🧩',
@@ -260,7 +286,7 @@ const NIGHT_ROLE_PATTERN = {
   RIOT:          { kind: 'P_INFO', emoji: '⚔️',
                    note: 'Recuerda: las nominaciones matan durante el día. La ejecución falla si solo votaron malvados. RIOT puede nominar.' },
   // ── Carousel esbirros ────────────────────────────────────────────────────
-  FEARMONGER:      { kind: 'P3',     effect: 'FEARMONGER',                emoji: '😨', label: 'Objetivo del miedo',  notSelf: false,
+  FEARMONGER:      { kind: 'P3',     effect: 'FEARMONGER',                emoji: '😨', label: 'Objetivo del miedo',  notSelf: false, autoToken: true,
                      note: 'Si el Fearmonger nomina Y ejecuta a este mismo jugador: el Bien gana.' },
   HARPY:           { kind: 'P3x2',   effect: 'HARPY',                     emoji: '🦅',
                      note: 'Mañana el Jugador 1 "cree que" el Jugador 2 es malvado.' },
@@ -270,7 +296,7 @@ const NIGHT_ROLE_PATTERN = {
                      note: 'Decide si queda borracho esta noche. Recordar: todos los jugadores votan con ojos cerrados mientras viva.' },
   SUMMONER:        { kind: 'P_INFO', emoji: '🌀',
                      note: 'Noche 1: dar 3 bluffs. Noche 3: el Invocador elige 1 jugador + tipo de Demonio → ese jugador pasa a ser el Demonio.' },
-  WIDOW:           { kind: 'P3',     effect: 'WIDOW_POISON',              emoji: '🕷️', label: 'Envenenar permanente a', notSelf: false,
+  WIDOW:           { kind: 'P3',     effect: 'WIDOW_POISON',              emoji: '🕷️', label: 'Envenenar permanente a', notSelf: false, autoToken: true,
                      note: 'Primera noche. Ver Grimorio completo. El elegido queda envenenado permanentemente. Informar a 1 bueno al azar: "hay una Viuda".' },
   YAGGABABBLE:     { kind: 'P_INFO', emoji: '🗣️',
                      note: 'Registrar cuántas veces dijo la frase hoy. Esa noche: hasta N ataques opcionales (uno por repetición).' },
@@ -705,6 +731,7 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
     const fallback = n => `${pattern.emoji} ${roleName || ''}\n${pattern.label} ${n} esta noche.`;
     const nightInfo = (infoLabels[pattern.effect] || fallback)(tname);
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [targetId], nightInfo });
+    if (pattern.autoToken) fireAutoTokens(send, actor, [targetId], game);
     setOk(true);
   };
   return (
@@ -745,6 +772,7 @@ function P3x2Panel({ actor, pattern, game, send, roleName }) {
     const n1 = game.players.find(p => p.id === t1)?.name;
     const n2 = game.players.find(p => p.id === t2)?.name;
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [t1, t2], nightInfo: buildInfo(n1, n2) });
+    if (pattern.autoToken) fireAutoTokens(send, actor, [t1, t2], game);
     setOk(true);
   };
   return (
@@ -807,6 +835,10 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
     const payload = { actorId: actor.id, nightInfo: buildInfo() };
     if (!isSameAlign && isFirstNight && redHerring) payload.redHerringSeatId = redHerring;
     send('NIGHT_NARRATOR_ACTION', payload);
+    if (isSameAlign) {
+      const role = ROLE_BY_ID[actor.role];
+      send('ADD_TOKEN', { playerId: actor.id, token: { instanceId: `${actor.role}:NO_ABILITY:${Date.now()}`, tokenId: 'NO_ABILITY', roleId: actor.role, roleName: role?.name, img: role?.img, label: 'Sin habilidad', duration: 'oneShot' } });
+    }
     setOk(true);
   };
   return (

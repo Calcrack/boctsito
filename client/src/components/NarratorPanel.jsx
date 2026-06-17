@@ -460,14 +460,14 @@ export default function NarratorPanel() {
 
       {/* ── Right panel — "Guía" (única fuente de instrucciones de noche) ── */}
       <aside className="right-panel">
+        {/* Efectos diferidos y avisos urgentes (antes fija abajo, ahora inline) */}
+        <AlertsInline game={game} send={send} />
+
         {/* Guía: una acción a la vez, centro de mando del narrador */}
         {isNight && <NightWalkthrough onActiveActor={setActiveNightActorId} />}
 
         {/* Mapa de sospechas (agregado) */}
         <SuspicionMap players={players} />
-
-        {/* Log de auditoría de estados/fichas */}
-        {Array.isArray(game.statusLog) && game.statusLog.length > 0 && <StatusLogPanel log={game.statusLog} />}
 
         {/* Night deaths summary */}
         {nightDeaths.length > 0 && (
@@ -491,8 +491,6 @@ export default function NarratorPanel() {
 
       </aside>
 
-      {/* ── Barra de alertas (abajo): sólo cuando hay decisión/consecuencia pendiente ── */}
-      <AlertsBar game={game} send={send} />
     </div>
   );
 }
@@ -760,10 +758,8 @@ function ManualNominateCard({ game, send }) {
   );
 }
 
-// Barra de alertas (abajo): SÓLO aparece cuando hay una decisión/consecuencia pendiente.
-// Pendientes = avisos warn/danger + efectos diferidos (Po/Pukka…) + opciones de registro.
-// Las notas contextuales (info) se fusionan dentro del paso activo de la Guía.
-function AlertsBar({ game, send }) {
+// Alertas inline (top del panel derecho): avisos urgentes + efectos diferidos.
+function AlertsInline({ game, send }) {
   const advice = (game.advice || []).filter(a => a.severity === 'warn' || a.severity === 'danger');
   const deferred = game.deferredEffects || [];
   const options = game.deferredOptions || [];
@@ -771,27 +767,25 @@ function AlertsBar({ game, send }) {
   if (advice.length === 0 && deferred.length === 0 && options.length === 0) return null;
 
   return (
-    <div className="alerts-bar">
-      <span className="alerts-bar-tag">⚠ Pendiente</span>
-      <div className="alerts-bar-items">
-        {advice.map((a, i) => (
-          <span key={'a' + i} className="alerts-bar-item">{a.text}</span>
-        ))}
-        {deferred.map(d => (
-          <span key={d.id} className="alerts-bar-item action">
-            {d.label}
-            <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9, marginLeft: 6 }}>✓ Hecho</button>
-          </span>
-        ))}
-        {options.map(o => (
-          <button key={o.role}
-            onClick={() => send('ADD_DEFERRED', { label: o.label, dueNight: game.nightNumber + (o.dueOffset || 1), sourcePlayerId: o.sourcePlayerId, role: o.role, severity: 'warn' })}
-            className="btn-night" style={{ fontSize: 9, flexShrink: 0 }}
-            title={o.label}>
-            + {o.roleName}: {o.trigger}
-          </button>
-        ))}
-      </div>
+    <div style={{ padding: '6px 10px', background: 'rgba(168,58,45,0.18)', borderBottom: 'var(--hairline)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--blood-hi)', textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}>⚠ Pendiente</span>
+      {advice.map((a, i) => (
+        <span key={'a' + i} style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', whiteSpace: 'nowrap' }}>{a.text}</span>
+      ))}
+      {deferred.map(d => (
+        <span key={d.id} style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-50)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {d.label}
+          <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9 }}>✓ Hecho</button>
+        </span>
+      ))}
+      {options.map(o => (
+        <button key={o.role}
+          onClick={() => send('ADD_DEFERRED', { label: o.label, dueNight: game.nightNumber + (o.dueOffset || 1), sourcePlayerId: o.sourcePlayerId, role: o.role, severity: 'warn' })}
+          className="btn-night" style={{ fontSize: 9 }}
+          title={o.label}>
+          + {o.roleName}: {o.trigger}
+        </button>
+      ))}
     </div>
   );
 }
@@ -830,28 +824,6 @@ function SuspicionMap({ players }) {
   );
 }
 
-// Log de auditoría de fichas/estados (aplicación y limpieza).
-function StatusLogPanel({ log }) {
-  const [open, setOpen] = useState(false);
-  const recent = log.slice(-40).reverse();
-  return (
-    <div style={{ border: 'var(--hairline-bone)', borderRadius: 4, overflow: 'hidden' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', cursor: 'pointer', background: 'rgba(0,0,0,0.2)' }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-300)' }}>📜 Log de estados ({log.length})</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
-      </div>
-      {open && (
-        <div style={{ maxHeight: 200, overflowY: 'auto', padding: '6px 10px' }}>
-          {recent.map((e, i) => (
-            <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', margin: '2px 0' }}>
-              <span style={{ color: 'var(--bone-600)', fontFamily: 'var(--mono)', fontSize: 9 }}>N{e.night}/D{e.day} </span>{e.message}
-            </p>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Importar campaña personalizada: pegar JSON del script (formato BotC).
 function ImportCampaignBox({ send, importResult }) {

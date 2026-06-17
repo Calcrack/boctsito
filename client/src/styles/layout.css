@@ -239,39 +239,26 @@ input, textarea { font-family: inherit; color: inherit; }
 }
 .panel-label .count { color: var(--bone-400); font-size: 13px; }
 
-/* ── ALERTS BAR (abajo) — sólo visible cuando hay pendientes ────────── */
-.alerts-bar {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 60;
+/* ── FICHAS EN GRIMORIO (bajo la foto del jugador) ──────────────────── */
+.seat-token-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: linear-gradient(to top, rgba(168,58,45,0.22), rgba(8,9,16,0.97));
-  border-top: 1px solid var(--blood-dim);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 -6px 24px rgba(0,0,0,0.5);
+  justify-content: center;
+  gap: 2px;
+  margin: 2px 0 1px;
+  position: relative;
+  z-index: 2;
 }
-.alerts-bar-tag {
-  font-family: var(--mono);
-  font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
-  color: var(--blood-hi); flex-shrink: 0;
+.seat-token-icon {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: var(--ink-700);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
-.alerts-bar-items {
-  display: flex; align-items: center; gap: 16px;
-  overflow-x: auto; flex: 1; min-width: 0;
-}
-.alerts-bar-item {
-  font-family: var(--serif); font-size: 13px; color: var(--bone-100);
-  white-space: nowrap; display: inline-flex; align-items: center; flex-shrink: 0;
-}
-.alerts-bar-item.action { color: var(--bone-50); }
-
-/* Reserva espacio al pie sólo cuando la barra está presente (sin saltos) */
-.app-shell.has-alerts .left-panel,
-.app-shell.has-alerts .right-panel { padding-bottom: 56px; }
-.app-shell.has-alerts .stage { padding-bottom: 44px; }
+.seat-token-dot { font-size: 7px; color: var(--bone-400); }
+.seat-token-overflow { font-size: 8px; color: var(--bone-500); font-family: var(--mono); }
 
 /* ── WIZARD DE MONTAJE (modal central, scroll propio) ───────────────── */
 .wizard-overlay {

@@ -3,6 +3,7 @@ const troubleBrewing = require('./troubleBrewing');
 const badMoonRising  = require('./badMoonRising');
 const sectsViolets   = require('./sectsViolets');
 const carousel       = require('./carousel');
+const travelers      = require('./travelers');
 
 const CAMPAIGNS = {
   [troubleBrewing.id]: troubleBrewing,
@@ -23,6 +24,9 @@ for (const c of Object.values(CAMPAIGNS)) {
   for (const [id, role] of Object.entries(c.roles)) {
     if (!ALL_ROLES[id]) ALL_ROLES[id] = role;
   }
+}
+for (const [id, role] of Object.entries(travelers.roles)) {
+  if (!ALL_ROLES[id]) ALL_ROLES[id] = role;
 }
 
 // Registro dinámico de campañas personalizadas (mutando los objetos compartidos

@@ -758,13 +758,13 @@ function ManualNominateCard({ game, send }) {
   );
 }
 
-// Alertas inline (top del panel derecho): avisos urgentes + efectos diferidos.
+// Alertas inline (top del panel derecho): avisos urgentes + efectos diferidos reales.
+// deferredOptions se excluye — causaba bucle infinito y mostraba la barra siempre.
 function AlertsInline({ game, send }) {
   const advice = (game.advice || []).filter(a => a.severity === 'warn' || a.severity === 'danger');
   const deferred = game.deferredEffects || [];
-  const options = game.deferredOptions || [];
 
-  if (advice.length === 0 && deferred.length === 0 && options.length === 0) return null;
+  if (advice.length === 0 && deferred.length === 0) return null;
 
   return (
     <div style={{ padding: '6px 10px', background: 'rgba(168,58,45,0.18)', borderBottom: 'var(--hairline)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -777,14 +777,6 @@ function AlertsInline({ game, send }) {
           {d.label}
           <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9 }}>✓ Hecho</button>
         </span>
-      ))}
-      {options.map(o => (
-        <button key={o.role}
-          onClick={() => send('ADD_DEFERRED', { label: o.label, dueNight: game.nightNumber + (o.dueOffset || 1), sourcePlayerId: o.sourcePlayerId, role: o.role, severity: 'warn' })}
-          className="btn-night" style={{ fontSize: 9 }}
-          title={o.label}>
-          + {o.roleName}: {o.trigger}
-        </button>
       ))}
     </div>
   );

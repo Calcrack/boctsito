@@ -216,6 +216,7 @@ function SeatStep({ seats, assignments, bag, roleList, moveSeat, assignSeat }) {
 function DecisionsStep({ decisions, seats, assignments, roleList, send }) {
   const goodNotInPlay = roleList.filter(r => r.alignment === 'good' && !Object.values(assignments).includes(r.id) && !ROLE_BY_ID[r.id]?.misperception);
   const demonsInCampaign = roleList.filter(r => r.type === 'demon');
+  const minionsInCampaign = roleList.filter(r => r.type === 'minion');
   const outsidersInPlay = seats.filter(s => ROLE_BY_ID[assignments[s.id]]?.type === 'outsider').map(s => assignments[s.id]);
 
   const setDec = (id, patch) => send('SETUP_SET_DECISION', { id, patch });
@@ -235,15 +236,15 @@ function DecisionsStep({ decisions, seats, assignments, roleList, send }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {decisions.map(d => (
           <DecisionCard key={d.id} d={d} goodNotInPlay={goodNotInPlay} demonsInCampaign={demonsInCampaign}
-            outsidersInPlay={outsidersInPlay} seats={seats} assignments={assignments}
-            nameOf={nameOf} setDec={setDec} suggest={suggest} />
+            minionsInCampaign={minionsInCampaign} outsidersInPlay={outsidersInPlay}
+            seats={seats} assignments={assignments} nameOf={nameOf} setDec={setDec} suggest={suggest} />
         ))}
       </div>
     </div>
   );
 }
 
-function DecisionCard({ d, goodNotInPlay, demonsInCampaign, outsidersInPlay, seats, assignments, nameOf, setDec, suggest }) {
+function DecisionCard({ d, goodNotInPlay, demonsInCampaign, minionsInCampaign, outsidersInPlay, seats, assignments, nameOf, setDec, suggest }) {
   const resolved = isResolved(d);
   const sel = (value, onChange, opts, placeholder) => (
     <select value={value || ''} onChange={e => onChange(e.target.value || null)}
@@ -298,6 +299,42 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, outsidersInPlay, sea
       } else {
         control = <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-400)' }}>{d.secret}</p>;
       }
+      break;
+    case 'puzzlemasterDrunk': {
+      const puzPool = seats.filter(s => s.id !== d.seat);
+      control = sel(d.chosen, v => setDec(d.id, { chosen: v }),
+        puzPool.map(s => ({ v: s.id, l: s.name })), '¿Qué jugador está borracho?');
+      break;
+    }
+    case 'alchemistAbility': {
+      const mAbility = (minionsInCampaign || []).find(r => r.id === d.chosen)?.ability;
+      const selEl = sel(d.chosen, v => setDec(d.id, { chosen: v }),
+        (minionsInCampaign || []).map(r => ({ v: r.id, l: r.name })), '¿Habilidad de qué Esbirro?');
+      control = (
+        <>
+          {selEl}
+          {mAbility && <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', margin: '4px 0 0', fontStyle: 'italic' }}>{mAbility}</p>}
+        </>
+      );
+      break;
+    }
+    case 'boffinAbility': {
+      const bAbility = (goodNotInPlay || []).find(r => r.id === d.chosen)?.ability;
+      control = (
+        <>
+          {sel(d.chosen, v => setDec(d.id, { chosen: v }),
+            (goodNotInPlay || []).map(r => ({ v: r.id, l: r.name })), '¿Qué habilidad buena tendrá el Demonio?')}
+          {bAbility && <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', margin: '4px 0 0', fontStyle: 'italic' }}>{bAbility}</p>}
+        </>
+      );
+      break;
+    }
+    case 'summonerSetup':
+      control = (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '4px 0', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
+          Quitar ficha de Demonio del saco → añadir 1 Aldeano. El Invocador recibe 3 bluffs en noche 1.
+        </p>
+      );
       break;
     default:
       control = null;
@@ -374,17 +411,25 @@ function isResolved(d) {
     case 'identidadFalsa':  return d.role === 'lunatic' ? !!d.lunatic?.perceivedDemon : !!d.chosenGoodRole;
     case 'forasteros':      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'registroInicial': return !!d.registersAs;
-    case 'otroSecreto':     return d.secret !== 'evilTwin' || !!d.targetSeat;
+    case 'otroSecreto':        return d.secret !== 'evilTwin' || !!d.targetSeat;
+    case 'puzzlemasterDrunk':  return !!d.chosen;
+    case 'alchemistAbility':   return !!d.chosen;
+    case 'boffinAbility':      return !!d.chosen;
+    case 'summonerSetup':      return true;
     default: return true;
   }
 }
 
 function titleFor(d) {
   switch (d.kind) {
-    case 'identidadFalsa':  return `Identidad falsa de ${d.seatName}`;
-    case 'forasteros':      return `Forasteros (${d.seatName})`;
-    case 'registroInicial': return `Registro de ${d.seatName}`;
-    case 'otroSecreto':     return d.secret === 'evilTwin' ? 'Gemela Malvada' : d.secret;
+    case 'identidadFalsa':     return `Identidad falsa de ${d.seatName}`;
+    case 'forasteros':         return `Forasteros (${d.seatName})`;
+    case 'registroInicial':    return `Registro de ${d.seatName}`;
+    case 'otroSecreto':        return d.secret === 'evilTwin' ? 'Gemela Malvada' : d.secret;
+    case 'puzzlemasterDrunk':  return `Maestro de Acertijos — jugador borracho`;
+    case 'alchemistAbility':   return `Alquimista — habilidad de Esbirro`;
+    case 'boffinAbility':      return `Rata de Laboratorio — habilidad del Demonio`;
+    case 'summonerSetup':      return `Invocador — preparación especial`;
     default: return d.kind;
   }
 }

@@ -11,6 +11,7 @@ const roles = {
     id: 'ALCHEMIST', name: 'Alquimista', alignment: 'good', type: 'townfolk',
     ability: 'Tienes una habilidad de Esbirro. Cuando la uses, el Narrador puede pedirte que elijas diferente.',
     firstNight: true, otherNights: false,
+    setup: { alchemistAbility: true },
   },
   AMNESIAC: {
     id: 'AMNESIAC', name: 'Amnésico', alignment: 'good', type: 'townfolk',
@@ -122,6 +123,22 @@ const roles = {
     ability: 'Cada noche, elige un jugador: si es Esbirro, lo aprendes. Todos los Esbirros elegidos pierden habilidad.',
     firstNight: false, otherNights: true,
   },
+  BOFFIN: {
+    id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'good', type: 'townfolk',
+    ability: 'El Demonio tiene la habilidad de un bueno no en juego. Ambos lo saben desde noche 1.',
+    firstNight: true, otherNights: false,
+    setup: { boffinAbility: true },
+  },
+  SHUGENJA: {
+    id: 'SHUGENJA', name: 'Shugenja', alignment: 'good', type: 'townfolk',
+    ability: 'Empiezas sabiendo si el jugador malo más cercano está a tu izquierda o a tu derecha.',
+    firstNight: true, otherNights: false,
+  },
+  STEWARD: {
+    id: 'STEWARD', name: 'Administrador', alignment: 'good', type: 'townfolk',
+    ability: 'Empiezas conociendo a 1 jugador bueno.',
+    firstNight: true, otherNights: false,
+  },
 
   // ── FORASTEROS ──────────────────────────────────────────────────────────
   DAMSEL: {
@@ -158,6 +175,7 @@ const roles = {
     id: 'PUZZLEMASTER', name: 'Maestro Acertijos', alignment: 'good', type: 'outsider',
     ability: '1 jugador está borracho. Si adivinas quién, aprendes al Demonio.',
     firstNight: true, otherNights: false,
+    setup: { puzzlemasterDrunk: true },
   },
   SNITCH: {
     id: 'SNITCH', name: 'Soplón', alignment: 'good', type: 'outsider',
@@ -208,15 +226,10 @@ const roles = {
     ability: 'Cada día, antes de nominaciones, puedes elegir públicamente un jugador: muere.',
     firstNight: false, otherNights: false,
   },
-  SHUGENJA: {
-    id: 'SHUGENJA', name: 'Shugenja', alignment: 'evil', type: 'minion',
-    ability: 'Tienes la habilidad de un personaje bueno que no está en juego.',
-    firstNight: true, otherNights: false,
-  },
-  STEWARD: {
-    id: 'STEWARD', name: 'Mayordomo', alignment: 'evil', type: 'minion',
-    ability: 'Comienzas sabiendo que 2 de tus 3 vecinos vivos son malos o estás borracho.',
-    firstNight: true, otherNights: false,
+  MASTERMIND: {
+    id: 'MASTERMIND', name: 'Mente Maestra', alignment: 'evil', type: 'minion',
+    ability: 'Si el Demonio es ejecutado, la partida continúa 1 día más. Si alguien es ejecutado ese día, su equipo pierde.',
+    firstNight: false, otherNights: false,
   },
   SUMMONER: {
     id: 'SUMMONER', name: 'Invocador', alignment: 'evil', type: 'minion',
@@ -302,7 +315,7 @@ const queueFirst = [
   // 'MARIONETTE' NO entra en la cola interactiva: es pasiva y no despierta con el mal.
   'MEZEPHELES', 'WIDOW', 'SUMMONER', 'SHUGENJA', 'STEWARD',
   'PUZZLEMASTER', 'ALCHEMIST', 'AMNESIAC',
-  'BOUNTY_HUNTER', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
+  'BOUNTY_HUNTER', 'KNIGHT', 'BOFFIN', 'NOBLE', 'DAMSEL', 'SNITCH',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
 ];
 
@@ -322,11 +335,10 @@ const SETUP = {
   AL_HADIKHIA: { demonBluffs: 3 }, KAZALI: { demonBluffs: 3 }, LEGION: { demonBluffs: 3 },
   LEVIATHAN: { demonBluffs: 3 }, LIL_MONSTA: { demonBluffs: 3 }, LLEECH: { demonBluffs: 3 },
   OJO: { demonBluffs: 3 }, RIOT: { demonBluffs: 3 },
-  WIDOW: { initialPoison: true }, SUMMONER: { demonBluffs: 3 },
+  WIDOW: { initialPoison: true }, SUMMONER: { summonerSetup: true, demonBluffs: 3 },
 };
 const INFO = {
   BOUNTY_HUNTER: { firstNight: true, kind: 'knowEvilPlayer' }, // 1 jugador malo
-  STEWARD:       { firstNight: true, kind: 'stewardNeighbors' },
 };
 for (const [id, s] of Object.entries(SETUP)) if (roles[id]) roles[id].setup = s;
 for (const [id, n] of Object.entries(INFO))  if (roles[id]) roles[id].info  = n;

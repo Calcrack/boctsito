@@ -125,6 +125,42 @@ function computeRequiredDecisions(game) {
       });
     }
 
+    // 8) Maestro de Acertijos — jugador borracho (elegido en setup, no en noche)
+    if (s.puzzlemasterDrunk) {
+      keep({
+        id: `puzzlemasterDrunk:${seat.id}`, kind: 'puzzlemasterDrunk',
+        seat: seat.id, seatName: seat.name, chosen: null,
+        consequence: 'Un jugador distinto al Maestro queda borracho todo el juego.',
+      });
+    }
+
+    // 9) Alquimista — habilidad de Esbirro (elegida en setup)
+    if (s.alchemistAbility) {
+      keep({
+        id: `alchemistAbility:${seat.id}`, kind: 'alchemistAbility',
+        seat: seat.id, seatName: seat.name, chosen: null,
+        consequence: 'El Alquimista tendrá la habilidad del Esbirro elegido durante toda la partida.',
+      });
+    }
+
+    // 10) Rata de Laboratorio — habilidad buena que tendrá el Demonio
+    if (s.boffinAbility) {
+      keep({
+        id: `boffinAbility:${seat.id}`, kind: 'boffinAbility',
+        seat: seat.id, seatName: seat.name, chosen: null,
+        consequence: 'El Demonio tendrá la habilidad del bueno elegido toda la partida. Ambos lo saben desde noche 1.',
+      });
+    }
+
+    // 11) Invocador — preparación especial (solo aviso, auto-resuelto)
+    if (s.summonerSetup) {
+      keep({
+        id: `summonerSetup:${seat.id}`, kind: 'summonerSetup',
+        seat: seat.id, seatName: seat.name, chosen: true,
+        consequence: 'Quitar la ficha de Demonio del saco y añadir 1 Aldeano. El Invocador recibe 3 bluffs en noche 1. En noche 3, elige jugador + tipo de Demonio.',
+      });
+    }
+
   }
   return out;
 }
@@ -178,9 +214,13 @@ function isDecisionResolved(d) {
     case 'identidadFalsa':
       if (d.role === 'lunatic') return !!d.lunatic?.perceivedDemon;
       return !!d.chosenGoodRole;
-    case 'forasteros':      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
-    case 'registroInicial': return !!d.registersAs;
-    case 'otroSecreto':     return d.secret !== 'evilTwin' || !!d.targetSeat;
+    case 'forasteros':         return Array.isArray(d.chosen) && d.chosen.length === d.expected;
+    case 'registroInicial':    return !!d.registersAs;
+    case 'otroSecreto':        return d.secret !== 'evilTwin' || !!d.targetSeat;
+    case 'puzzlemasterDrunk':  return !!d.chosen;
+    case 'alchemistAbility':   return !!d.chosen;
+    case 'boffinAbility':      return !!d.chosen;
+    case 'summonerSetup':      return true;
     default: return true;
   }
 }

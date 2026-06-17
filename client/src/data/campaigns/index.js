@@ -3,6 +3,7 @@ import troubleBrewing from './troubleBrewing';
 import badMoonRising from './badMoonRising';
 import sectsViolets from './sectsViolets';
 import carousel from './carousel';
+import { roles as travelerRoles } from './travelers';
 
 export const CAMPAIGNS = {
   [troubleBrewing.id]: troubleBrewing,
@@ -31,6 +32,9 @@ export const ALL_ROLES = (() => {
     for (const r of c.roles) {
       if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
     }
+  }
+  for (const r of travelerRoles) {
+    if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
   }
   return out;
 })();

@@ -79,6 +79,7 @@ export default function NarratorPanel() {
   const [showAutoMode, setShowAutoMode] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(true);
+  const [confirmWin, setConfirmWin] = useState(null);
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
   const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
 
@@ -360,6 +361,29 @@ export default function NarratorPanel() {
                     <button onClick={() => send('STOP_AUTO_MODE', {})} className="btn-night" style={{ fontSize: 8 }}>Detener</button>
                   </div>
                 )
+            )}
+
+            {/* Botones de victoria */}
+            {phase !== 'lobby' && phase !== 'game_over' && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                {confirmWin ? (
+                  <>
+                    <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-200)', flex: 1 }}>
+                      ¿Declarar victoria del <strong style={{ color: confirmWin === 'good' ? 'var(--good)' : 'var(--blood-hi)' }}>{confirmWin === 'good' ? 'Bien' : 'Mal'}</strong>?
+                    </p>
+                    <button onClick={() => { send('DECLARE_WINNER', { winner: confirmWin }); setConfirmWin(null); }}
+                      className="btn-action danger" style={{ fontSize: 11, padding: '4px 10px' }}>Sí, confirmar</button>
+                    <button onClick={() => setConfirmWin(null)} className="btn-night" style={{ fontSize: 11 }}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setConfirmWin('good')} className="btn-action"
+                      style={{ flex: 1, fontSize: 11, borderColor: 'var(--good)', color: 'var(--good)' }}>✨ Gana el Bien</button>
+                    <button onClick={() => setConfirmWin('evil')} className="btn-action danger"
+                      style={{ flex: 1, fontSize: 11 }}>⚔ Gana el Mal</button>
+                  </>
+                )}
+              </div>
             )}
 
             <PhaseStepControl phase={phase} game={game} send={send} />

@@ -162,18 +162,19 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
         )}
       </div>
 
-      {/* Fichas de efecto: íconos circulares bajo la foto */}
+      {/* Fichas de efecto: íconos superpuestos sobre la foto (solo narrador) */}
       {isNarrator && (player.tokens || []).length > 0 && (
         <div className="seat-token-row">
-          {(player.tokens || []).slice(0, 4).map((t, i) => {
+          {(player.tokens || []).slice(0, 3).map((t, i) => {
             const tImg = t.img || ROLE_BY_ID[t.roleId]?.img;
+            const typeClass = `type-${(t.type || '').toLowerCase()}`;
             return tImg
-              ? <img key={i} src={tImg} className="seat-token-icon" title={t.label}
-                     onError={e => { e.target.style.display = 'none'; }} />
-              : <span key={i} className="seat-token-dot" title={t.label}>●</span>;
+              ? <img key={i} src={tImg} className={`seat-token-icon ${typeClass}`}
+                     title={t.label} onError={e => { e.target.style.display = 'none'; }} />
+              : <span key={i} className={`seat-token-dot ${typeClass}`} title={t.label}>●</span>;
           })}
-          {(player.tokens || []).length > 4 && (
-            <span className="seat-token-overflow">+{(player.tokens || []).length - 4}</span>
+          {(player.tokens || []).length > 3 && (
+            <span className="seat-token-overflow">+{(player.tokens || []).length - 3}</span>
           )}
         </div>
       )}

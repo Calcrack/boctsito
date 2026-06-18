@@ -1169,8 +1169,9 @@ function GamblerPanel({ actor, pattern, game, send, roleName }) {
   }
 
   const target = game.players.find(p => p.id === targetId);
-  const guessCorrect = target && guessRoleId && !actor.poisoned && target.role === guessRoleId;
-  const guessWrong   = target && guessRoleId && (actor.poisoned || target.role !== guessRoleId);
+  const actorEffective = !actor.poisoned && !actor.drunkAs;
+  const guessCorrect = target && guessRoleId && actorEffective && target.role === guessRoleId;
+  const guessWrong   = target && guessRoleId && (!actorEffective || target.role !== guessRoleId);
   const can = targetId && guessRoleId;
 
   const buildInfo = () => {
@@ -1195,8 +1196,13 @@ function GamblerPanel({ actor, pattern, game, send, roleName }) {
           {guessCorrect ? '✅ CORRECTO — el Tahúr no muere' : '💀 INCORRECTO — el Tahúr muere esta noche'}
         </p>
       )}
-      <button onClick={() => { if (!can) return; send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: buildInfo() }); setOk(true); }}
-        disabled={!can || ok} className="btn-action primary"
+      <button onClick={() => {
+        if (!can) return;
+        const payload = { actorId: actor.id, nightInfo: buildInfo() };
+        if (guessWrong) { payload.actionType = 'KILL'; payload.targetIds = [actor.id]; }
+        send('NIGHT_NARRATOR_ACTION', payload);
+        setOk(true);
+      }} disabled={!can || ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
     </div>
   );

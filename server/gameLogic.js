@@ -83,6 +83,7 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     impShotUsed: false,
     statuses: [],
     tokens: [],
+    foolUsed: false,
   };
   game.players.push(player);
   return player;
@@ -876,6 +877,28 @@ function addDeferred(game, { label, dueNight, sourcePlayerId, severity = 'warn',
   logStatus(game, `🗓 Pendiente registrado: ${label}`);
 }
 
+function isActorEffective(actor) {
+  if (!actor) return false;
+  if (actor.poisoned) return false;
+  if (actor.drunkAs) return false;
+  return true;
+}
+
+function checkFoolProtection(game, target, actorId, artRole) {
+  if (target.role === 'FOOL' && !target.foolUsed && !target.poisoned) {
+    target.foolUsed = true;
+    addDeferred(game, {
+      label: `🃏 ${target.name} (Tonto) sobrevivió su primera muerte esta noche`,
+      dueNight: game.nightNumber,
+      sourcePlayerId: actorId,
+      severity: 'info',
+      role: 'FOOL',
+    });
+    return true;
+  }
+  return false;
+}
+
 // Consejos proactivos según el estado actual de la partida.
 function computeAdvice(game) {
   const advice = [];
@@ -958,7 +981,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
 
     case 'PROTECT':
     case 'MONK_PROTECT':
-      if (targets[0] && !actor?.poisoned) {
+      if (targets[0] && isActorEffective(actor)) {
         // Protección del Monje: solo esta noche; se limpia al amanecer.
         placeToken(targets[0], {
           type: 'PROTECTED', roleId: artRole || 'MONK', label: 'A salvo',
@@ -997,33 +1020,37 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         const pool = game.players.filter(p => p.alive && p.id !== target.id && p.type !== 'demon');
         if (pool.length > 0) {
           const redirectTarget = pool[Math.floor(Math.random() * pool.length)];
-          redirectTarget.alive = false;
-          clearBearerDeathTokens(redirectTarget);
-          game.nightDeaths.push(redirectTarget.id);
-          placeToken(redirectTarget, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
-          const isRealRaven = redirectTarget.role === 'RAVENKEEPER' && !redirectTarget.poisoned;
-          const isDrunkRaven = redirectTarget.role === 'DRUNK' && redirectTarget.drunkAs === 'RAVENKEEPER';
-          if (isRealRaven || isDrunkRaven) {
-            redirectTarget.pendingRavenkeeper = true;
-            redirectTarget.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
-            game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== redirectTarget.id);
+          if (!checkFoolProtection(game, redirectTarget, actorId, artRole)) {
+            redirectTarget.alive = false;
+            clearBearerDeathTokens(redirectTarget);
+            game.nightDeaths.push(redirectTarget.id);
+            placeToken(redirectTarget, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
+            const isRealRaven = redirectTarget.role === 'RAVENKEEPER' && !redirectTarget.poisoned;
+            const isDrunkRaven = redirectTarget.role === 'DRUNK' && redirectTarget.drunkAs === 'RAVENKEEPER';
+            if (isRealRaven || isDrunkRaven) {
+              redirectTarget.pendingRavenkeeper = true;
+              redirectTarget.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
+              game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== redirectTarget.id);
+            }
+            checkScarletWoman(game, actor);
           }
-          checkScarletWoman(game, actor);
         }
         // pool vacío (solo Alcalde + Demonio vivos) → Alcalde sobrevive
       } else {
-        target.alive = false;
-        clearBearerDeathTokens(target);
-        game.nightDeaths.push(target.id);
-        placeToken(target, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
-        const isRealRaven = target.role === 'RAVENKEEPER' && !target.poisoned;
-        const isDrunkRaven = target.role === 'DRUNK' && target.drunkAs === 'RAVENKEEPER';
-        if (isRealRaven || isDrunkRaven) {
-          target.pendingRavenkeeper = true;
-          target.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
-          game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== target.id);
+        if (!checkFoolProtection(game, target, actorId, artRole)) {
+          target.alive = false;
+          clearBearerDeathTokens(target);
+          game.nightDeaths.push(target.id);
+          placeToken(target, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
+          const isRealRaven = target.role === 'RAVENKEEPER' && !target.poisoned;
+          const isDrunkRaven = target.role === 'DRUNK' && target.drunkAs === 'RAVENKEEPER';
+          if (isRealRaven || isDrunkRaven) {
+            target.pendingRavenkeeper = true;
+            target.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
+            game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== target.id);
+          }
+          checkScarletWoman(game, actor);
         }
-        checkScarletWoman(game, actor);
       }
       break;
     }
@@ -1094,6 +1121,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       for (const t of targets) {
         if (!t || !t.alive) continue;
         if (t.protected || t.safeTonight) continue;
+        if (checkFoolProtection(game, t, actorId, artRole)) continue;
         t.alive = false;
         clearBearerDeathTokens(t);
         game.nightDeaths.push(t.id);
@@ -1368,6 +1396,16 @@ function startDay(game) {
 }
 
 function startNight(game) {
+  // F5: Vórtice — cada día sin ejecución el Mal gana (solo noches ≥2)
+  if (game.nightNumber > 0 && game.phase !== 'game_over') {
+    const vortox = game.players.find(p => p.alive && p.role === 'VORTOX' && !p.poisoned);
+    if (vortox && !game.executedToday) {
+      game.winner = 'evil';
+      game.phase = 'game_over';
+      game.winReason = '☠ Vórtice: día sin ejecución';
+      return game;
+    }
+  }
   game.phase = game.nightNumber === 0 ? 'first_night' : 'night';
   game.nightNumber++;
   // ANOCHECER: limpia fichas UNTIL_NEXT_DUSK / ONE_DAY (veneno previo, etc.)
@@ -1522,6 +1560,7 @@ function getPublicState(game, viewerId, isNarrator) {
         ? (p.accusations || [])
         : (p.accusations || []).filter(a => a.accuserId === viewerId),
       slayerUsed:  p.slayerUsed,
+      foolUsed:    isNarrator ? (p.foolUsed || false) : undefined,
       impShotUsed: (isMe && p.type === 'demon') || isNarrator ? p.impShotUsed : false,
       pendingRavenkeeper: isNarrator ? p.pendingRavenkeeper : (isMe ? p.pendingRavenkeeper : false),
       isNightTarget: nightTargets.has(p.id),

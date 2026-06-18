@@ -30,6 +30,7 @@ export default function ActionModal({ target, onClose, isNarrator }) {
   const [accusedRole, setAccusedRole] = useState('');
   const [confirmKill, setConfirmKill] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
+  const [confirmNarratorKill, setConfirmNarratorKill] = useState(false);
 
   if (!game) return null;
   const { phase, nominations, activeNomination } = game;
@@ -73,6 +74,13 @@ export default function ActionModal({ target, onClose, isNarrator }) {
   const handleImpShot   = () => { send('IMP_DAY_SHOT', { targetId: target.id }); onClose(); };
 
   const handleNarratorKill   = () => { send('KILL_PLAYER', { playerId: target.id }); onClose(); };
+  const killWarnings = (() => {
+    const w = [];
+    if (target.protected) w.push('🛡 Protegido esta noche (Monje / Posadero / Marinero)');
+    if (target.role === 'SOLDIER' && !target.poisoned) w.push('⚔ Soldado: inmune a ataques del Demonio');
+    if (target.role === 'FOOL' && target.foolUsed === false && !target.poisoned) w.push('🃏 Tonto: primera muerte anulada (se consumirá)');
+    return w;
+  })();
   const handleNarratorRevive = () => { send('REVIVE_PLAYER', { playerId: target.id }); onClose(); };
   const handleRevealRole     = () => { send('REVEAL_ROLE', { playerId: target.id }); onClose(); };
 
@@ -110,10 +118,28 @@ export default function ActionModal({ target, onClose, isNarrator }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleRevealRole} className="btn-action primary" style={{ flex: 1 }}>Revelar personaje</button>
                 {target.alive
-                  ? <button onClick={handleNarratorKill}   className="btn-action danger" style={{ flex: 1 }}>Matar jugador</button>
-                  : <button onClick={handleNarratorRevive} className="btn-action"        style={{ flex: 1 }}>Revivir jugador</button>
+                  ? <button onClick={() => setConfirmNarratorKill(true)} className="btn-action danger" style={{ flex: 1 }}>Matar jugador</button>
+                  : <button onClick={handleNarratorRevive} className="btn-action"                      style={{ flex: 1 }}>Revivir jugador</button>
                 }
               </div>
+              {confirmNarratorKill && target.alive && (
+                <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(168,58,45,0.12)', border: '1px solid var(--blood-dim)', borderRadius: 4 }}>
+                  {killWarnings.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      {killWarnings.map((w, i) => (
+                        <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-200)', margin: '2px 0', fontStyle: 'italic' }}>{w}</p>
+                      ))}
+                    </div>
+                  )}
+                  <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--blood-hi)', fontWeight: 600, margin: '0 0 8px' }}>
+                    ¿Confirmar muerte de {target.name}?
+                  </p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={handleNarratorKill} className="btn-action danger" style={{ flex: 1 }}>Confirmar muerte</button>
+                    <button onClick={() => setConfirmNarratorKill(false)} className="btn-night">Cancelar</button>
+                  </div>
+                </div>
+              )}
 
               {/* Fichas y estados activos del jugador, con explicación */}
               <div style={{ marginTop: 12 }}>

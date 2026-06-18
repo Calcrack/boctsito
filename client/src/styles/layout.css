@@ -239,26 +239,56 @@ input, textarea { font-family: inherit; color: inherit; }
 }
 .panel-label .count { color: var(--bone-400); font-size: 13px; }
 
-/* ── FICHAS EN GRIMORIO (bajo la foto del jugador) ──────────────────── */
+/* ── FICHAS EN GRIMORIO (encima de la foto del jugador) ──────────────────── */
 .seat-token-row {
+  position: absolute;
+  top: calc(var(--sz) * 0.62);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
   display: flex;
   justify-content: center;
-  gap: 2px;
-  margin: 2px 0 1px;
-  position: relative;
-  z-index: 2;
+  align-items: center;
 }
 .seat-token-icon {
-  width: 15px;
-  height: 15px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.25);
+  border: 2px solid rgba(201,162,74,0.7);
   background: var(--ink-700);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.85), 0 0 0 1px rgba(0,0,0,0.5);
+  margin-left: -5px;
+  flex-shrink: 0;
+  cursor: help;
 }
-.seat-token-dot { font-size: 7px; color: var(--bone-400); }
-.seat-token-overflow { font-size: 8px; color: var(--bone-500); font-family: var(--mono); }
+.seat-token-icon:first-child { margin-left: 0; }
+.seat-token-icon.type-poisoned   { border-color: #4ade80; box-shadow: 0 0 10px rgba(74,222,128,0.75), 0 2px 6px rgba(0,0,0,0.8); }
+.seat-token-icon.type-protected  { border-color: #93c5fd; box-shadow: 0 0 10px rgba(147,197,253,0.75), 0 2px 6px rgba(0,0,0,0.8); }
+.seat-token-icon.type-safe_tonight { border-color: #93c5fd; box-shadow: 0 0 10px rgba(147,197,253,0.75), 0 2px 6px rgba(0,0,0,0.8); }
+.seat-token-icon.type-drunk_night { border-color: #f59e0b; box-shadow: 0 0 10px rgba(245,158,11,0.75), 0 2px 6px rgba(0,0,0,0.8); }
+.seat-token-icon.type-drunk      { border-color: #f59e0b; box-shadow: 0 0 10px rgba(245,158,11,0.75), 0 2px 6px rgba(0,0,0,0.8); }
+.seat-token-icon.type-dies       { border-color: #dc2626; box-shadow: 0 0 12px rgba(220,38,38,0.85), 0 2px 6px rgba(0,0,0,0.8); }
+.seat-token-dot {
+  width: 26px; height: 26px;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--ink-600);
+  border: 2px solid rgba(201,162,74,0.5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  margin-left: -5px;
+  flex-shrink: 0;
+  cursor: help;
+}
+.seat-token-dot:first-child { margin-left: 0; }
+.seat-token-overflow {
+  font-size: 8px; color: var(--bone-400);
+  font-family: var(--mono);
+  background: rgba(0,0,0,0.65);
+  padding: 1px 4px; border-radius: 8px;
+  margin-left: -2px;
+}
 
 /* ── WIZARD DE MONTAJE (modal central, scroll propio) ───────────────── */
 .wizard-overlay {

@@ -778,6 +778,20 @@ function handleMessage(type, payload, session) {
       break;
     }
 
+    case 'DECLARE_WINNER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const { winner, reason } = payload;
+      if (winner !== 'good' && winner !== 'evil') throw new Error('winner debe ser good o evil');
+      game.winner = winner;
+      game.phase = 'game_over';
+      game.winReason = reason || (winner === 'good' ? 'El Bien declara victoria' : 'El Mal declara victoria');
+      recordGameWin(game, winner);
+      broadcastToAll('GAME_OVER', { winner });
+      broadcastGame();
+      break;
+    }
+
     case 'REVIVE_PLAYER': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);

@@ -62,7 +62,7 @@ const roles = {
 
 // ── Tags de montaje/info (vocabulario en troubleBrewing.js) ──────────
 const SETUP = {
-  GODFATHER: { outsiderModifier: 1, otherSecret: 'godfatherOutsiders' }, // ±1 Forastero, lo confirma el Narrador
+  GODFATHER: { outsiderModifierChoice: [-1, 1], otherSecret: 'godfatherOutsiders' }, // narrador elige ±1 Forastero
   PUKKA:     { initialPoison: true, demonBluffs: 3 },
   LUNATIC:   { lunaticExtras: true }, // falseIdentity ya lo infiere misperception.believes='demon'
   ZOMBUUL:   { demonBluffs: 3 },
@@ -85,7 +85,7 @@ module.exports = {
   name: 'Bad Moon Rising',
   roles,
   distribution: tb.distribution,
-  outsiderModifiers: {}, // Padrino ±1 se confirma como decisión de montaje (forasteros)
+  outsiderModifiers: {}, // Padrino ±1 narrador elige en setup (outsiderModifierChoice)
   queueFirst,
   queueOther,
 };

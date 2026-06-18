@@ -194,8 +194,8 @@ const NIGHT_ROLE_PATTERN = {
   CHAMBERMAID:     { kind: 'P_CHAMBERMAID', emoji: '🛎️' },
   EXORCIST:        { kind: 'P3',     effect: 'EXORCIST_CHOOSE',           emoji: '✝️', label: 'Elegir a',            notSelf: true, autoToken: true,
                      note: 'Si es el Demonio: informarle quién eres + suprimir su ataque. Si no: nada (no dar señal).' },
-  INNKEEPER:       { kind: 'P3x2',   effect: 'INNKEEPER_PROTECT',         emoji: '🏨', autoToken: true,
-                     note: 'Ambos quedan protegidos de toda muerte nocturna. Narrador elige cuál de los 2 queda borracho.' },
+  INNKEEPER:       { kind: 'P_INNKEEPER', emoji: '🏨',
+                     note: 'Ambos quedan protegidos de toda muerte nocturna. Tú eliges cuál queda borracho.' },
   GAMBLER:         { kind: 'P_GAMBLER', emoji: '🎲' },
   GOSSIP:          { kind: 'P_GOSSIP', emoji: '💬' },
   COURTIER:        { kind: 'P_COURTIER', emoji: '🎴' },
@@ -410,7 +410,7 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
                   </span>
                   {m.discordId && (
                     <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: m.id })}
-                      className="btn-action primary" style={{ fontSize: 9, padding: '3px 8px' }}>🚪 Ir a su sala</button>
+                      className="btn-action primary" style={{ fontSize: 13, padding: '6px 12px' }}>🚪 Ir a su sala</button>
                   )}
                 </div>
                 {m.nightInfo
@@ -426,21 +426,11 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
       </div>
 
       <div style={{ padding: '8px 16px 10px', borderTop: 'var(--hairline)' }}>
-        {step?.type === 'role' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--bone-300)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={!!step.actor.nightInfo || completed.has(current)} onChange={e => {
-                const c = new Set(completed);
-                if (e.target.checked) c.add(current); else c.delete(current);
-                setCompleted(c);
-              }} />
-              Desperté
-            </label>
-            {step.actor.discordId && (
-              <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: step.actor.id })}
-                className="btn-action primary" style={{ fontSize: 11, padding: '4px 10px' }}>🚪 Ir a su habitación</button>
-            )}
-          </div>
+        {step?.type === 'role' && step.actor.discordId && (
+          <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: step.actor.id })}
+            className="btn-action primary" style={{ width: '100%', fontSize: 14, padding: '8px 0', marginBottom: 8 }}>
+            🚪 Ir a su habitación
+          </button>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setIdx(Math.max(0, current - 1))} disabled={current <= 0}
@@ -463,10 +453,10 @@ function RoleStepView({ step, game, send }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        {shown.img && <img src={shown.img} style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+        {shown.img && <img src={shown.img} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>{shown.name}</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bone-300)' }}>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 24, color: evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>{shown.name}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--bone-300)' }}>
             🗣 {actor.name}{actor.poisoned ? ' · 🧪 envenenado' : ''}{!actor.alive ? ' · ☠' : ''}
           </div>
         </div>
@@ -491,12 +481,12 @@ function RoleStepView({ step, game, send }) {
         </div>
       )}
 
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-300)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>{shown.ability}</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-300)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>{shown.ability}</p>
 
       {actor.nightInfo ? (
         <div style={{ background: 'rgba(201,162,74,0.07)', border: 'var(--hairline)', borderRadius: 4, padding: '8px 10px', marginBottom: 10 }}>
           <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>Para decirle por voz</p>
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{actor.nightInfo}</p>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{actor.nightInfo}</p>
         </div>
       ) : (
         <div style={{ background: 'rgba(0,0,0,0.25)', border: 'var(--hairline-bone)', borderRadius: 4, padding: '7px 10px', marginBottom: 10 }}>
@@ -546,6 +536,7 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
     case 'P_MOONCHILD':     return <MoonchildPanel    actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_NOBLE':         return <NoblePanel        actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_PUKKA':         return <PukkaPanel        actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_INNKEEPER':     return <InnkeeperPanel     actor={actor} game={game} send={send} />;
     case 'P_PUZZLEMASTER':  return <PuzzlemasterPanel actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_ALCHEMIST':     return <AlchemistPanel    actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_SHUGENJA':      return <ShugenjaPanel     actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
@@ -563,10 +554,10 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
   }
 }
 
-const panelStyle = { marginTop: 10, background: 'rgba(201,162,74,0.06)', border: '1px solid rgba(201,162,74,0.25)', borderRadius: 6, padding: '10px 12px' };
-const labelStyle = { fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 8px' };
-const selStyle   = { fontSize: 11, background: 'var(--ink-600)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2, color: 'var(--bone-100)', padding: '4px 6px', width: '100%', marginBottom: 4 };
-const btnPrimary = { width: '100%', fontSize: 11, padding: '6px 0' };
+const panelStyle = { marginTop: 10, background: 'rgba(201,162,74,0.06)', border: '1px solid rgba(201,162,74,0.25)', borderRadius: 6, padding: '12px 14px' };
+const labelStyle = { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 8px' };
+const selStyle   = { fontSize: 13, background: 'var(--ink-600)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2, color: 'var(--bone-100)', padding: '5px 7px', width: '100%', marginBottom: 4 };
+const btnPrimary = { width: '100%', fontSize: 13, padding: '7px 0' };
 const poisonNote = <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: '#4ade80', fontStyle: 'italic', margin: '0 0 6px' }}>🧪 Envenenado: elige libremente (info FALSA).</p>;
 
 // P2 — par verdadero + señuelo + personaje (Lavandera, Bibliotecario, Investigador)
@@ -1425,6 +1416,57 @@ function PukkaPanel({ actor, pattern, game, send, roleName }) {
             style={{ ...btnPrimary, opacity: (targetId && !ok) ? 1 : 0.4 }}>🕸️ Envenenar</button>
         </>
       )}
+    </div>
+  );
+}
+
+// P_INNKEEPER — Posadero: 2 protegidos + 1 borracho (narrador elige cuál)
+function InnkeeperPanel({ actor, game, send }) {
+  const [t1, setT1] = useState('');
+  const [t2, setT2] = useState('');
+  const [drunk, setDrunk] = useState('');
+  const [ok, setOk] = useState(actor.nightInfo != null);
+
+  const living = game.players.filter(p => p.alive);
+  const canConfirm = t1 && t2 && t1 !== t2 && (drunk === t1 || drunk === t2);
+
+  const onT1 = v => { setT1(v); if (drunk && drunk !== v && drunk !== t2) setDrunk(''); setOk(false); };
+  const onT2 = v => { setT2(v); if (drunk && drunk !== t1 && drunk !== v) setDrunk(''); setOk(false); };
+
+  const confirm = () => {
+    if (!canConfirm) return;
+    const n1 = game.players.find(p => p.id === t1)?.name;
+    const n2 = game.players.find(p => p.id === t2)?.name;
+    const dn = game.players.find(p => p.id === drunk)?.name;
+    const nightInfo = `🏨 Posadero\nProtegidos: ${n1} y ${n2}. ${dn} queda borracho.`;
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'INNKEEPER_PROTECT', targetIds: [t1, t2, drunk], nightInfo });
+    setOk(true);
+  };
+
+  const drunkOptions = [t1, t2].filter(Boolean).map(id => ({ id, name: game.players.find(p => p.id === id)?.name }));
+
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Aplicado' : 'Posadero — 2 protegidos + 1 borracho'}</p>
+      <select style={selStyle} value={t1} onChange={e => onT1(e.target.value)}>
+        <option value="">Jugador 1 (protegido)…</option>
+        {living.filter(p => p.id !== t2).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <select style={selStyle} value={t2} onChange={e => onT2(e.target.value)}>
+        <option value="">Jugador 2 (protegido)…</option>
+        {living.filter(p => p.id !== t1).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      {t1 && t2 && (
+        <select style={selStyle} value={drunk} onChange={e => { setDrunk(e.target.value); setOk(false); }}>
+          <option value="">¿Cuál queda borracho?…</option>
+          {drunkOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      )}
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
+        Ambos A salvo esta noche. Tú eliges cuál queda borracho hasta el crepúsculo.
+      </p>
+      <button onClick={confirm} disabled={!canConfirm || ok} className="btn-action primary"
+        style={{ ...btnPrimary, opacity: (canConfirm && !ok) ? 1 : 0.4 }}>🏨 Aplicar</button>
     </div>
   );
 }

@@ -63,6 +63,57 @@ function getNeeded(count, roles) {
 const TABS = ['setup', 'mesa', 'ranking'];
 const TAB_LABELS = { setup: 'Config', mesa: 'Mesa', ranking: '🏆' };
 
+function PuzzlemasterDayPanel({ pm, alreadyUsed, send }) {
+  const [moved, setMoved] = useState(false);
+  const [guessed, setGuessed] = useState(null); // 'correct' | 'wrong'
+
+  const applyNoAbility = () => {
+    send('ADD_TOKEN', { playerId: pm.id, token: { type: 'NO_ABILITY', roleId: 'PUZZLEMASTER', label: 'Sin habilidad', expiry: [] } });
+  };
+
+  const onCorrect = () => {
+    setGuessed('correct');
+    applyNoAbility();
+    send('NIGHT_NARRATOR_ACTION', { actorId: pm.id, actionType: 'PUZZLEMASTER_REVEAL', targetIds: [] });
+  };
+
+  const onWrong = () => {
+    setGuessed('wrong');
+    applyNoAbility();
+  };
+
+  const s = { marginTop: 8, background: 'rgba(201,162,74,0.06)', border: '1px solid rgba(201,162,74,0.25)', borderRadius: 6, padding: '10px 12px' };
+  const lbl = { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 6px' };
+
+  if (alreadyUsed) return (
+    <div style={s}>
+      <p style={lbl}>🧩 Maestro de Acertijos</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', margin: 0, fontStyle: 'italic' }}>Habilidad ya usada.</p>
+    </div>
+  );
+
+  return (
+    <div style={s}>
+      <p style={lbl}>🧩 Maestro de Acertijos — Acción de día</p>
+      {!moved ? (
+        <button className="btn-action primary" style={{ width: '100%', fontSize: 13, padding: '7px 0' }}
+          onClick={() => { send('MOVE_NARRATOR_TO_ROOM', { playerId: pm.id }); setMoved(true); }}>
+          🚪 Llevar a habitación
+        </button>
+      ) : guessed ? (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: guessed === 'correct' ? '#4ade80' : 'var(--bone-400)', margin: 0 }}>
+          {guessed === 'correct' ? '✓ Adivinó correcto — resultado revelado.' : '✗ Adivinó incorrecto — habilidad consumida.'}
+        </p>
+      ) : (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn-action primary" style={{ flex: 1, fontSize: 12, padding: '6px 0' }} onClick={onCorrect}>✓ Adivinó correcto</button>
+          <button className="btn-action danger" style={{ flex: 1, fontSize: 12, padding: '6px 0' }} onClick={onWrong}>✗ Adivinó incorrecto</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NarratorPanel() {
   const { state, send } = useGame();
   const { game, discordMembers, rankings, campaigns: serverCampaigns, importResult } = state;
@@ -387,6 +438,16 @@ export default function NarratorPanel() {
             )}
 
             <PhaseStepControl phase={phase} game={game} send={send} />
+
+            {/* Maestro de Acertijos — panel de acción de día */}
+            {phase !== 'lobby' && phase !== 'game_over' && (() => {
+              const pm = players.find(p => p.role === 'PUZZLEMASTER' && p.alive);
+              if (!pm) return null;
+              const alreadyUsed = (pm.tokens || []).some(t => t.type === 'NO_ABILITY');
+              return (
+                <PuzzlemasterDayPanel key={pm.id} pm={pm} alreadyUsed={alreadyUsed} send={send} />
+              );
+            })()}
 
             {/* Control de noche por rol (matar / envenenar / proteger / info) */}
             {isNight && <NightControl />}

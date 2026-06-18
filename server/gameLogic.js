@@ -42,6 +42,9 @@ function createGame(narratorId, gameId) {
     nightReadyPlayers: [],
     statusLog: [],
     deferredEffects: [],
+    pukkaLastPoisoned: null,
+    shabalothLastKilled: [],
+    grandmotherGrandchild: null,
     // ── Montaje (Addendum 2): el Narrador decide TODO antes de empezar ──
     setup: { locked: false, seatOrder: [], assignments: {}, decisions: [] },
     setupResolved: null,
@@ -84,6 +87,8 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     statuses: [],
     tokens: [],
     foolUsed: false,
+    zombuulFirstDied: false,
+    vigormortisAlive: false,
   };
   game.players.push(player);
   return player;
@@ -1117,6 +1122,19 @@ function applyNightAction(game, actionType, actorId, targetIds) {
     }
 
     // ── Acciones genéricas para campañas con narrador (BMR / S&V) ──────
+    // Rutas directas al bloque KILL (sin lógica extra)
+    case 'VORTOX_KILL':
+    case 'KAZALI_KILL':
+    case 'LLEECH_KILL':
+    case 'OJO_KILL':
+    case 'LEGION_KILL':
+    case 'GODFATHER_KILL':
+    case 'NO_DASHII_KILL': // vecinos envenenados los gestiona el narrador
+      // fall-through: idéntico a KILL
+    case 'SHABALOTH_KILL': {
+      if (actionType === 'SHABALOTH_KILL') game.shabalothLastKilled = targetIds;
+      // fall-through
+    }
     case 'KILL': {
       for (const t of targets) {
         if (!t || !t.alive) continue;
@@ -1126,7 +1144,162 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         clearBearerDeathTokens(t);
         game.nightDeaths.push(t.id);
         placeToken(t, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
+        checkGrandmotherDeath(game, t, actorId, artRole);
         checkScarletWoman(game, actor);
+      }
+      break;
+    }
+
+    case 'ASSASSIN_KILL': {
+      // Ignora toda protección
+      for (const t of targets) {
+        if (!t || !t.alive) continue;
+        t.alive = false;
+        clearBearerDeathTokens(t);
+        game.nightDeaths.push(t.id);
+        placeToken(t, { type: 'DIES', roleId: artRole || 'ASSASSIN', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
+        checkGrandmotherDeath(game, t, actorId, artRole);
+        checkScarletWoman(game, actor);
+      }
+      break;
+    }
+
+    case 'FANG_GU_KILL': {
+      const t = targets[0]; if (!t || !t.alive) break;
+      if (t.type === 'outsider' && !t.poisoned && !t.protected && !t.safeTonight) {
+        const oldRole = actor.role;
+        t.role = oldRole; t.type = 'demon'; t.alignment = 'evil';
+        actor.alive = false; game.nightDeaths.push(actor.id);
+        addDeferred(game, { label: `🌿 Fang Gu saltó a ${t.name} — nuevo Fang Gu (malvado)`, dueNight: game.nightNumber, severity: 'warn', role: 'FANG_GU' });
+      } else {
+        if (!t.protected && !t.safeTonight && !checkFoolProtection(game, t, actorId, artRole)) {
+          t.alive = false; clearBearerDeathTokens(t); game.nightDeaths.push(t.id);
+          placeToken(t, { type: 'DIES', roleId: artRole, label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
+          checkGrandmotherDeath(game, t, actorId, artRole);
+          checkScarletWoman(game, actor);
+        }
+      }
+      break;
+    }
+
+    case 'VIGORMORTIS_KILL': {
+      const t = targets[0]; if (!t || !t.alive) break;
+      if (!t.protected && !t.safeTonight && !checkFoolProtection(game, t, actorId, artRole)) {
+        t.alive = false; clearBearerDeathTokens(t); game.nightDeaths.push(t.id);
+        placeToken(t, { type: 'DIES', roleId: artRole, label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
+        if (t.type === 'minion') t.vigormortisAlive = true;
+        checkGrandmotherDeath(game, t, actorId, artRole);
+        checkScarletWoman(game, actor);
+      }
+      break;
+    }
+
+    case 'ZOMBUUL_KILL': {
+      const t = targets[0]; if (!t) break;
+      if (!t.alive || t.protected || t.safeTonight) break;
+      if (checkFoolProtection(game, t, actorId, artRole)) break;
+      if (t.id === actorId && !actor.zombuulFirstDied) {
+        actor.zombuulFirstDied = true;
+        addDeferred(game, { label: `🧟 Zombuul aparenta estar muerto — ¡sigue vivo!`, dueNight: game.nightNumber, severity: 'warn', role: 'ZOMBUUL' });
+        break;
+      }
+      t.alive = false; clearBearerDeathTokens(t); game.nightDeaths.push(t.id);
+      placeToken(t, { type: 'DIES', roleId: artRole, label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
+      checkGrandmotherDeath(game, t, actorId, artRole);
+      checkScarletWoman(game, actor);
+      break;
+    }
+
+    case 'PUKKA_POISON': {
+      // Matar al envenenado de la noche anterior
+      if (game.pukkaLastPoisoned) {
+        const prev = game.players.find(p => p.id === game.pukkaLastPoisoned);
+        if (prev?.alive && !prev.protected && !prev.safeTonight) {
+          prev.alive = false; clearBearerDeathTokens(prev); game.nightDeaths.push(prev.id);
+          placeToken(prev, { type: 'DIES', roleId: 'PUKKA', label: 'Muere (Pukka)', expiry: ['AT_DAWN'], sourceRole: 'PUKKA', sourcePlayerId: actorId }, game);
+          checkGrandmotherDeath(game, prev, actorId, 'PUKKA');
+        }
+      }
+      // Envenenar al nuevo objetivo
+      if (targets[0]) {
+        placeToken(targets[0], { type: 'POISONED', roleId: 'PUKKA', label: 'Envenenado (Pukka)', expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'PUKKA', sourcePlayerId: actorId }, game);
+        game.pukkaLastPoisoned = targets[0].id;
+      }
+      break;
+    }
+
+    case 'INNKEEPER_PROTECT': {
+      // targetIds: [prot1, prot2, drunkId]
+      const [ip1, ip2, iDrunk] = targets;
+      for (const t of [ip1, ip2]) {
+        if (t) {
+          t.safeTonight = true;
+          placeToken(t, { type: 'SAFE_TONIGHT', roleId: 'INNKEEPER', label: 'A salvo', expiry: ['AT_DAWN', 'ON_REPLACE'], sourceRole: 'INNKEEPER', sourcePlayerId: actorId }, game);
+        }
+      }
+      if (iDrunk) placeToken(iDrunk, { type: 'DRUNK_NIGHT', roleId: 'INNKEEPER', label: 'Borracho', expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'INNKEEPER', sourcePlayerId: actorId }, game);
+      break;
+    }
+
+    case 'SAILOR_DRUNK': {
+      if (actor) { actor.safeTonight = true; }
+      if (targets[0]) placeToken(targets[0], { type: 'DRUNK_NIGHT', roleId: 'SAILOR', label: 'Borracho', expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'SAILOR', sourcePlayerId: actorId }, game);
+      break;
+    }
+
+    case 'DEVILS_ADVOCATE_PROTECT': {
+      if (targets[0] && isActorEffective(actor)) placeToken(targets[0], {
+        type: 'SURVIVES_EXECUTION', roleId: 'DEVILS_ADVOCATE', label: 'Sobrevive ejecución',
+        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'DEVILS_ADVOCATE', sourcePlayerId: actorId,
+      }, game);
+      break;
+    }
+
+    case 'WITCH_CURSE': {
+      if (targets[0] && isActorEffective(actor)) placeToken(targets[0], {
+        type: 'WITCH_CURSED', roleId: 'WITCH', label: 'Maldito',
+        expiry: ['ON_REPLACE'], sourceRole: 'WITCH', sourcePlayerId: actorId,
+      }, game);
+      break;
+    }
+
+    case 'GRANDMOTHER_INFO': {
+      if (actor && targets[0]) {
+        game.grandmotherGrandchild = targets[0].id;
+        const t = targets[0];
+        actor.nightInfo = actor.poisoned
+          ? `👵 Abuela\nJugador bueno: (FALSO — envenenada).`
+          : `👵 Abuela\nNieto: ${t.name} (${ROLES[t.role]?.name || t.role}).`;
+      }
+      break;
+    }
+
+    case 'PROFESSOR_REVIVE': {
+      if (!actor || !targets[0]) break;
+      const prTarget = targets[0];
+      if (!prTarget.alive && !actor.poisoned && prTarget.type === 'townfolk') {
+        prTarget.alive = true; prTarget.deadVoteNominationId = null;
+        game.nightDeaths = game.nightDeaths.filter(id => id !== prTarget.id);
+        addDeferred(game, { label: `🎓 Profesor revivió a ${prTarget.name}`, dueNight: game.nightNumber, severity: 'info', role: 'PROFESSOR' });
+      }
+      break;
+    }
+
+    case 'EXORCIST_CHOOSE': {
+      if (targets[0] && isActorEffective(actor)) {
+        placeToken(targets[0], { type: 'EXORCISED', roleId: 'EXORCIST', label: 'Exorcizado', expiry: ['AT_DAWN', 'ON_REPLACE'], sourceRole: 'EXORCIST', sourcePlayerId: actorId }, game);
+        if (targets[0].type === 'demon') targets[0].safeTonight = true;
+      }
+      break;
+    }
+
+    case 'ACROBAT_CHECK': {
+      if (!actor || !targets[0] || !isActorEffective(actor)) break;
+      const acrobatTarget = targets[0];
+      const tDrunk = acrobatTarget.poisoned || (acrobatTarget.tokens || []).some(tk => ['DRUNK_NIGHT', 'DRUNK'].includes(tk.type));
+      if (tDrunk) {
+        actor.alive = false; clearBearerDeathTokens(actor); game.nightDeaths.push(actor.id);
+        placeToken(actor, { type: 'DIES', roleId: 'ACROBAT', label: 'Muere (Acróbata)', expiry: ['AT_DAWN'], sourceRole: 'ACROBAT', sourcePlayerId: actor.id }, game);
       }
       break;
     }
@@ -1163,6 +1336,15 @@ function applyNightAction(game, actionType, actorId, targetIds) {
   return game;
 }
 
+function checkGrandmotherDeath(game, killed, actorId, artRole) {
+  if (!game.grandmotherGrandchild || killed.id !== game.grandmotherGrandchild) return;
+  const gm = game.players.find(p => p.role === 'GRANDMOTHER' && p.alive && !p.poisoned);
+  if (!gm) return;
+  gm.alive = false; clearBearerDeathTokens(gm); game.nightDeaths.push(gm.id);
+  placeToken(gm, { type: 'DIES', roleId: 'GRANDMOTHER', label: 'Muere con nieto', expiry: ['AT_DAWN'], sourceRole: 'GRANDMOTHER', sourcePlayerId: actorId }, game);
+  addDeferred(game, { label: `👵 La Abuela murió junto a su nieto ${killed.name}`, dueNight: game.nightNumber, severity: 'info', role: 'GRANDMOTHER' });
+}
+
 function checkScarletWoman(game, killer) {
   if (!killer || killer.type !== 'demon' || killer.alive) return;
   const scarlet = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
@@ -1183,6 +1365,19 @@ function nominate(game, nominatorId, nomineeId) {
 
   const alreadyNominated = game.nominations.some(n => n.nominatorId === nominatorId);
   if (alreadyNominated) throw new Error('Ya has nominado a alguien hoy');
+
+  // Bruja: si el nominador está maldito y la Bruja está sana → muere al nominar
+  const witchCurse = (nominator.tokens || []).find(t => t.type === 'WITCH_CURSED');
+  if (witchCurse) {
+    nominator.tokens = nominator.tokens.filter(t => t !== witchCurse);
+    const witch = game.players.find(p => p.role === 'WITCH' && p.alive);
+    if (isActorEffective(witch)) {
+      nominator.alive = false;
+      clearBearerDeathTokens(nominator);
+      addDeferred(game, { label: `🧙‍♀️ ${nominator.name} murió por la Bruja al nominar`, dueNight: game.nightNumber, severity: 'warn', role: 'WITCH' });
+      checkWinCondition(game);
+    }
+  }
 
   if (nominee.role === 'VIRGIN' && !nominee.virginUsed) {
     // FIX: La Virgen gasta su poder en la PRIMERA nominación, sin importar quién la nomine
@@ -1320,6 +1515,16 @@ function executeNominationWinner(game) {
 
   winner.executed = true;
   game.executedToday = nominee.id;
+
+  // Abogado del Diablo: si tiene token SURVIVES_EXECUTION → no muere
+  const daToken = (nominee.tokens || []).find(t => t.type === 'SURVIVES_EXECUTION');
+  if (daToken) {
+    nominee.tokens = nominee.tokens.filter(t => t !== daToken);
+    syncStatusFlags(game);
+    addDeferred(game, { label: `⚖️ ${nominee.name} sobrevivió la ejecución (Abogado del Diablo)`, dueNight: game.nightNumber, severity: 'warn', role: 'DEVILS_ADVOCATE' });
+    return { executed: nominee, gameOver: false, winner: null, tie: false, savedByDA: true };
+  }
+
   nominee.alive = false;
   clearBearerDeathTokens(nominee);
   // Ficha "Murió hoy" para el Enterrador: dura el día y se lee esa noche.
@@ -1560,7 +1765,9 @@ function getPublicState(game, viewerId, isNarrator) {
         ? (p.accusations || [])
         : (p.accusations || []).filter(a => a.accuserId === viewerId),
       slayerUsed:  p.slayerUsed,
-      foolUsed:    isNarrator ? (p.foolUsed || false) : undefined,
+      foolUsed:        isNarrator ? (p.foolUsed || false) : undefined,
+      zombuulFirstDied: isNarrator ? (p.zombuulFirstDied || false) : undefined,
+      vigormortisAlive: isNarrator ? (p.vigormortisAlive || false) : undefined,
       impShotUsed: (isMe && p.type === 'demon') || isNarrator ? p.impShotUsed : false,
       pendingRavenkeeper: isNarrator ? p.pendingRavenkeeper : (isMe ? p.pendingRavenkeeper : false),
       isNightTarget: nightTargets.has(p.id),
@@ -1666,4 +1873,5 @@ module.exports = {
   addDeferred, assignBelievedRoles,
   applySetup, regenDemonNightInfo,
   getPublicState,
+  placeToken, syncStatusFlags,
 };

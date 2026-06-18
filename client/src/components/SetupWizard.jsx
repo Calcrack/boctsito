@@ -329,6 +329,42 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, minionsInCampaign, o
       );
       break;
     }
+    case 'outsiderModifierChoice': {
+      const oBase = d.base ?? 0;
+      const oPicked = d.chosenModifier;
+      const oChosen = d.chosen || [];
+      const oExpected = oPicked != null ? Math.max(0, oBase + oPicked) : null;
+      control = (
+        <div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            {(d.options || [-1, 1]).map(opt => (
+              <button key={opt} className="btn-night"
+                style={{ flex: 1, fontSize: 12, padding: '6px 0',
+                  borderColor: oPicked === opt ? 'var(--gold)' : undefined,
+                  color: oPicked === opt ? 'var(--gold-hot)' : undefined }}
+                onClick={() => setDec(d.id, { chosenModifier: opt, expected: Math.max(0, oBase + opt), chosen: [] })}>
+                {opt > 0 ? `+${opt}` : opt} Forastero
+              </button>
+            ))}
+          </div>
+          {oExpected != null && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', width: '100%' }}>Esperados: {oExpected}</span>
+              {outsidersInPlay.map(rid => {
+                const on = oChosen.includes(rid);
+                return (
+                  <button key={rid} className="btn-night" style={{ fontSize: 8, borderColor: on ? 'var(--gold)' : undefined, color: on ? 'var(--gold-hot)' : undefined }}
+                    onClick={() => setDec(d.id, { chosen: on ? oChosen.filter(x => x !== rid) : [...oChosen, rid] })}>
+                    {ROLE_BY_ID[rid]?.name || rid}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+      break;
+    }
     case 'summonerSetup':
       control = (
         <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '4px 0', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
@@ -412,9 +448,10 @@ function isResolved(d) {
     case 'forasteros':      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'registroInicial': return !!d.registersAs;
     case 'otroSecreto':        return d.secret !== 'evilTwin' || !!d.targetSeat;
-    case 'puzzlemasterDrunk':  return !!d.chosen;
-    case 'alchemistAbility':   return !!d.chosen;
-    case 'boffinAbility':      return !!d.chosen;
+    case 'puzzlemasterDrunk':       return !!d.chosen;
+    case 'alchemistAbility':        return !!d.chosen;
+    case 'boffinAbility':           return !!d.chosen;
+    case 'outsiderModifierChoice':  return d.chosenModifier != null && Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'summonerSetup':      return true;
     default: return true;
   }
@@ -428,7 +465,8 @@ function titleFor(d) {
     case 'otroSecreto':        return d.secret === 'evilTwin' ? 'Gemela Malvada' : d.secret;
     case 'puzzlemasterDrunk':  return `Maestro de Acertijos — jugador borracho`;
     case 'alchemistAbility':   return `Alquimista — habilidad de Esbirro`;
-    case 'boffinAbility':      return `Rata de Laboratorio — habilidad del Demonio`;
+    case 'boffinAbility':            return `Rata de Laboratorio — habilidad del Demonio`;
+    case 'outsiderModifierChoice':   return `${d.seatName} — ±1 Forastero`;
     case 'summonerSetup':      return `Invocador — preparación especial`;
     default: return d.kind;
   }

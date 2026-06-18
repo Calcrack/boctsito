@@ -12,6 +12,7 @@ const {
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, addDeferred, getPublicState,
   assignBelievedRoles, applySetup, regenDemonNightInfo,
+  placeToken, syncStatusFlags,
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
@@ -1201,6 +1202,18 @@ function handleMessage(type, payload, session) {
       if (assignedCount < game.players.length) throw new Error('Faltan asientos por asignar un rol');
       if (!isSetupComplete(game.setup.decisions)) throw new Error('Faltan decisiones de montaje por resolver');
       applySetup(game);
+      // Maestro de Acertijos: aplicar borrachera permanente al jugador elegido en setup
+      const pmDec = (game.setup.decisions || []).find(d => d.kind === 'puzzlemasterDrunk');
+      if (pmDec?.chosen) {
+        const drunkPlayer = game.players.find(p => p.id === pmDec.chosen || p.seatId === pmDec.chosen);
+        if (drunkPlayer) {
+          placeToken(drunkPlayer, {
+            type: 'DRUNK_NIGHT', roleId: 'PUZZLEMASTER', label: 'Borracho (Maestro)',
+            expiry: [], sourceRole: 'PUZZLEMASTER', sourcePlayerId: null,
+          }, game);
+          syncStatusFlags(game);
+        }
+      }
       broadcastGame();
       break;
     }
@@ -1223,6 +1236,14 @@ function handleMessage(type, payload, session) {
       }
       if (actionType && actorId && Array.isArray(targetIds)) {
         applyNightAction(game, actionType, actorId, targetIds);
+      }
+      // Maestro de Acertijos: revelar Demonio si adivinó correctamente
+      if (actionType === 'PUZZLEMASTER_REVEAL' && actorId) {
+        const pm = game.players.find(p => p.id === actorId);
+        const demon = game.players.find(p => p.type === 'demon' && p.alive);
+        if (pm && demon && !pm.poisoned) {
+          pm.nightInfo = `🧩 Maestro\nEl Demonio es: ${demon.name}.`;
+        }
       }
       broadcastGame();
       break;

@@ -92,7 +92,7 @@ function computeRequiredDecisions(game) {
       keep(dec);
     }
 
-    // 2) Forasteros (Barón/Padrino/Fang Gu/Vigormortis)
+    // 2) Forasteros fijos (Barón/Fang Gu/Vigormortis)
     if (typeof s.outsiderModifier === 'number') {
       const base = ctx.campaign.distribution[ctx.seats.length]?.outsiders ?? 0;
       keep({
@@ -100,6 +100,21 @@ function computeRequiredDecisions(game) {
         modifier: s.outsiderModifier, expected: Math.max(0, base + s.outsiderModifier),
         chosen: [],
         consequence: `${role.name} modifica el nº de Forasteros (${s.outsiderModifier > 0 ? '+' : ''}${s.outsiderModifier}). Confirma cuáles entran.`,
+      });
+    }
+
+    // 2b) Forasteros con elección del narrador (Padrino: -1 o +1)
+    if (s.outsiderModifierChoice) {
+      const base = ctx.campaign.distribution[ctx.seats.length]?.outsiders ?? 0;
+      keep({
+        id: `outsiderModifierChoice:${seat.id}`, kind: 'outsiderModifierChoice',
+        seat: seat.id, seatName: seat.name,
+        options: s.outsiderModifierChoice, // [-1, 1]
+        chosenModifier: null,
+        chosen: [],
+        expected: null, // se calcula al elegir el modificador
+        base,
+        consequence: `${role.name}: elige si entran +1 o -1 Forastero, luego confirma cuáles.`,
       });
     }
 
@@ -220,6 +235,9 @@ function isDecisionResolved(d) {
     case 'puzzlemasterDrunk':  return !!d.chosen;
     case 'alchemistAbility':   return !!d.chosen;
     case 'boffinAbility':      return !!d.chosen;
+    case 'outsiderModifierChoice':
+      if (d.chosenModifier == null) return false;
+      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'summonerSetup':      return true;
     default: return true;
   }
@@ -231,13 +249,15 @@ function isSetupComplete(decisions) {
 // ── utilidades internas ──────────────────────────────────────────────
 function indexById(arr) { const m = {}; for (const d of arr) m[d.id] = d; return m; }
 function pickChosen(prev) {
-  const { chosenGoodRole, lunatic, chosen, targetSeat, registersAs } = prev;
+  const { chosenGoodRole, lunatic, chosen, targetSeat, registersAs, chosenModifier, expected } = prev;
   const out = {};
   if (chosenGoodRole !== undefined) out.chosenGoodRole = chosenGoodRole;
   if (lunatic !== undefined) out.lunatic = lunatic;
   if (chosen !== undefined) out.chosen = chosen;
   if (targetSeat !== undefined) out.targetSeat = targetSeat;
   if (registersAs !== undefined) out.registersAs = registersAs;
+  if (chosenModifier !== undefined) out.chosenModifier = chosenModifier;
+  if (expected !== undefined) out.expected = expected;
   return out;
 }
 

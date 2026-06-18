@@ -2,10 +2,17 @@
 // Soporta formato (a) lista de IDs + _meta, y (b) definiciones homebrew.
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 const { ALL_ROLES, getCampaign } = require('./campaigns');
-const { getDB } = require('./db');
 
-const CUSTOM_PATH = path.join(__dirname, 'campaigns-custom.json');
+const CUSTOM_PATH           = path.join(__dirname, 'campaigns-custom.json');
+const GITHUB_TOKEN          = process.env.GITHUB_TOKEN;
+const GITHUB_REPO           = process.env.GITHUB_REPO;
+const GITHUB_BRANCH         = process.env.GITHUB_BRANCH || 'rankings-data';
+const CAMPAIGNS_GITHUB_PATH = 'server/campaigns-custom.json';
+
+let _sha   = null;
+let _cache = null;
 
 // Alias: id canónico de botc → nuestro ID interno cuando difieren.
 const ID_ALIASES = {
@@ -228,7 +235,7 @@ function priorityOf(id, roles, key) {
   return 999;
 }
 
-// ── Persistencia de campañas personalizadas ────────────────────────
+// ── Persistencia de campañas personalizadas (GitHub API, igual que rankings) ──
 function _fileLoad() {
   try {
     if (!fs.existsSync(CUSTOM_PATH)) return {};
@@ -236,44 +243,99 @@ function _fileLoad() {
   } catch { return {}; }
 }
 
-async function loadCustomCampaigns() {
-  try {
-    const db = await getDB();
-    if (db) {
-      const docs = await db.collection('custom_campaigns').find({}).toArray();
-      const result = {};
-      for (const { _id, ...c } of docs) result[c.id] = c;
-      return result;
+function _ghRequest(method, apiPath, body) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const req = https.request({
+      hostname: 'api.github.com',
+      path: apiPath,
+      method,
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'boct-game',
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+      },
+    }, res => {
+      let raw = '';
+      res.on('data', c => raw += c);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(raw) }); }
+        catch { resolve({ status: res.statusCode, body: raw }); }
+      });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function _pushCampaigns(data) {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  const content = Buffer.from(JSON.stringify(data, null, 2), 'utf8').toString('base64');
+  const apiPath = `/repos/${GITHUB_REPO}/contents/${CAMPAIGNS_GITHUB_PATH}`;
+  if (!_sha) {
+    const get = await _ghRequest('GET', `${apiPath}?ref=${GITHUB_BRANCH}`, null);
+    if (get.status === 200) _sha = get.body.sha;
+    else if (get.status !== 404) { console.error('[Campaigns] GET sha falló:', get.status); return; }
+  }
+  const body = { message: 'chore: update campaigns', content, branch: GITHUB_BRANCH };
+  if (_sha) body.sha = _sha;
+  const put = await _ghRequest('PUT', apiPath, body);
+  if (put.status === 200 || put.status === 201) {
+    _sha = put.body.content?.sha;
+    console.log(`[Campaigns] Sincronizadas en GitHub (${Object.keys(data).length})`);
+  } else if (put.status === 409) {
+    _sha = null;
+    const get2 = await _ghRequest('GET', `${apiPath}?ref=${GITHUB_BRANCH}`, null);
+    if (get2.status === 200) {
+      _sha = get2.body.sha;
+      const body2 = { ...body, sha: _sha };
+      const put2 = await _ghRequest('PUT', apiPath, body2);
+      if (put2.status === 200 || put2.status === 201) _sha = put2.body.content?.sha;
+      else { console.error('[Campaigns] Push falló (reintento):', put2.status); _sha = null; }
     }
-  } catch (e) { console.error('[Campaigns] DB load error:', e.message); }
-  return _fileLoad();
+  } else {
+    console.error('[Campaigns] Push falló:', put.status, JSON.stringify(put.body).slice(0, 200));
+    _sha = null;
+  }
+}
+
+async function loadCustomCampaigns() {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) {
+    _cache = _fileLoad();
+    return _cache;
+  }
+  try {
+    const res = await _ghRequest('GET', `/repos/${GITHUB_REPO}/contents/${CAMPAIGNS_GITHUB_PATH}?ref=${GITHUB_BRANCH}`, null);
+    if (res.status === 200 && res.body.content) {
+      _sha = res.body.sha;
+      _cache = JSON.parse(Buffer.from(res.body.content, 'base64').toString('utf8'));
+      try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(_cache, null, 2), 'utf8'); } catch {}
+      console.log(`[Campaigns] ${Object.keys(_cache).length} campaña(s) cargada(s) desde GitHub`);
+      return _cache;
+    }
+    if (res.status === 404) { _cache = {}; return _cache; }
+    console.error('[Campaigns] GitHub GET falló:', res.status);
+  } catch (e) { console.error('[Campaigns] GitHub load error:', e.message); }
+  _cache = _fileLoad();
+  return _cache;
 }
 
 async function saveCustomCampaign(campaign) {
-  try {
-    const db = await getDB();
-    if (db) {
-      await db.collection('custom_campaigns').replaceOne({ id: campaign.id }, campaign, { upsert: true });
-      return campaign;
-    }
-  } catch (e) { console.error('[Campaigns] DB save error:', e.message); }
-  const all = _fileLoad();
-  all[campaign.id] = campaign;
-  try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(all, null, 2), 'utf8'); } catch {}
+  if (_cache === null) _cache = _fileLoad();
+  _cache[campaign.id] = campaign;
+  try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(_cache, null, 2), 'utf8'); } catch {}
+  _pushCampaigns(_cache).catch(e => console.error('[Campaigns] push error:', e.message));
   return campaign;
 }
 
 async function deleteCustomCampaign(id) {
-  try {
-    const db = await getDB();
-    if (db) {
-      await db.collection('custom_campaigns').deleteOne({ id });
-      return;
-    }
-  } catch (e) { console.error('[Campaigns] DB delete error:', e.message); }
-  const all = _fileLoad();
-  delete all[id];
-  try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(all, null, 2), 'utf8'); } catch {}
+  if (_cache === null) _cache = _fileLoad();
+  delete _cache[id];
+  try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(_cache, null, 2), 'utf8'); } catch {}
+  _pushCampaigns(_cache).catch(e => console.error('[Campaigns] push error:', e.message));
 }
 
 // Construye una campaña lista para el motor a partir de un script.

@@ -21,13 +21,7 @@ const { buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCamp
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 const { initDB, saveGame, loadGame, logGameEvent } = require('./persistence');
 
-// Carga campañas personalizadas persistidas y las registra en el motor.
-try {
-  const custom = loadCustomCampaigns();
-  for (const c of Object.values(custom)) registerCampaign(c);
-  const n = Object.keys(custom).length;
-  if (n) console.log(`✓ ${n} campaña(s) personalizada(s) cargada(s)`);
-} catch (e) { console.error('Error cargando campañas personalizadas:', e.message); }
+// Las campañas personalizadas se cargan de forma asíncrona en startup().
 
 const SAVE_PATH = path.join(__dirname, 'game-save.json');
 
@@ -347,7 +341,7 @@ function handleMessage(type, payload, session) {
         break;
       }
       registerCampaign(campaign);
-      saveCustomCampaign(campaign);
+      saveCustomCampaign(campaign).catch(e => console.error('[Campaigns] save error:', e.message));
       sendTo(ws, 'IMPORT_RESULT', {
         ok: true, id: campaign.id, name: campaign.name,
         roleCount: Object.keys(campaign.roles).length,
@@ -368,7 +362,7 @@ function handleMessage(type, payload, session) {
       const cid = payload.campaignId;
       if (cid && CAMPAIGNS[cid] && CAMPAIGNS[cid].isCustom) {
         delete CAMPAIGNS[cid];
-        deleteCustomCampaign(cid);
+        deleteCustomCampaign(cid).catch(e => console.error('[Campaigns] delete error:', e.message));
         const game = getGame(MAIN_GAME_ID);
         if (game.campaignId === cid) game.campaignId = DEFAULT_CAMPAIGN;
       }
@@ -1553,7 +1547,6 @@ async function startup() {
   try {
     await initDB();
     console.log('[DB] Inicializada');
-    // Load partida persistida
     const saved = await loadGame(MAIN_GAME_ID);
     if (saved) {
       Object.assign(mainGame, saved);
@@ -1562,6 +1555,14 @@ async function startup() {
   } catch (e) {
     console.error('[DB] Error:', e.message, e.stack);
   }
+
+  // Cargar campañas personalizadas (MongoDB si MONGODB_URI está definido, si no, archivo local)
+  try {
+    const custom = await loadCustomCampaigns();
+    for (const c of Object.values(custom)) registerCampaign(c);
+    const n = Object.keys(custom).length;
+    if (n) console.log(`✓ ${n} campaña(s) personalizada(s) cargada(s)`);
+  } catch (e) { console.error('[Campaigns] Error al cargar:', e.message); }
 
   server.listen(PORT, () => {
     console.log(`[Server] http://localhost:${PORT}`);

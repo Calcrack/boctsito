@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ALL_ROLES, getCampaign } = require('./campaigns');
+const { getDB } = require('./db');
 
 const CUSTOM_PATH = path.join(__dirname, 'campaigns-custom.json');
 
@@ -228,24 +229,51 @@ function priorityOf(id, roles, key) {
 }
 
 // ── Persistencia de campañas personalizadas ────────────────────────
-function loadCustomCampaigns() {
+function _fileLoad() {
   try {
     if (!fs.existsSync(CUSTOM_PATH)) return {};
     return JSON.parse(fs.readFileSync(CUSTOM_PATH, 'utf8')) || {};
   } catch { return {}; }
 }
 
-function saveCustomCampaign(campaign) {
-  const all = loadCustomCampaigns();
+async function loadCustomCampaigns() {
+  try {
+    const db = await getDB();
+    if (db) {
+      const docs = await db.collection('custom_campaigns').find({}).toArray();
+      const result = {};
+      for (const { _id, ...c } of docs) result[c.id] = c;
+      return result;
+    }
+  } catch (e) { console.error('[Campaigns] DB load error:', e.message); }
+  return _fileLoad();
+}
+
+async function saveCustomCampaign(campaign) {
+  try {
+    const db = await getDB();
+    if (db) {
+      await db.collection('custom_campaigns').replaceOne({ id: campaign.id }, campaign, { upsert: true });
+      return campaign;
+    }
+  } catch (e) { console.error('[Campaigns] DB save error:', e.message); }
+  const all = _fileLoad();
   all[campaign.id] = campaign;
-  fs.writeFileSync(CUSTOM_PATH, JSON.stringify(all, null, 2), 'utf8');
+  try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(all, null, 2), 'utf8'); } catch {}
   return campaign;
 }
 
-function deleteCustomCampaign(id) {
-  const all = loadCustomCampaigns();
+async function deleteCustomCampaign(id) {
+  try {
+    const db = await getDB();
+    if (db) {
+      await db.collection('custom_campaigns').deleteOne({ id });
+      return;
+    }
+  } catch (e) { console.error('[Campaigns] DB delete error:', e.message); }
+  const all = _fileLoad();
   delete all[id];
-  fs.writeFileSync(CUSTOM_PATH, JSON.stringify(all, null, 2), 'utf8');
+  try { fs.writeFileSync(CUSTOM_PATH, JSON.stringify(all, null, 2), 'utf8'); } catch {}
 }
 
 // Construye una campaña lista para el motor a partir de un script.

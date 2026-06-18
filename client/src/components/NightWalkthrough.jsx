@@ -429,7 +429,7 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
         {step?.type === 'role' && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--bone-300)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={completed.has(current)} onChange={e => {
+              <input type="checkbox" checked={!!step.actor.nightInfo || completed.has(current)} onChange={e => {
                 const c = new Set(completed);
                 if (e.target.checked) c.add(current); else c.delete(current);
                 setCompleted(c);
@@ -574,7 +574,7 @@ function P2Panel({ actor, pattern, game, send, roleName }) {
   const [trueSeat,  setTrueSeat]  = useState('');
   const [decoySeat, setDecoySeat] = useState('');
   const [shownRole, setShownRole] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const living = game.players.filter(p => p.alive && p.id !== actor.id);
   const isp    = actor.poisoned;
@@ -617,7 +617,7 @@ function P2Panel({ actor, pattern, game, send, roleName }) {
 // P1 — número calculado + override (Empática, Cocinero, Sepulturero, Oráculo, Relojero, Niña de las Flores…)
 function P1Panel({ actor, pattern, game, send, roleName }) {
   const [val, setVal] = useState('');
-  const [ok,  setOk]  = useState(false);
+  const [ok,  setOk]  = useState(actor.nightInfo != null);
   const name = roleName || ROLE_BY_ID[actor.role]?.name || '';
 
   if (pattern.what === 'executedRole') {
@@ -719,7 +719,7 @@ function P1Panel({ actor, pattern, game, send, roleName }) {
 // P3 — elegir 1 jugador (Envenenador, Monje, Mayordomo, Imp, Abuela, y todos los Demonios no-TB)
 function P3Panel({ actor, pattern, game, send, roleName }) {
   const [targetId, setTargetId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = pattern.deadOnly
     ? game.players.filter(p => !p.alive)
@@ -790,7 +790,7 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
 function P3x2Panel({ actor, pattern, game, send, roleName }) {
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const living = game.players.filter(p => p.alive);
   const can = t1 && t2 && t1 !== t2;
@@ -838,7 +838,7 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
   const [p1, setP1] = useState('');
   const [p2, setP2] = useState('');
   const [redHerring, setRedHerring] = useState(game.smokeScreenPlayerId || '');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const living = game.players.filter(p => p.alive && p.id !== actor.id);
   const goodPl = game.players.filter(p => p.alignment === 'good');
@@ -915,7 +915,7 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
 
 // P_INFO — recordatorio de mecánica especial; sin selector de jugador
 function P_InfoPanel({ actor, pattern, send, roleName }) {
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `${pattern.emoji} ${roleName}\n[Narrador gestionó manualmente]` });
     setOk(true);
@@ -939,7 +939,7 @@ function P_InfoPanel({ actor, pattern, send, roleName }) {
 function DreamerPanel({ actor, pattern, game, send, roleName }) {
   const [targetId, setTargetId] = useState('');
   const [decoyId, setDecoyId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   const target = game.players.find(p => p.id === targetId);
@@ -986,7 +986,7 @@ function ChambermaidPanel({ actor, pattern, game, send, roleName }) {
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
   const [count, setCount] = useState(null);
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   const can = t1 && t2 && t1 !== t2 && count !== null;
@@ -1033,7 +1033,7 @@ function POPanel({ actor, pattern, game, send }) {
   const [t2, setT2] = useState('');
   const [t3, setT3] = useState('');
   const [targetId, setTargetId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const [skipped, setSkipped] = useState(false);
 
   const living = game.players.filter(p => p.alive);
@@ -1095,7 +1095,7 @@ function POPanel({ actor, pattern, game, send }) {
 // P_PHILOSOPHER — elegir personaje bueno una sola vez (Filósofo)
 function PhilosopherPanel({ actor, pattern, game, send, roleName }) {
   const [roleId, setRoleId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const goodRoles = (game.campaignRoles || []).filter(r => r.alignment === 'good' && r.id !== actor.role);
   const chosenDef = roleId ? ROLE_BY_ID[roleId] : null;
@@ -1127,7 +1127,7 @@ function PhilosopherPanel({ actor, pattern, game, send, roleName }) {
 // P_YESNO — decisión binaria del Narrador (Manitas, etc.)
 function YesNoPanel({ actor, pattern, send, roleName }) {
   const [val, setVal] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const chosen = val === 'yes' ? (pattern.yesLabel || 'SÍ') : val === 'no' ? (pattern.noLabel || 'NO') : null;
   const info = chosen ? `${pattern.emoji} ${roleName}\n${pattern.label}: ${chosen}.` : null;
   return (
@@ -1153,7 +1153,7 @@ function YesNoPanel({ actor, pattern, send, roleName }) {
 function GamblerPanel({ actor, pattern, game, send, roleName }) {
   const [targetId, setTargetId] = useState('');
   const [guessRoleId, setGuessRoleId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   // All roles in play (campaign + any cross-edition players bring)
@@ -1206,7 +1206,7 @@ function GamblerPanel({ actor, pattern, game, send, roleName }) {
 function GossipPanel({ actor, pattern, game, send, roleName }) {
   const [triggered, setTriggered] = useState(null);
   const [targetId, setTargetId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
 
@@ -1249,7 +1249,7 @@ function GossipPanel({ actor, pattern, game, send, roleName }) {
 // P_COURTIER — Cortesano: elige un personaje (no jugador) que queda borracho 3 noches
 function CourtierPanel({ actor, pattern, game, send, roleName }) {
   const [guessRoleId, setGuessRoleId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const rolesInPlay = [];
   const seen = new Set();
@@ -1291,7 +1291,7 @@ function CourtierPanel({ actor, pattern, game, send, roleName }) {
 function MoonchildPanel({ actor, pattern, game, send, roleName }) {
   const [died, setDied] = useState(null);
   const [targetId, setTargetId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   const can = died === false || (died === true && targetId);
@@ -1333,7 +1333,7 @@ function NoblePanel({ actor, pattern, game, send, roleName }) {
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
   const [t3, setT3] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
 
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   const selected = [t1, t2, t3].filter(Boolean);
@@ -1374,7 +1374,7 @@ function PukkaPanel({ actor, pattern, game, send, roleName }) {
   );
   const [deathOk, setDeathOk] = useState(!prevPoisoned);
   const [targetId, setTargetId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive);
 
   const confirm = () => {
@@ -1425,7 +1425,7 @@ function PukkaPanel({ actor, pattern, game, send, roleName }) {
 
 // P_PUZZLEMASTER — Maestro de Acertijos: muestra jugador borracho fijado en setup
 function PuzzlemasterPanel({ actor, pattern, game, send, roleName }) {
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const dec = (game.setup?.decisions || []).find(d => d.kind === 'puzzlemasterDrunk');
   const drunkPlayer = dec?.chosen ? game.players.find(p => p.id === dec.chosen) : null;
   return (
@@ -1452,7 +1452,7 @@ function PuzzlemasterPanel({ actor, pattern, game, send, roleName }) {
 
 // P_ALCHEMIST — Alquimista: muestra habilidad de Esbirro fijada en setup
 function AlchemistPanel({ actor, pattern, game, send, roleName }) {
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const dec = (game.setup?.decisions || []).find(d => d.kind === 'alchemistAbility');
   const minionRole = dec?.chosen ? ROLE_BY_ID[dec.chosen] : null;
   return (
@@ -1485,7 +1485,7 @@ function AlchemistPanel({ actor, pattern, game, send, roleName }) {
 // P_SHUGENJA — Shugenja: dirección al jugador malo más cercano
 function ShugenjaPanel({ actor, game, send }) {
   const [dir, setDir] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
       nightInfo: `🔮 Shugenja\nEl jugador malo más cercano está en dirección ${dir === 'cw' ? '↻ Horario' : '↺ Anti-horario'}.` });
@@ -1512,7 +1512,7 @@ function ShugenjaPanel({ actor, game, send }) {
 
 // P_STEWARD — Administrador: muestra el jugador bueno conocido
 function StewardPanel({ actor, game, send }) {
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const knownPlayer = game.players.find(p => (p.tokens || []).some(t => t.roleId === 'STEWARD' && t.tokenId === 'SABE'))
     || game.players.find(p => p.id === (game.setup?.decisions || []).find(d => d.kind === 'stewardNeighbors')?.chosen?.seat);
   return (
@@ -1538,7 +1538,7 @@ function StewardPanel({ actor, game, send }) {
 function CerenovusPanel({ actor, game, send }) {
   const [targetId, setTargetId] = useState('');
   const [charId, setCharId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   const goodRoles = (game.campaignRoles || []).filter(r => r.alignment === 'good');
   const tname = game.players.find(p => p.id === targetId)?.name;
@@ -1575,7 +1575,7 @@ function CerenovusPanel({ actor, game, send }) {
 function PitHagPanel({ actor, game, send }) {
   const [targetId, setTargetId] = useState('');
   const [charId, setCharId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive);
   const allRoles = game.campaignRoles || [];
   const tname = game.players.find(p => p.id === targetId)?.name;
@@ -1615,7 +1615,7 @@ function PitHagPanel({ actor, game, send }) {
 function EngineerPanel({ actor, game, send }) {
   const [choice, setChoice] = useState('');
   const [selectedRoles, setSelectedRoles] = useState([]);
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const used = (actor.tokens || []).some(t => t.tokenId === 'SIN_HABILIDAD' && t.roleId === 'ENGINEER');
   const allRoles = game.campaignRoles || [];
   const minions = allRoles.filter(r => r.type === 'minion');
@@ -1679,7 +1679,7 @@ function AlHadikhiaPanel({ actor, game, send }) {
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
   const [t3, setT3] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive);
   const n = id => game.players.find(p => p.id === id)?.name || '?';
   const can = t1 && t2 && t3 && new Set([t1, t2, t3]).size === 3;
@@ -1711,7 +1711,7 @@ function SummonerPanel({ actor, game, send }) {
   const nightNum = game.nightNumber;
   const [targetId, setTargetId] = useState('');
   const [demonId, setDemonId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive);
   const demons = (game.campaignRoles || []).filter(r => r.type === 'demon');
   if (nightNum < 3) return (
@@ -1752,7 +1752,7 @@ function SummonerPanel({ actor, game, send }) {
 // P_LIL_MONSTA — Pequeña Monsta: esbirros eligen quién porta al bebé
 function LilMonstaPanel({ actor, game, send }) {
   const [chosen, setChosen] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const minions = game.players.filter(p => p.type === 'minion' && p.alive);
   const nm = game.players.find(p => p.id === chosen)?.name;
   const confirm = () => {
@@ -1783,7 +1783,7 @@ function LilMonstaPanel({ actor, game, send }) {
 function BaristaPanel({ actor, game, send }) {
   const [targetId, setTargetId] = useState('');
   const [effect, setEffect] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive);
   const tname = game.players.find(p => p.id === targetId)?.name;
   const confirm = () => {
@@ -1818,7 +1818,7 @@ function BaristaPanel({ actor, game, send }) {
 function HarlotPanel({ actor, game, send }) {
   const [targetId, setTargetId] = useState('');
   const [consent, setConsent] = useState(null);
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const pool = game.players.filter(p => p.alive && p.id !== actor.id);
   const tname = game.players.find(p => p.id === targetId)?.name;
   const confirm = () => {
@@ -1864,7 +1864,7 @@ function HarlotPanel({ actor, game, send }) {
 // P_APPRENTICE — Aprendiz: primera noche, habilidad de Aldeano o Esbirro
 function ApprenticePanel({ actor, game, send }) {
   const [chosenId, setChosenId] = useState('');
-  const [ok, setOk] = useState(false);
+  const [ok, setOk] = useState(actor.nightInfo != null);
   const isGood = actor.alignment === 'good';
   const pool = (game.campaignRoles || []).filter(r => isGood ? r.type === 'townfolk' : r.type === 'minion');
   const chosen = pool.find(r => r.id === chosenId);

@@ -121,18 +121,26 @@ export const roles = [
 
 export const firstNightOrder = [
   'EVIL_INFO',
-  'POPPY_GROWER', 'MAGICIAN', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'RIOT', 'LEVIATHAN',
-  'MARIONETTE', 'MEZEPHELES', 'WIDOW', 'SUMMONER', 'SHUGENJA', 'STEWARD',
-  'PUZZLEMASTER', 'ALCHEMIST', 'AMNESIAC',
+  'POPPY_GROWER', 'MAGICIAN',
+  'BOFFIN',       // demon conoce su habilidad buena antes de actuar
+  'KAZALI', 'LEGION', 'LIL_MONSTA', 'LLEECH', 'RIOT', 'LEVIATHAN',
+  // MARIONETTE excluida: pasiva, no despierta con el mal
+  'MEZEPHELES', 'SUMMONER', 'YAGGABABBLE', 'SHUGENJA', 'STEWARD',
+  'PUZZLEMASTER', 'ALCHEMIST',
   'BOUNTY_HUNTER', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
+  'WIDOW',        // al final: ve el Grimorio completo tras todos los tokens colocados
 ];
 
 export const otherNightOrder = [
-  'POPPY_GROWER', 'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'OJO', 'AL_HADIKHIA',
-  'WIDOW', 'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
-  'PREACHER', 'LYCANTHROPE', 'HUNTSMAN', 'ENGINEER', 'ACROBAT',
-  'CANNIBAL', 'BOUNTY_HUNTER', 'CULT_LEADER',
+  'POPPY_GROWER',
+  'PREACHER',    // antes de esbirros: quita habilidad del esbirro elegido esa noche
+  'LYCANTHROPE', // antes de demonios: si mata a bueno, bloquea ataque del demonio
+  'ENGINEER',    // antes de demonios: cambia qué roles están en juego antes de que actúen
+  'HUNTSMAN',    // antes de demonios: salva Damisela antes que actúe demonio (canónico)
+  'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'OJO', 'AL_HADIKHIA',
+  'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
+  'ACROBAT', 'CANNIBAL', 'BOUNTY_HUNTER', 'CULT_LEADER', 'NIGHTWATCHMAN',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
 ];
 

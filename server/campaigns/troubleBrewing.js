@@ -132,7 +132,7 @@ const BASE_DISTRIBUTION = {
 
 // Cola interactiva del motor (NO cambiar — preserva el comportamiento auto/jugador de TB).
 const queueFirst  = ['POISONER', 'WASHERWOMAN', 'LIBRARIAN', 'INVESTIGATOR', 'COOK', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
-const queueOther  = ['POISONER', 'MONK', 'IMP', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
+const queueOther  = ['POISONER', 'MONK', 'IMP', 'RAVENKEEPER', 'FORTUNE_TELLER', 'EMPATH', 'UNDERTAKER', 'BUTLER', 'SPY'];
 
 // ── Tags de montaje/info (dirigen el motor de decisiones; ver server/setup.js) ──
 // VOCABULARIO CANÓNICO (compartido por todas las campañas):

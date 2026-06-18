@@ -52,7 +52,7 @@ export const roles = [
 ];
 
 export const firstNightOrder = ['EVIL_INFO', 'POISONER', 'WASHERWOMAN', 'LIBRARIAN', 'INVESTIGATOR', 'COOK', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
-export const otherNightOrder = ['POISONER', 'MONK', 'SCARLET_WOMAN', 'IMP', 'RAVENKEEPER', 'UNDERTAKER', 'EMPATH', 'FORTUNE_TELLER', 'BUTLER', 'SPY'];
+export const otherNightOrder = ['POISONER', 'MONK', 'SCARLET_WOMAN', 'IMP', 'RAVENKEEPER', 'FORTUNE_TELLER', 'EMPATH', 'UNDERTAKER', 'BUTLER', 'SPY'];
 
 // ── Fichas recordatorias (reminder tokens) por rol dueño ───────────────
 // duration: 'permanent' (perdura) | 'night' (se quita al amanecer) | 'oneShot' (un uso)

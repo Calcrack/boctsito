@@ -58,7 +58,7 @@ export const roles = [
     ability: 'Cada noche*: puedes elegir un jugador: muere. Si anoche no elegiste a nadie, esta noche elige 3 jugadores.', controls: ['kill'] },
 ];
 
-export const firstNightOrder = ['MINION_INFO', 'LUNATIC', 'DEMON_INFO', 'SAILOR', 'COURTIER', 'GODFATHER', 'DEVILS_ADVOCATE', 'PUKKA', 'GRANDMOTHER', 'CHAMBERMAID'];
+export const firstNightOrder = ['MINION_INFO', 'LUNATIC', 'DEMON_INFO', 'PUKKA', 'SAILOR', 'COURTIER', 'GODFATHER', 'DEVILS_ADVOCATE', 'GRANDMOTHER', 'CHAMBERMAID'];
 export const otherNightOrder = ['SAILOR', 'COURTIER', 'INNKEEPER', 'GAMBLER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
 
 // ── Fichas recordatorias (reminder tokens) por rol dueño ───────────────

@@ -21,7 +21,7 @@ const roles = {
   ATHEIST: {
     id: 'ATHEIST', name: 'Ateo', alignment: 'good', type: 'townfolk',
     ability: 'Todos los jugadores son buenos. Los buenos ganan si el Narrador es ejecutado.',
-    firstNight: true, otherNights: false,
+    firstNight: false, otherNights: false,
   },
   BALLOONIST: {
     id: 'BALLOONIST', name: 'Aeronauta', alignment: 'good', type: 'townfolk',
@@ -311,19 +311,27 @@ const BASE_DISTRIBUTION = {
 
 // Orden nocturno derivado de análisis de habilidades
 const queueFirst = [
-  'POPPY_GROWER', 'MAGICIAN', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'RIOT', 'LEVIATHAN',
+  'POPPY_GROWER', 'MAGICIAN',
+  'BOFFIN',       // demon conoce su habilidad buena antes de actuar
+  'KAZALI', 'LEGION', 'LIL_MONSTA', 'LLEECH', 'RIOT', 'LEVIATHAN',
   // 'MARIONETTE' NO entra en la cola interactiva: es pasiva y no despierta con el mal.
-  'MEZEPHELES', 'WIDOW', 'SUMMONER', 'SHUGENJA', 'STEWARD',
-  'PUZZLEMASTER', 'ALCHEMIST', 'AMNESIAC',
-  'BOUNTY_HUNTER', 'KNIGHT', 'BOFFIN', 'NOBLE', 'DAMSEL', 'SNITCH',
+  'MEZEPHELES', 'SUMMONER', 'YAGGABABBLE',
+  'SHUGENJA', 'STEWARD',
+  'PUZZLEMASTER', 'ALCHEMIST',
+  'BOUNTY_HUNTER', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
+  'WIDOW',        // al final: mira el Grimorio completo tras todos los tokens colocados
 ];
 
 const queueOther = [
-  'POPPY_GROWER', 'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'OJO', 'AL_HADIKHIA',
-  'WIDOW', 'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
-  'PREACHER', 'LYCANTHROPE', 'HUNTSMAN', 'ENGINEER', 'ACROBAT',
-  'CANNIBAL', 'BOUNTY_HUNTER', 'CULT_LEADER',
+  'POPPY_GROWER',
+  'PREACHER',    // antes de esbirros: quita habilidad del esbirro elegido esa noche
+  'LYCANTHROPE', // antes de demonios: si mata a bueno, bloquea ataque del demonio
+  'ENGINEER',    // antes de demonios: cambia qué roles están en juego antes de que actúen
+  'HUNTSMAN',    // antes de demonios: salva Damisela antes que actúe demonio (canónico)
+  'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'OJO', 'AL_HADIKHIA',
+  'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
+  'ACROBAT', 'CANNIBAL', 'BOUNTY_HUNTER', 'CULT_LEADER', 'NIGHTWATCHMAN',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
 ];
 

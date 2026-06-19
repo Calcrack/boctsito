@@ -36,7 +36,7 @@
     "name": "Yoshi",
     "avatar": "https://cdn.discordapp.com/avatars/707784492395528204/42714d1f2b15ce762c856fdf662ddede.webp?size=64",
     "wins_as_good": 10,
-    "wins_as_demon": 1,
+    "wins_as_demon": 2,
     "total_games": 24
   },
   "1189757757872685133": {
@@ -52,7 +52,7 @@
     "name": "Barajas",
     "avatar": "https://cdn.discordapp.com/avatars/1180989287483854929/47412cf62c8722e29a175b469469b916.webp?size=64",
     "wins_as_good": 6,
-    "wins_as_demon": 0,
+    "wins_as_demon": 1,
     "total_games": 52
   },
   "1065312881995956226": {
@@ -60,7 +60,7 @@
     "name": "Ochoo",
     "avatar": "https://cdn.discordapp.com/avatars/1065312881995956226/c6466cd10a5c1a18bd8b3da5e8f19b54.webp?size=64",
     "wins_as_good": 0,
-    "wins_as_demon": 2,
+    "wins_as_demon": 3,
     "total_games": 14
   },
   "1001956199400488970": {

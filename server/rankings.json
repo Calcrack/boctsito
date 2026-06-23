@@ -3,7 +3,7 @@
     "discordId": "1115070408811610134",
     "name": "Jabe",
     "avatar": "https://cdn.discordapp.com/avatars/1115070408811610134/0190f44648789e36ea825436d8e038e5.webp?size=64",
-    "wins_as_good": 10,
+    "wins_as_good": 11,
     "wins_as_demon": 2,
     "total_games": 37
   },
@@ -27,7 +27,7 @@
     "discordId": "668502963962118175",
     "name": "Aivan",
     "avatar": "https://cdn.discordapp.com/avatars/668502963962118175/8d796061b77b943e61dbee5d7401380f.webp?size=64",
-    "wins_as_good": 9,
+    "wins_as_good": 10,
     "wins_as_demon": 2,
     "total_games": 61
   },
@@ -35,7 +35,7 @@
     "discordId": "707784492395528204",
     "name": "Yoshi",
     "avatar": "https://cdn.discordapp.com/avatars/707784492395528204/42714d1f2b15ce762c856fdf662ddede.webp?size=64",
-    "wins_as_good": 10,
+    "wins_as_good": 11,
     "wins_as_demon": 3,
     "total_games": 27
   },
@@ -67,7 +67,7 @@
     "discordId": "1001956199400488970",
     "name": "Shady",
     "avatar": "https://cdn.discordapp.com/avatars/1001956199400488970/3de1cc44aadff3624fc1994c412b725c.webp?size=64",
-    "wins_as_good": 4,
+    "wins_as_good": 5,
     "wins_as_demon": 1,
     "total_games": 19
   },
@@ -75,7 +75,7 @@
     "discordId": "997676545298673674",
     "name": "Mauro",
     "avatar": "https://cdn.discordapp.com/avatars/997676545298673674/eef9d575fc83f4eec20e3604d1f3a13a.webp?size=64",
-    "wins_as_good": 3,
+    "wins_as_good": 4,
     "wins_as_demon": 0,
     "total_games": 45
   },

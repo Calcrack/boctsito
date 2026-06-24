@@ -1201,6 +1201,12 @@ function handleMessage(type, payload, session) {
       const assignedCount = Object.keys(game.setup.assignments).length;
       if (assignedCount < game.players.length) throw new Error('Faltan asientos por asignar un rol');
       if (!isSetupComplete(game.setup.decisions)) throw new Error('Faltan decisiones de montaje por resolver');
+      const assignedRoles = Object.values(game.setup.assignments);
+      if (assignedRoles.includes('ATHEIST')) {
+        const campaign = getCampaign(game.campaignId);
+        const evilAssigned = assignedRoles.filter(rid => campaign.roles[rid]?.alignment === 'evil');
+        if (evilAssigned.length > 0) throw new Error('Con Ateo: no puede haber roles malvados asignados');
+      }
       applySetup(game);
       // Maestro de Acertijos: aplicar borrachera permanente al jugador elegido en setup
       const pmDec = (game.setup.decisions || []).find(d => d.kind === 'puzzlemasterDrunk');

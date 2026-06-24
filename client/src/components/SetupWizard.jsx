@@ -49,7 +49,16 @@ export default function SetupWizard({ game, send, onClose }) {
 
   const toggleBag = (rid) => setBag(prev => {
     const n = new Set(prev);
-    n.has(rid) ? n.delete(rid) : n.add(rid);
+    if (n.has(rid)) {
+      n.delete(rid);
+    } else {
+      n.add(rid);
+      if (rid === 'ATHEIST') {
+        for (const id of [...n]) {
+          if (ROLE_BY_ID[id]?.alignment === 'evil') n.delete(id);
+        }
+      }
+    }
     return n;
   });
 
@@ -122,6 +131,7 @@ export default function SetupWizard({ game, send, onClose }) {
 
 // ── Paso 1: el saco ──────────────────────────────────────────────────
 function BagStep({ roleList, bag, toggleBag, needed, playerCount }) {
+  const atheistInBag = bag.has('ATHEIST');
   const have = {
     townfolk: [...bag].filter(id => ROLE_BY_ID[id]?.type === 'townfolk').length,
     outsider: [...bag].filter(id => ROLE_BY_ID[id]?.type === 'outsider').length,
@@ -129,12 +139,18 @@ function BagStep({ roleList, bag, toggleBag, needed, playerCount }) {
     demon:    [...bag].filter(id => ROLE_BY_ID[id]?.type === 'demon').length,
   };
   const needMap = needed ? { townfolk: needed.townfolk, outsider: needed.outsiders, minion: needed.minions, demon: needed.demons } : null;
+  const visibleTypes = atheistInBag ? TYPES.filter(t => t.k === 'townfolk' || t.k === 'outsider') : TYPES;
   return (
     <div>
       <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 10px' }}>
         Elige qué personajes entran en el saco ({playerCount} jugadores).
       </p>
-      {TYPES.map(({ k, label }) => (
+      {atheistInBag && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', background: 'rgba(201,162,74,0.08)', border: '1px solid rgba(201,162,74,0.3)', borderRadius: 4, padding: '6px 10px', margin: '0 0 10px' }}>
+          ⚠ Ateo activo — solo aldeanos y forasteros permitidos.
+        </p>
+      )}
+      {visibleTypes.map(({ k, label }) => (
         <div key={k} style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--bone-400)' }}>{label}</span>

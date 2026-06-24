@@ -54,15 +54,17 @@ const GLOBAL_FIRST_NIGHT_ORDER = [
 
 const GLOBAL_OTHER_NIGHT_ORDER = [
   'POPPY_GROWER',
+  'LUNATIC',
   'LLEECH','KAZALI','LEGION','LIL_MONSTA','HARLOT','OJO','AL_HADIKHIA',
   'BARISTA','WIDOW','MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER','SUMMONER','YAGGABABBLE',
-  'PHILOSOPHER','SAILOR','COURTIER','INNKEEPER','GAMBLER',
+  'PHILOSOPHER','SAILOR','COURTIER','INNKEEPER',
   'POISONER','MONK',
-  'DEVILS_ADVOCATE','LUNATIC','EXORCIST',
+  'DEVILS_ADVOCATE','EXORCIST',
   'SNAKE_CHARMER','WITCH','CERENOVUS','PIT_HAG',
   'ZOMBUUL','PUKKA','SHABALOTH','PO',
   'FANG_GU','NO_DASHII','VORTOX','VIGORMORTIS',
   'SCARLET_WOMAN','IMP','ASSASSIN','GODFATHER',
+  'GAMBLER',
   'PREACHER','LYCANTHROPE','HUNTSMAN','ENGINEER','ACROBAT',
   'CANNIBAL','RAVENKEEPER',
   'UNDERTAKER','EMPATH','FORTUNE_TELLER','BUTLER',
@@ -715,7 +717,7 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
   const pool = pattern.deadOnly
     ? game.players.filter(p => !p.alive)
     : game.players.filter(p =>
-        p.alive &&
+        (p.alive || p.diedThisNight) &&
         (pattern.notSelf ? p.id !== actor.id : true) &&
         (pattern.evilOnly && !actor.poisoned ? p.alignment === 'evil' : true)
       );
@@ -769,7 +771,7 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
       )}
       <select style={selStyle} value={targetId} onChange={e => { setTargetId(e.target.value); setOk(false); }}>
         <option value="">{pattern.label || 'Elegir jugador'}…</option>
-        {pool.map(p => <option key={p.id} value={p.id}>{p.name}{pattern.deadOnly ? ' ☠' : ''}</option>)}
+        {pool.map(p => <option key={p.id} value={p.id}>{p.name}{pattern.deadOnly ? ' ☠' : p.diedThisNight ? ' ☠ (murió esta noche)' : ''}</option>)}
       </select>
       <button onClick={confirm} disabled={!targetId} className="btn-action primary"
         style={{ ...btnPrimary, opacity: targetId ? 1 : 0.4 }}>{pattern.emoji} Aplicar</button>
@@ -783,7 +785,7 @@ function P3x2Panel({ actor, pattern, game, send, roleName }) {
   const [t2, setT2] = useState('');
   const [ok, setOk] = useState(actor.nightInfo != null);
 
-  const living = game.players.filter(p => p.alive);
+  const living = game.players.filter(p => p.alive || p.diedThisNight);
   const can = t1 && t2 && t1 !== t2;
 
   const buildInfo = (n1, n2) => {

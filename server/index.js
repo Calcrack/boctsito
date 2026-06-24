@@ -1372,6 +1372,15 @@ function handleMessage(type, payload, session) {
       if (!nom.ghostDeclines.includes(session.playerId))
         nom.ghostDeclines.push(session.playerId);
 
+      // Avanza turno igual que vote() hace
+      if (Array.isArray(nom.voteOrder)) {
+        const idx = nom.voteOrder.indexOf(session.playerId);
+        if (idx >= 0 && idx >= (nom.voteTurnIndex || 0)) {
+          nom.voteTurnIndex = idx + 1;
+          nom.argueTimer = null;
+        }
+      }
+
       // Auto-resolve if all eligible (living + eligible dead) have now voted or declined
       if (!nom.resolved) {
         const living2 = game.players.filter(p => p.alive);

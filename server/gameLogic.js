@@ -1530,13 +1530,15 @@ function executeNominationWinner(game) {
   // Ficha "Murió hoy" para el Enterrador: dura el día y se lee esa noche.
   placeToken(nominee, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
 
-  if (nominee.role === 'SAINT' && !nominee.poisoned) {
+  const atheistActive = game.players.some(p => p.role === 'ATHEIST');
+
+  if (!atheistActive && nominee.role === 'SAINT' && !nominee.poisoned) {
     game.winner = 'evil'; game.phase = 'game_over';
     game.winReason = 'Santo ejecutado';
     return { executed: nominee, gameOver: true, winner: 'evil', tie: false };
   }
 
-  if (nominee.type === 'demon') {
+  if (!atheistActive && nominee.type === 'demon') {
     const scarlet   = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
     const liveCount = game.players.filter(p => p.alive).length;
     if (scarlet && liveCount >= 5) {
@@ -1602,7 +1604,8 @@ function startDay(game) {
 
 function startNight(game) {
   // F5: Vórtice — cada día sin ejecución el Mal gana (solo noches ≥2)
-  if (game.nightNumber > 0 && game.phase !== 'game_over') {
+  const hasAtheist = game.players.some(p => p.role === 'ATHEIST');
+  if (!hasAtheist && game.nightNumber > 0 && game.phase !== 'game_over') {
     const vortox = game.players.find(p => p.alive && p.role === 'VORTOX' && !p.poisoned);
     if (vortox && !game.executedToday) {
       game.winner = 'evil';
@@ -1667,6 +1670,7 @@ function openNominations(game) {
 
 function checkWinCondition(game) {
   if (game.phase === 'game_over') return true;
+  if (game.players.some(p => p.role === 'ATHEIST')) return false;
   const living = game.players.filter(p => p.alive);
   const demons  = living.filter(p => p.type === 'demon');
 
@@ -1746,6 +1750,7 @@ function getPublicState(game, viewerId, isNarrator) {
       alive: p.alive,
       discordChannel: p.discordChannel || null,
       deadVoteNominationId: p.deadVoteNominationId,
+      diedThisNight: (game.nightDeaths || []).includes(p.id),
       poisoned:   isNarrator ? p.poisoned   : (isMe ? p.poisoned : false),
       protected:  isNarrator ? p.protected  : (isMe ? p.protected : false),
       isMaster:   isNarrator ? isMaster     : false,

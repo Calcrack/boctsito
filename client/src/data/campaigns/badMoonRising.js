@@ -59,7 +59,7 @@ export const roles = [
 ];
 
 export const firstNightOrder = ['MINION_INFO', 'LUNATIC', 'DEMON_INFO', 'PUKKA', 'SAILOR', 'COURTIER', 'GODFATHER', 'DEVILS_ADVOCATE', 'GRANDMOTHER', 'CHAMBERMAID'];
-export const otherNightOrder = ['SAILOR', 'COURTIER', 'INNKEEPER', 'GAMBLER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
+export const otherNightOrder = ['SAILOR', 'COURTIER', 'INNKEEPER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GAMBLER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
 
 // ── Fichas recordatorias (reminder tokens) por rol dueño ───────────────
 export const reminders = {

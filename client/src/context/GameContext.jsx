@@ -16,6 +16,7 @@ const initialState = {
   playerName: null,
   isNarrator: false,
   game: null,
+  nightPlayerSnapshot: null,
   playerList: [],
   notifications: [],
   discordMembers: [],
@@ -36,8 +37,17 @@ function reducer(state, action) {
       return { ...state, playerId: action.payload.playerId, playerName: action.payload.playerName, gameId: 'main', error: null };
     case 'PLAYER_LIST':
       return { ...state, playerList: action.payload.players };
-    case 'GAME_STATE':
-      return { ...state, game: action.payload };
+    case 'GAME_STATE': {
+      const newPhase = action.payload?.phase;
+      const isNight = newPhase === 'first_night' || newPhase === 'night';
+      const wasNight = state.game?.phase === 'first_night' || state.game?.phase === 'night';
+      const nightPlayerSnapshot = isNight && !wasNight
+        ? [...(action.payload.players || [])]
+        : isNight
+          ? state.nightPlayerSnapshot
+          : null;
+      return { ...state, game: action.payload, nightPlayerSnapshot };
+    }
     case 'DISCORD_MEMBERS':
       return { ...state, discordMembers: action.payload.members };
     case 'ADD_NOTIFICATION': {

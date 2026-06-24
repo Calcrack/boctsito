@@ -78,7 +78,7 @@ for (const [id, n] of Object.entries(INFO))  if (roles[id]) roles[id].info  = n;
 
 // Colas interactivas del motor (espejo del orden de noche del cliente, sin marcadores *_INFO).
 const queueFirst = ['LUNATIC', 'PUKKA', 'SAILOR', 'COURTIER', 'GODFATHER', 'DEVILS_ADVOCATE', 'GRANDMOTHER', 'CHAMBERMAID'];
-const queueOther = ['SAILOR', 'COURTIER', 'INNKEEPER', 'GAMBLER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
+const queueOther = ['SAILOR', 'COURTIER', 'INNKEEPER', 'DEVILS_ADVOCATE', 'LUNATIC', 'EXORCIST', 'ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'ASSASSIN', 'GODFATHER', 'GAMBLER', 'GOSSIP', 'PROFESSOR', 'MINSTREL', 'TEA_LADY', 'PACIFIST', 'FOOL', 'MOONCHILD', 'GRANDMOTHER', 'CHAMBERMAID'];
 
 module.exports = {
   id: 'BAD_MOON_RISING',

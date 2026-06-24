@@ -512,9 +512,9 @@
 
 .dead-vote-token {
   position: absolute;
-  bottom: -4px;
-  right: -4px;
-  width: 16px; height: 16px;
+  bottom: -6px;
+  right: -6px;
+  width: 26px; height: 26px;
   z-index: 9;
 }
 
@@ -522,6 +522,6 @@
   width: 100%; height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid var(--good);
-  box-shadow: 0 0 6px rgba(109,140,184,0.5);
+  border: 2px solid var(--good);
+  box-shadow: 0 0 8px rgba(109,140,184,0.8), 0 0 3px rgba(0,0,0,0.8);
 }

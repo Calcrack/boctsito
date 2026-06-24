@@ -131,6 +131,54 @@ function SpyGrimoire({ players }) {
 
 const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
 
+function FrozenTableroToggle({ players }) {
+  const [open, setOpen] = useState(false);
+  if (!players || players.length === 0) return null;
+  return (
+    <>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          position: 'fixed', bottom: 20, right: 20, zIndex: 400,
+          background: 'rgba(10,11,20,0.85)', backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(201,162,74,0.35)', borderRadius: 6,
+          padding: '8px 14px', cursor: 'pointer',
+          fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--gold)',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.6)',
+        }}
+      >
+        {open ? '✕ Cerrar' : '👁 Ver pueblo'}
+      </button>
+      {open && (
+        <div style={{
+          position: 'fixed', bottom: 64, right: 20, zIndex: 399,
+          background: 'rgba(10,11,20,0.95)', backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(201,162,74,0.25)', borderRadius: 8,
+          padding: '14px 16px', maxWidth: 280, width: '90vw',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.8)',
+        }}>
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 10 }}>
+            Pueblo · amanecer anterior
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {players.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: p.alive ? 1 : 0.45 }}>
+                {p.avatar
+                  ? <img src={p.avatar} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: p.alive ? '1px solid var(--gold-dim)' : '1px solid var(--blood-dim)', flexShrink: 0 }} />
+                  : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--ink-700)', border: p.alive ? '1px solid var(--gold-dim)' : '1px solid var(--blood-dim)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-300)' }}>{p.name[0]}</div>
+                }
+                <span style={{ fontFamily: 'var(--serif)', fontSize: 14, color: p.alive ? 'var(--bone-200)' : 'var(--bone-500)' }}>
+                  {p.alive ? '' : '☠ '}{p.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 const INTERACTIVE_ROLES = {
   BUTLER:       { action: 'BUTLER_MASTER',    targets: 1, label: 'Elige a tu Amo esta noche',              desc: 'Solo podrás votar si tu Amo ya ha votado.',                                    pool: 'living_others' },
   FORTUNE_TELLER:{ action: 'FORTUNE_TELLER', targets: 2, label: 'Elige 2 jugadores para consultar',       desc: 'Sabrás si alguno de ellos es el Demonio.',                                     pool: 'living', waitForInfo: true },
@@ -152,7 +200,7 @@ const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-90
 
 export default function NightScreen({ player }) {
   const { send, state, logout } = useGame();
-  const { game } = state;
+  const { game, nightPlayerSnapshot } = state;
   const [selected, setSelected] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [actionSent, setActionSent] = useState(false);
@@ -191,13 +239,19 @@ export default function NightScreen({ player }) {
 
   const allPlayers = game?.players || [];
   const living = allPlayers.filter(p => p.alive);
+  const diedTonight = allPlayers.filter(p => p.diedThisNight);
 
   const pool = (() => {
     if (!interactiveConfig) return [];
-    if (interactiveConfig.pool === 'living_others') return living.filter(p => p.id !== player.id);
-    if (interactiveConfig.pool === 'living') return living;
-    if (interactiveConfig.pool === 'all_living') return living;
-    return allPlayers;
+    const base = (() => {
+      if (interactiveConfig.pool === 'living_others') return living.filter(p => p.id !== player.id);
+      if (interactiveConfig.pool === 'living') return living;
+      if (interactiveConfig.pool === 'all_living') return living;
+      return allPlayers;
+    })();
+    if (interactiveConfig.pool === 'all') return base;
+    const baseIds = new Set(base.map(p => p.id));
+    return [...base, ...diedTonight.filter(p => !baseIds.has(p.id) && p.id !== player.id)];
   })();
 
   const positions = getCirclePositions(pool.length);
@@ -351,6 +405,7 @@ export default function NightScreen({ player }) {
           </div>
         </div>
         <NightSkipPanel game={game} playerId={player.id} send={send} />
+        <FrozenTableroToggle players={nightPlayerSnapshot} />
       </div>
     );
   }
@@ -486,6 +541,7 @@ export default function NightScreen({ player }) {
           </div>
         )}
         <NightSkipPanel game={game} playerId={player.id} send={send} />
+        <FrozenTableroToggle players={nightPlayerSnapshot} />
       </div>
     );
   }
@@ -534,13 +590,14 @@ export default function NightScreen({ player }) {
             const pos = positions[i];
             const isSel = selected.includes(p.id);
             const isDead = !p.alive;
+            const diedNight = p.diedThisNight;
             return (
               <div key={p.id} style={{ position: 'absolute', left: `calc(50% + ${pos.x}px - 30px)`, top: `calc(50% + ${pos.y}px - 30px)` }}>
                 <button
                   onClick={() => toggleSelect(p.id)}
                   style={{
                     width: 60, height: 60, borderRadius: '50%',
-                    border: isSel ? '3px solid var(--gold)' : '2px solid rgba(201,162,74,0.25)',
+                    border: isSel ? '3px solid var(--gold)' : diedNight ? '2px solid var(--blood-dim)' : '2px solid rgba(201,162,74,0.25)',
                     boxShadow: isSel ? '0 0 0 3px var(--gold), var(--shadow-medallion)' : 'var(--shadow-medallion)',
                     overflow: 'hidden', background: isDead ? 'var(--ink-800)' : 'var(--ink-700)',
                     transform: isSel ? 'scale(1.12)' : 'scale(1)',
@@ -548,7 +605,7 @@ export default function NightScreen({ player }) {
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-100)',
-                    opacity: isDead ? 0.4 : 1,
+                    opacity: isDead ? (diedNight ? 0.65 : 0.4) : 1,
                   }}
                 >
                   {p.avatar
@@ -556,8 +613,8 @@ export default function NightScreen({ player }) {
                     : p.name[0]
                   }
                 </button>
-                <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: isSel ? 'var(--gold-hot)' : 'var(--bone-400)', textAlign: 'center', marginTop: 4, whiteSpace: 'nowrap' }}>
-                  {p.name}
+                <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: isSel ? 'var(--gold-hot)' : diedNight ? 'var(--blood-hi)' : 'var(--bone-400)', textAlign: 'center', marginTop: 4, whiteSpace: 'nowrap' }}>
+                  {diedNight ? `☠ ${p.name}` : p.name}
                 </p>
               </div>
             );
@@ -586,6 +643,7 @@ export default function NightScreen({ player }) {
         )}
       </div>
       <NightSkipPanel game={game} playerId={player.id} send={send} />
+      <FrozenTableroToggle players={nightPlayerSnapshot} />
     </div>
   );
 }

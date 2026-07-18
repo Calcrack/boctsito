@@ -189,6 +189,13 @@ export function GameProvider({ children }) {
           dispatch({ type: 'SET_IMPORT_RESULT', payload });
           break;
         case 'KICKED_SESSION': {
+          // El narrador expulsó esta sesión: NO re-unirse — volver al login limpio.
+          if (payload?.reason === 'narrator_kick') {
+            autoRejoinRef.current = null;
+            localStorage.removeItem('boct_session');
+            window.location.reload();
+            break;
+          }
           // Another tab/device joined as same player — rejoin immediately
           const saved2 = autoRejoinRef.current || JSON.parse(localStorage.getItem('boct_session') || 'null');
           if (saved2?.playerName && ws.readyState === WebSocket.OPEN) {

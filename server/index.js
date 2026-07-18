@@ -981,6 +981,8 @@ function handleMessage(type, payload, session) {
     case 'NOMINATE_AS': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
+      // Comodidad: si aún es de día, abre nominaciones automáticamente.
+      if (game.phase === 'day') openNominations(game);
       const result = nominate(game, payload.nominatorId, payload.nomineeId);
       broadcastGame();
       if (result.virginTrigger) {
@@ -1003,6 +1005,50 @@ function handleMessage(type, payload, session) {
         recordGameWin(game, game.winner);
         broadcastToAll('GAME_OVER', { winner: game.winner });
       }
+      break;
+    }
+
+    // ── Voto emitido por el narrador en nombre de un jugador ──
+    case 'VOTE_AS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const nomination = vote(game, payload.playerId, payload.nominationId, payload.inFavor);
+      const voter = game.players.find(p => p.id === payload.playerId);
+      broadcastGame();
+      broadcastToAll('NOTIFICATION', {
+        message: `🗳️ ${voter?.name || '?'} vota ${payload.inFavor ? '✅ a favor' : '❌ en contra'} de ${nomination.nomineeName} (por el narrador)`,
+        type: 'vote',
+      });
+      break;
+    }
+
+    // ── Expulsar la SESIÓN de un jugador (libera su asiento para re-unirse) ──
+    case 'KICK_PLAYER_SESSION': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = getGame(MAIN_GAME_ID);
+      const targetId = payload.playerId;
+      const target = game?.players.find(p => p.id === targetId);
+      let kicked = 0;
+      [...sessions.values()]
+        .filter(s => s.playerId === targetId)
+        .forEach(s => {
+          sendTo(s.ws, 'KICKED_SESSION', { reason: 'narrator_kick' });
+          s.playerId = null; s.gameId = null;
+          kicked++;
+        });
+      // Reenvía la lista de asientos libres a quienes están en la pantalla de login.
+      if (game) {
+        const joinedIds = new Set([...sessions.values()].filter(s => s.playerId).map(s => s.playerId));
+        const available = game.players.filter(p => !joinedIds.has(p.id)).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }));
+        sessions.forEach(s => { if (!s.gameId) sendTo(s.ws, 'PLAYER_LIST', { players: available }); });
+      }
+      sendTo(ws, 'NOTIFICATION', {
+        message: kicked > 0
+          ? `🔌 Sesión de ${target?.name || '?'} expulsada (${kicked}). Ya puede volver a unirse.`
+          : `🔌 ${target?.name || '?'} no tenía sesión activa — su asiento ya está libre.`,
+        type: 'info',
+      });
+      broadcastGame();
       break;
     }
 

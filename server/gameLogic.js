@@ -1996,7 +1996,10 @@ function getPublicState(game, viewerId, isNarrator) {
 
   const publicPlayers = players.map(p => {
     const isMe        = p.id === viewerId;
-    const canSeeRole  = isNarrator || isMe || phase === 'game_over' || !!winner || viewerIsSpy;
+    // El jugador NO ve su propio rol hasta que empieza la primera noche
+    // (o cuando el narrador se lo revela explícitamente con REVEAL_ROLE).
+    const meCanSeeOwnRole = isMe && (nightNumber >= 1 || p.showRole);
+    const canSeeRole  = isNarrator || meCanSeeOwnRole || phase === 'game_over' || !!winner || viewerIsSpy;
     // Capa 2: el jugador ve su rol CREÍDO (Marioneta/Lunático/Borracho), nunca el real.
     const showSelfPerceived = isMe && !!p.believedRole && !winner;
     const perceivedDef = showSelfPerceived ? ROLES[p.believedRole] : null;

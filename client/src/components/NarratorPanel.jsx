@@ -287,6 +287,9 @@ export default function NarratorPanel() {
                       <option value="">Discord</option>
                       {discordMembers.map(m => <option key={m.id} value={m.id}>{m.displayName}</option>)}
                     </select>
+                    <button onClick={() => send('KICK_PLAYER_SESSION', { playerId: p.id })}
+                      title="Expulsar su sesión (libera el asiento para que pueda volver a unirse)"
+                      style={{ color: 'var(--moon)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>🔌</button>
                     <button onClick={() => send('REMOVE_PLAYER', { playerId: p.id })} style={{ color: 'var(--blood-hi)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>
                   </div>
                 ))}
@@ -452,8 +455,8 @@ export default function NarratorPanel() {
             {/* Control de noche por rol (matar / envenenar / proteger / info) */}
             {isNight && <NightControl />}
 
-            {/* Nominación manual: el narrador fija nominador y nominado */}
-            {phase === 'nominations' && (
+            {/* Nominación manual: el narrador fija nominador y nominado (día o nominaciones) */}
+            {(phase === 'day' || phase === 'nominations') && (
               <ManualNominateCard game={game} send={send} />
             )}
 
@@ -511,6 +514,11 @@ export default function NarratorPanel() {
                         <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
                         <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: role?.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)' }}>{role?.name || '?'}</span>
                         {p.poisoned && <span style={{ fontSize: 9, color: '#4ade80' }}>⚠</span>}
+                        <button onClick={() => send('KICK_PLAYER_SESSION', { playerId: p.id })}
+                          title="Expulsar su sesión (libera el asiento para que pueda volver a unirse)"
+                          style={{ fontSize: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--moon)', padding: '2px 4px' }}>
+                          🔌
+                        </button>
                         <button onClick={() => send(p.alive ? 'KILL_PLAYER' : 'REVIVE_PLAYER', { playerId: p.id })}
                           style={{ fontSize: 10, background: 'none', border: 'none', cursor: 'pointer', color: p.alive ? 'var(--blood-hi)' : 'var(--good)', padding: '2px 4px' }}>
                           {p.alive ? '☠' : '♻'}
@@ -708,9 +716,23 @@ function ActiveNominationCard({ game, send }) {
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--good)' }}>Turno {turnIdx + 1}/{order.length}</span>
                 <MiniAvatar player={turnPlayer} size={22} />
                 <strong style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', flex: 1 }}>{turnPlayer.name}</strong>
-                <span style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic' }}>vota en su pantalla</span>
                 <button onClick={() => send('ADVANCE_VOTE_TURN', { nominationId: nom.id })}
                   className="btn-night" style={{ fontSize: 10, padding: '4px 8px' }} title="Saltar turno (no vota)">Saltar →</button>
+              </div>
+              {/* Voto por el narrador: cuando el jugador no puede votar desde su pantalla */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <button onClick={() => send('VOTE_AS', { playerId: turnPlayer.id, nominationId: nom.id, inFavor: true })}
+                  className="btn-action danger" style={{ flex: 1, fontSize: 11, padding: '5px 0' }}
+                  title={`Votar A FAVOR por ${turnPlayer.name}`}>
+                  ⚔ A favor (por {turnPlayer.name.slice(0, 10)})
+                </button>
+                {turnPlayer.alive && (
+                  <button onClick={() => send('VOTE_AS', { playerId: turnPlayer.id, nominationId: nom.id, inFavor: false })}
+                    className="btn-action" style={{ flex: 1, fontSize: 11, padding: '5px 0', borderColor: 'var(--good)', color: 'var(--good)' }}
+                    title={`Votar EN CONTRA por ${turnPlayer.name}`}>
+                    🛡 En contra
+                  </button>
+                )}
               </div>
             </div>
           ) : (

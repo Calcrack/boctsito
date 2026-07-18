@@ -716,10 +716,13 @@ function handleMessage(type, payload, session) {
     }
 
     case 'SLAYER_ACTION': {
+      // Solo el narrador ejecuta el disparo del Cazador (cuando el jugador se lo pide).
+      if (!session.isNarrator) throw new Error('El disparo del Cazador lo ejecuta el narrador — pídeselo');
       const game = requireGame(session);
-      const slayer = game.players.find(p => p.id === session.playerId);
+      const slayerId = payload.slayerId;
+      const slayer = game.players.find(p => p.id === slayerId);
       const targetName = game.players.find(p => p.id === payload.targetId)?.name || '?';
-      const result = slayerAction(game, session.playerId, payload.targetId);
+      const result = slayerAction(game, slayerId, payload.targetId);
       broadcastGame();
       if (result.poisoned) {
         broadcastToAll('BROADCAST_EVENT', {

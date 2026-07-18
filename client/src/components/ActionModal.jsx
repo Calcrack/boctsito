@@ -55,7 +55,11 @@ export default function ActionModal({ target, onClose, isNarrator }) {
 
   const role   = target.role ? ROLE_BY_ID[target.role] : null;
   const myRole = me?.role ? ROLE_BY_ID[me.role] : null;
-  const canSlayer = myRole?.id === 'SLAYER' && !me?.slayerUsed && me?.alive && ['day', 'nominations'].includes(phase);
+  // El disparo del Cazador lo ejecuta SOLO el narrador (cuando el jugador se lo pide).
+  const slayerInGame = isNarrator
+    ? game.players.find(p => (p.role === 'SLAYER' || p.drunkAs === 'SLAYER') && p.alive && !p.slayerUsed)
+    : null;
+  const canNarratorSlayer = !!slayerInGame && target.alive && target.id !== slayerInGame.id && ['day', 'nominations'].includes(phase);
   const isSelfEvil = target.id === playerId && me?.alignment === 'evil';
   const canImpShot = !isNarrator && me?.alignment === 'evil' && me?.alive &&
     !me?.impShotUsed && ['day', 'nominations'].includes(phase) && target.id !== me?.id && target.alive;
@@ -69,7 +73,7 @@ export default function ActionModal({ target, onClose, isNarrator }) {
   const handleVoteSaveConfirm = () => { send('VOTE', { nominationId: activeNomination, inFavor: false }); setConfirmSave(false); onClose(); };
   const handleGhostDecline  = () => { send('GHOST_DECLINE_VOTE', { nominationId: activeNomination }); onClose(); };
   const handleSuspect   = () => { if (accusedRole) { send('ACCUSE', { targetId: target.id, accusedRole }); onClose(); } };
-  const handleSlayer    = () => { send('SLAYER_ACTION', { targetId: target.id }); onClose(); };
+  const handleNarratorSlayer = () => { send('SLAYER_ACTION', { slayerId: slayerInGame.id, targetId: target.id }); onClose(); };
   const handleBluff     = (roleId) => send('SET_BLUFF_ROLE', { roleId });
   const handleImpShot   = () => { send('IMP_DAY_SHOT', { targetId: target.id }); onClose(); };
 
@@ -275,11 +279,16 @@ export default function ActionModal({ target, onClose, isNarrator }) {
             </div>
           )}
 
-          {/* Slayer */}
-          {!isNarrator && !isSelfEvil && canSlayer && (
-            <button onClick={handleSlayer} className="btn-action primary" style={{ width: '100%' }}>
-              Usar poder del Cazador
-            </button>
+          {/* Disparo del Cazador — solo el narrador, cuando el jugador se lo pide */}
+          {isNarrator && canNarratorSlayer && (
+            <div style={{ borderBottom: 'var(--hairline-bone)', paddingBottom: 12 }}>
+              <button onClick={handleNarratorSlayer} className="btn-action primary" style={{ width: '100%' }}>
+                🏹 Disparo del Cazador ({slayerInGame.name}) → {target.name}
+              </button>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', marginTop: 4, textAlign: 'center' }}>
+                Ejecuta el tiro único del Cazador en nombre de {slayerInGame.name} — gasta su habilidad
+              </p>
+            </div>
           )}
 
         </div>

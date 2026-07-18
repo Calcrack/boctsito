@@ -243,6 +243,12 @@ function handleMessage(type, payload, session) {
       game.nominations = [];
       game.activeNomination = null;
       game.executedToday = null;
+      game.executionAttemptToday = false;
+      game.mastermindPending = false;
+      game.mastermindDay = null;
+      game.mastermindDone = false;
+      game.minstrelPending = null;
+      game.evilTwinPair = null;
       game.nightDeaths = [];
       game.nightActions = {};
       game.winner = null;
@@ -264,6 +270,8 @@ function handleMessage(type, payload, session) {
         p.accusations = []; p.slayerUsed = false; p.virginUsed = false;
         p.butlerMaster = null; p.bluffRole = null; p.impShotUsed = false;
         p.statuses = []; p.tokens = []; p.believedRole = null; p.drunkAs = null;
+        p.foolUsed = false; p.zombuulFirstDied = false; p.zombuulReallyDead = false;
+        p.golemUsed = false; p.vigormortisAlive = false;
       });
       game.deferredEffects = [];
       game.statusLog = [];
@@ -415,7 +423,7 @@ function handleMessage(type, payload, session) {
       // Auto Mayor win: 3 vivos, sin ejecución hoy, Alcalde vivo
       const livingNow = game.players.filter(p => p.alive);
       const mayorNow  = game.players.find(p => p.role === 'MAYOR' && p.alive && !p.poisoned);
-      if (mayorNow && livingNow.length === 3 && !game.executedToday) {
+      if (mayorNow && livingNow.length === 3 && !game.executedToday && !game.executionAttemptToday) {
         mayorWin(game);
         broadcastGame();
         broadcastToAll('BROADCAST_EVENT', { title: '🏛️ Victoria del Alcalde', message: 'Quedan 3 jugadores vivos sin ejecución. ¡El bien gana!', type: 'info' });
@@ -426,6 +434,14 @@ function handleMessage(type, payload, session) {
       const isFirstNight = game.nightNumber === 0;
       startNight(game);
       if (isFirstNight) recordGameStart(game);
+      // El anochecer puede terminar la partida (Vórtice, día extra de la Mente Maestra).
+      if (game.phase === 'game_over' && game.winner) {
+        broadcastGame();
+        broadcastToAll('BROADCAST_EVENT', { title: '🏁 Fin de la partida', message: game.winReason || 'La partida ha terminado', type: 'info' });
+        recordGameWin(game, game.winner);
+        broadcastToAll('GAME_OVER', { winner: game.winner });
+        break;
+      }
       teleportToNightRooms(game);
       setPlazaChannelPermission(false).catch(() => {});
       broadcastGame();
@@ -517,9 +533,19 @@ function handleMessage(type, payload, session) {
           message: `${result.executed.name} nominó a la Virgen y fue ejecutado/a inmediatamente.`,
           type: 'execution',
         });
+      } else if (result.golemTrigger) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🗿 ¡Gólem!',
+          message: `${result.killed.name} murió al ser nominado por el Gólem.`,
+          type: 'execution',
+        });
       } else {
         const nom = result.nomination;
         broadcastToAll('NOTIFICATION', { message: `⚖️ ${nom.nominatorName} nomina a ${nom.nomineeName}`, type: 'nomination' });
+      }
+      if (game.phase === 'game_over' && game.winner) {
+        recordGameWin(game, game.winner);
+        broadcastToAll('GAME_OVER', { winner: game.winner });
       }
       break;
     }
@@ -620,6 +646,12 @@ function handleMessage(type, payload, session) {
         broadcastToAll('BROADCAST_EVENT', {
           title: '⚖️ Empate',
           message: 'Hay un empate en votos. Nadie es ejecutado.',
+          type: 'warning',
+        });
+      } else if (result.vizierSurvived) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '👑 El Visir sobrevive',
+          message: `${result.executed.name} es el Visir y no puede morir durante el día.`,
           type: 'warning',
         });
       } else if (result.executed) {
@@ -957,9 +989,19 @@ function handleMessage(type, payload, session) {
           message: `${result.executed.name} nominó a la Virgen y fue ejecutado/a inmediatamente.`,
           type: 'execution',
         });
+      } else if (result.golemTrigger) {
+        broadcastToAll('BROADCAST_EVENT', {
+          title: '🗿 ¡Gólem!',
+          message: `${result.killed.name} murió al ser nominado por el Gólem.`,
+          type: 'execution',
+        });
       } else {
         const nom = result.nomination;
         broadcastToAll('NOTIFICATION', { message: `⚖️ ${nom.nominatorName} nomina a ${nom.nomineeName}`, type: 'nomination' });
+      }
+      if (game.phase === 'game_over' && game.winner) {
+        recordGameWin(game, game.winner);
+        broadcastToAll('GAME_OVER', { winner: game.winner });
       }
       break;
     }
@@ -1509,6 +1551,8 @@ function scheduleAutoNight(game) {
 
   if (result.tie) {
     broadcastToAll('BROADCAST_EVENT', { title: '⚖️ Empate', message: 'Empate en votos. Nadie es ejecutado.', type: 'warning' });
+  } else if (result.vizierSurvived) {
+    broadcastToAll('BROADCAST_EVENT', { title: '👑 El Visir sobrevive', message: `${result.executed.name} es el Visir y no puede morir durante el día.`, type: 'warning' });
   } else if (result.executed) {
     broadcastToAll('BROADCAST_EVENT', {
       title: '💀 Ejecución',
@@ -1528,7 +1572,7 @@ function scheduleAutoNight(game) {
   // Victoria del Alcalde: 3 vivos sin ejecución
   const livingAuto = game.players.filter(p => p.alive);
   const mayorAuto  = game.players.find(p => p.role === 'MAYOR' && p.alive && !p.poisoned);
-  if (mayorAuto && livingAuto.length === 3 && !game.executedToday) {
+  if (mayorAuto && livingAuto.length === 3 && !game.executedToday && !game.executionAttemptToday) {
     mayorWin(game);
     broadcastGame();
     broadcastToAll('BROADCAST_EVENT', { title: '🏛️ Victoria del Alcalde', message: 'Quedan 3 jugadores vivos sin ejecución. ¡El bien gana!', type: 'info' });
@@ -1542,6 +1586,14 @@ function scheduleAutoNight(game) {
   setAutoTimer(MAIN_GAME_ID, () => {
     if (!game.autoMode || game.phase === 'game_over') return;
     startNight(game);
+    // El anochecer puede terminar la partida (Vórtice, día extra de la Mente Maestra).
+    if (game.phase === 'game_over' && game.winner) {
+      broadcastGame();
+      broadcastToAll('BROADCAST_EVENT', { title: '🏁 Fin de la partida', message: game.winReason || 'La partida ha terminado', type: 'info' });
+      recordGameWin(game, game.winner);
+      broadcastToAll('GAME_OVER', { winner: game.winner });
+      return;
+    }
     teleportToNightRooms(game);
     setPlazaChannelPermission(false).catch(() => {});
     broadcastGame();

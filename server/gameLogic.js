@@ -45,6 +45,11 @@ function createGame(narratorId, gameId) {
     pukkaLastPoisoned: null,
     shabalothLastKilled: [],
     grandmotherGrandchild: null,
+    executionAttemptToday: false,   // hubo ejecución hoy (aunque el ejecutado no muriera)
+    mastermindPending: false,       // Demonio muerto con Mente Maestra viva: día extra por empezar
+    mastermindDay: null,            // dayNumber del día extra en curso
+    mastermindDone: false,          // día extra ya resuelto (no se repite)
+    minstrelPending: null,          // id del Juglar cuya borrachera colectiva se aplica al anochecer
     // ── Montaje (Addendum 2): el Narrador decide TODO antes de empezar ──
     setup: { locked: false, seatOrder: [], assignments: {}, decisions: [] },
     setupResolved: null,
@@ -88,6 +93,8 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
     tokens: [],
     foolUsed: false,
     zombuulFirstDied: false,
+    zombuulReallyDead: false,
+    golemUsed: false,
     vigormortisAlive: false,
   };
   game.players.push(player);
@@ -230,7 +237,13 @@ function applySetup(game) {
         if (seatP?.role === 'SPY') game.spyRegistersAs = d.registersAs === 'good' ? 'good' : null;
         if (seatP?.role === 'RECLUSE') game.recluseRegistersAs = (d.registersAs === 'minion' || d.registersAs === 'demon') ? d.registersAs : null;
         break;
-      default: break; // forasteros / otroSecreto: informativos; bluffs/veneno/info → noche
+      case 'otroSecreto':
+        // Gemela Malvada: guarda la pareja (gemela ↔ gemelo bueno) para el fin de partida.
+        if (d.secret === 'evilTwin' && seatP && d.targetSeat) {
+          game.evilTwinPair = { evilId: seatP.id, goodId: d.targetSeat };
+        }
+        break;
+      default: break; // forasteros: informativos; bluffs/veneno/info → noche
     }
   }
 
@@ -1140,6 +1153,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         if (!t || !t.alive) continue;
         if (t.protected || t.safeTonight) continue;
         if (checkFoolProtection(game, t, actorId, artRole)) continue;
+        if (zombuulFakeDeath(game, t)) continue;
         t.alive = false;
         clearBearerDeathTokens(t);
         game.nightDeaths.push(t.id);
@@ -1151,9 +1165,10 @@ function applyNightAction(game, actionType, actorId, targetIds) {
     }
 
     case 'ASSASSIN_KILL': {
-      // Ignora toda protección
+      // Ignora toda protección (incluida la muerte fingida del Zombuul)
       for (const t of targets) {
         if (!t || !t.alive) continue;
+        if (t.role === 'ZOMBUUL') t.zombuulReallyDead = true;
         t.alive = false;
         clearBearerDeathTokens(t);
         game.nightDeaths.push(t.id);
@@ -1304,6 +1319,22 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
     }
 
+    case 'FEARMONGER': {
+      // Marca al objetivo del miedo. Si el propio Fearmonger lo nomina y ejecuta,
+      // el equipo del ejecutado pierde (se resuelve en executeNominationWinner).
+      if (targets[0]) {
+        placeToken(targets[0], {
+          type: 'FEARMONGER_MARK', roleId: 'FEARMONGER', label: 'Objetivo del miedo',
+          expiry: ['ON_REPLACE'], sourceRole: 'FEARMONGER', sourcePlayerId: actorId,
+        }, game);
+        addDeferred(game, {
+          label: '😨 Anuncia al amanecer: "El Sembrador de Miedo ha elegido a un jugador."',
+          dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'info', role: 'FEARMONGER',
+        });
+      }
+      break;
+    }
+
     case 'MAKE_DRUNK':
       // Borracho de una noche (≈ envenenado): se limpia al próximo anochecer.
       for (const t of targets) if (t) placeToken(t, {
@@ -1354,6 +1385,62 @@ function checkScarletWoman(game, killer) {
   }
 }
 
+// ── Mente Maestra ────────────────────────────────────────────────────
+function livingSoberMastermind(game) {
+  return game.players.find(p => p.role === 'MASTERMIND' && p.alive && !p.poisoned && !p.drunkAs) || null;
+}
+
+// El Demonio acaba de morir sin sucesor: si hay Mente Maestra viva y sobria,
+// la partida NO termina — se juega 1 día más en secreto. Devuelve true si aplazó.
+function tryMastermindDefer(game) {
+  if (game.mastermindDone || game.mastermindPending || game.mastermindDay != null) {
+    return game.mastermindPending || game.mastermindDay != null;
+  }
+  const mm = livingSoberMastermind(game);
+  if (!mm) return false;
+  game.mastermindPending = true;
+  addDeferred(game, {
+    label: '🧩 Mente Maestra: el Demonio ha muerto — NO anuncies la victoria. Se juega 1 día más: si mañana ejecutan a alguien, su equipo pierde; si nadie es ejecutado, ganan los buenos.',
+    dueNight: game.nightNumber, sourcePlayerId: mm.id, severity: 'warn', role: 'MASTERMIND',
+  });
+  return true;
+}
+
+// Durante el día extra: cualquier ejecución (muera o no el ejecutado) decide la partida.
+function checkMastermindExtraDayExecution(game, executedPlayer) {
+  if (game.mastermindDay == null || game.mastermindDone) return false;
+  game.mastermindDone = true;
+  const evilExecuted = executedPlayer.alignment === 'evil' || ['minion', 'demon'].includes(executedPlayer.type);
+  game.winner = evilExecuted ? 'good' : 'evil';
+  game.phase = 'game_over';
+  game.winReason = evilExecuted
+    ? '🧩 Día extra (Mente Maestra): ejecutado un malvado — ganan los buenos'
+    : '🧩 Día extra (Mente Maestra): ejecutado un bueno — ganan los malos';
+  return true;
+}
+
+// ── Zombuul: la primera muerte es fingida (sigue vivo en secreto) ────
+function zombuulFakeDeath(game, target) {
+  if (target.role !== 'ZOMBUUL' || target.zombuulFirstDied || target.poisoned) return false;
+  target.zombuulFirstDied = true;
+  target.alive = false; // registra como muerto para todos
+  clearBearerDeathTokens(target);
+  game.nightDeaths.push(target.id);
+  placeToken(target, { type: 'DIES', roleId: 'ZOMBUUL', label: 'Aparenta morir', expiry: ['AT_DAWN'], sourceRole: 'ZOMBUUL' }, game);
+  addDeferred(game, {
+    label: '🧟 El Zombuul aparenta estar muerto — ¡sigue vivo en secreto! Sigue despertándolo si nadie murió de día. Su segunda muerte es la real.',
+    dueNight: game.nightNumber, sourcePlayerId: target.id, severity: 'warn', role: 'ZOMBUUL',
+  });
+  return true;
+}
+
+// ¿Cuenta este jugador como Demonio vivo para el fin de partida?
+function countsAsLivingDemon(p) {
+  if (p.type !== 'demon') return false;
+  if (p.alive) return true;
+  return p.role === 'ZOMBUUL' && p.zombuulFirstDied && !p.zombuulReallyDead;
+}
+
 function nominate(game, nominatorId, nomineeId) {
   if (game.phase !== 'nominations') throw new Error('Las nominaciones no están abiertas');
   if (game.activeNomination) throw new Error('Ya hay una nominación activa — resuélvela primero');
@@ -1367,11 +1454,13 @@ function nominate(game, nominatorId, nomineeId) {
   if (alreadyNominated) throw new Error('Ya has nominado a alguien hoy');
 
   // Bruja: si el nominador está maldito y la Bruja está sana → muere al nominar
+  // (con 3 o menos jugadores vivos la Bruja pierde su habilidad)
   const witchCurse = (nominator.tokens || []).find(t => t.type === 'WITCH_CURSED');
   if (witchCurse) {
     nominator.tokens = nominator.tokens.filter(t => t !== witchCurse);
     const witch = game.players.find(p => p.role === 'WITCH' && p.alive);
-    if (isActorEffective(witch)) {
+    const livingForWitch = game.players.filter(p => p.alive).length;
+    if (isActorEffective(witch) && livingForWitch > 3) {
       nominator.alive = false;
       clearBearerDeathTokens(nominator);
       addDeferred(game, { label: `🧙‍♀️ ${nominator.name} murió por la Bruja al nominar`, dueNight: game.nightNumber, severity: 'warn', role: 'WITCH' });
@@ -1379,14 +1468,32 @@ function nominate(game, nominatorId, nomineeId) {
     }
   }
 
+  // Gólem: solo puede nominar una vez; si el nominado no es el Demonio, muere.
+  if (nominator.role === 'GOLEM') {
+    if (nominator.golemUsed) throw new Error('El Gólem solo puede nominar una vez por partida');
+    nominator.golemUsed = true;
+    if (nominee.type !== 'demon' && !nominator.poisoned) {
+      nominee.alive = false;
+      clearBearerDeathTokens(nominee);
+      addDeferred(game, { label: `🗿 ${nominee.name} murió al ser nominado por el Gólem (no era el Demonio)`, dueNight: game.nightNumber, severity: 'warn', role: 'GOLEM' });
+      checkWinCondition(game);
+      return { golemTrigger: true, killed: nominee };
+    }
+  }
+
   if (nominee.role === 'VIRGIN' && !nominee.virginUsed) {
     // FIX: La Virgen gasta su poder en la PRIMERA nominación, sin importar quién la nomine
     nominee.virginUsed = true;
-    
+
     // Solo mata si es Aldeano y no está envenenada
     if (nominator.type === 'townfolk' && !nominee.poisoned) {
       nominator.alive = false;
-      checkWinCondition(game);
+      game.executionAttemptToday = true; // cuenta como ejecución del día
+      // Día extra de la Mente Maestra: esta ejecución decide la partida.
+      if (!game.players.some(p => p.role === 'ATHEIST')) {
+        checkMastermindExtraDayExecution(game, nominator);
+      }
+      if (game.phase !== 'game_over') checkWinCondition(game);
       return { virginTrigger: true, executed: nominator };
     }
     // Si no es Aldeano o está envenenada, el poder se gasta sin efecto
@@ -1514,7 +1621,21 @@ function executeNominationWinner(game) {
   if (!nominee) return { executed: null, gameOver: false, tie: false };
 
   winner.executed = true;
-  game.executedToday = nominee.id;
+  game.executionAttemptToday = true;
+
+  const atheistActive = game.players.some(p => p.role === 'ATHEIST');
+
+  // Día extra de la Mente Maestra: cualquier ejecución (muera o no) decide la partida.
+  if (!atheistActive && checkMastermindExtraDayExecution(game, nominee)) {
+    // El ejecutado muere igualmente salvo que algo lo salve (da igual para el resultado).
+    const daTok = (nominee.tokens || []).find(t => t.type === 'SURVIVES_EXECUTION');
+    if (!daTok && nominee.role !== 'VIZIER') {
+      nominee.alive = false;
+      clearBearerDeathTokens(nominee);
+      game.executedToday = nominee.id;
+    }
+    return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
+  }
 
   // Abogado del Diablo: si tiene token SURVIVES_EXECUTION → no muere
   const daToken = (nominee.tokens || []).find(t => t.type === 'SURVIVES_EXECUTION');
@@ -1525,12 +1646,51 @@ function executeNominationWinner(game) {
     return { executed: nominee, gameOver: false, winner: null, tie: false, savedByDA: true };
   }
 
+  // Visir: no puede morir durante el día (salvo envenenado).
+  if (nominee.role === 'VIZIER' && !nominee.poisoned) {
+    addDeferred(game, { label: `👑 ${nominee.name} (Visir) no puede morir durante el día — sobrevive la ejecución`, dueNight: game.nightNumber, severity: 'warn', role: 'VIZIER' });
+    return { executed: nominee, gameOver: false, winner: null, tie: false, vizierSurvived: true };
+  }
+
+  // Zombuul: su primera "muerte" es fingida — sigue vivo en secreto.
+  if (!atheistActive && nominee.role === 'ZOMBUUL' && !nominee.zombuulFirstDied && !nominee.poisoned) {
+    nominee.zombuulFirstDied = true;
+    nominee.alive = false;
+    clearBearerDeathTokens(nominee);
+    game.executedToday = nominee.id;
+    placeToken(nominee, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
+    addDeferred(game, {
+      label: '🧟 El Zombuul fue ejecutado y aparenta estar muerto — ¡sigue vivo en secreto! La Mente Maestra NO se activa. Su segunda muerte es la real.',
+      dueNight: game.nightNumber, sourcePlayerId: nominee.id, severity: 'warn', role: 'ZOMBUUL',
+    });
+    return { executed: nominee, gameOver: false, winner: null, tie: false };
+  }
+
   nominee.alive = false;
   clearBearerDeathTokens(nominee);
+  game.executedToday = nominee.id;
+  if (nominee.role === 'ZOMBUUL') nominee.zombuulReallyDead = true;
   // Ficha "Murió hoy" para el Enterrador: dura el día y se lee esa noche.
   placeToken(nominee, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
 
-  const atheistActive = game.players.some(p => p.role === 'ATHEIST');
+  // Juglar: si el ejecutado es un Esbirro, todos los demás se emborrachan al anochecer.
+  const minstrel = game.players.find(p => p.role === 'MINSTREL' && p.alive && !p.poisoned && !p.drunkAs);
+  if (nominee.type === 'minion' && minstrel) {
+    game.minstrelPending = minstrel.id;
+    addDeferred(game, { label: `🎻 Juglar: ${nominee.name} (Esbirro) fue ejecutado — TODOS los demás estarán borrachos hasta el próximo anochecer (se aplica al empezar la noche)`, dueNight: game.nightNumber, severity: 'warn', role: 'MINSTREL' });
+  }
+
+  // Avisos al narrador para habilidades de decisión humana.
+  if (nominee.role === 'BOOMDANDY' && !nominee.poisoned) {
+    addDeferred(game, { label: '💥 ¡Pólvora ejecutada! Todos excepto 3 jugadores mueren — resuélvelo manualmente (dedos apuntando).', dueNight: game.nightNumber, severity: 'warn', role: 'BOOMDANDY' });
+  }
+  if (nominee.role === 'GOBLIN' && !nominee.poisoned) {
+    addDeferred(game, { label: '👺 Goblin ejecutado: si reclamó PÚBLICAMENTE ser el Goblin al ser nominado, los malvados ganan (decláralo tú).', dueNight: game.nightNumber, severity: 'warn', role: 'GOBLIN' });
+  }
+  const pacifist = game.players.find(p => p.role === 'PACIFIST' && p.alive && !p.poisoned && !p.drunkAs);
+  if (pacifist && nominee.alignment === 'good' && nominee.id !== pacifist.id) {
+    addDeferred(game, { label: `🕊️ Pacifista en juego: puedes decidir que ${nominee.name} (bueno ejecutado) NO muera — usa Revivir si lo salvas.`, dueNight: game.nightNumber, severity: 'info', role: 'PACIFIST' });
+  }
 
   if (!atheistActive && nominee.role === 'SAINT' && !nominee.poisoned) {
     game.winner = 'evil'; game.phase = 'game_over';
@@ -1538,11 +1698,40 @@ function executeNominationWinner(game) {
     return { executed: nominee, gameOver: true, winner: 'evil', tie: false };
   }
 
+  // Sembrador de Miedo: si el propio Fearmonger nominó y ejecutó a su marcado, el equipo del ejecutado pierde.
+  if (!atheistActive) {
+    const fmToken = (nominee.tokens || []).find(t => t.type === 'FEARMONGER_MARK');
+    const fearmonger = fmToken ? game.players.find(p => p.id === fmToken.sourcePlayerId) : null;
+    if (fearmonger && fearmonger.alive && !fearmonger.poisoned && winner.nominatorId === fearmonger.id) {
+      const evilExecuted = nominee.alignment === 'evil';
+      game.winner = evilExecuted ? 'good' : 'evil';
+      game.phase = 'game_over';
+      game.winReason = evilExecuted
+        ? '😨 Sembrador de Miedo ejecutó a su objetivo malvado — su plan fracasa, ganan los buenos'
+        : '😨 Sembrador de Miedo nominó y ejecutó a su objetivo — el equipo del ejecutado pierde';
+      return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
+    }
+  }
+
+  // Gemela Malvada: si el gemelo bueno es ejecutado con la gemela viva y sana, gana el Mal.
+  if (!atheistActive && nominee.alignment === 'good') {
+    const twinPair = game.evilTwinPair || null; // { evilId, goodId }
+    const evilTwin = game.players.find(p => p.role === 'EVIL_TWIN' && p.alive && !p.poisoned);
+    if (evilTwin && twinPair && twinPair.goodId === nominee.id) {
+      game.winner = 'evil'; game.phase = 'game_over';
+      game.winReason = '👯 El gemelo bueno fue ejecutado — gana el Mal (Gemela Malvada)';
+      return { executed: nominee, gameOver: true, winner: 'evil', tie: false };
+    }
+  }
+
   if (!atheistActive && nominee.type === 'demon') {
     const scarlet   = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
     const liveCount = game.players.filter(p => p.alive).length;
     if (scarlet && liveCount >= 5) {
       scarlet.role = 'IMP'; scarlet.type = 'demon';
+    } else if (tryMastermindDefer(game)) {
+      // Mente Maestra: la partida NO termina — se juega 1 día más en silencio.
+      return { executed: nominee, gameOver: false, winner: null, tie: false, mastermindDefer: true };
     } else {
       game.winner = 'good'; game.phase = 'game_over';
       game.winReason = 'Demonio ejecutado';
@@ -1570,6 +1759,17 @@ function slayerAction(game, slayerId, targetId) {
   }
 
   if (target?.type === 'demon') {
+    // Zombuul: la primera muerte es fingida.
+    if (target.role === 'ZOMBUUL' && !target.zombuulFirstDied && !target.poisoned) {
+      target.zombuulFirstDied = true;
+      target.alive = false;
+      addDeferred(game, {
+        label: '🧟 El Cazador "mató" al Zombuul — aparenta estar muerto pero sigue vivo en secreto.',
+        dueNight: game.nightNumber, sourcePlayerId: target.id, severity: 'warn', role: 'ZOMBUUL',
+      });
+      return { hit: true, gameOver: false };
+    }
+    if (target.role === 'ZOMBUUL') target.zombuulReallyDead = true;
     target.alive = false;
     game.nightDeaths.push(target.id);
     const scarlet   = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
@@ -1577,6 +1777,10 @@ function slayerAction(game, slayerId, targetId) {
     if (scarlet && liveCount >= 5) {
       scarlet.role = 'IMP'; scarlet.type = 'demon';
       return { hit: true, gameOver: false };
+    }
+    // Mente Maestra: la partida no termina — se juega 1 día más.
+    if (!game.players.some(p => p.role === 'ATHEIST') && tryMastermindDefer(game)) {
+      return { hit: true, gameOver: false, mastermindDefer: true };
     }
     game.winner = 'good'; game.phase = 'game_over';
     game.winReason = 'Cazador mató al Demonio';
@@ -1591,6 +1795,16 @@ function startDay(game) {
   game.nominations = [];
   game.activeNomination = null;
   game.executedToday = null;
+  game.executionAttemptToday = false;
+  // Mente Maestra: el día extra empieza el primer día tras la muerte del Demonio.
+  if (game.mastermindPending && !game.mastermindDone) {
+    game.mastermindPending = false;
+    game.mastermindDay = game.dayNumber;
+    addDeferred(game, {
+      label: `🧩 HOY es el día extra de la Mente Maestra (día ${game.dayNumber}). Si ejecutan a alguien, su equipo pierde. Si nadie es ejecutado, al anochecer ganan los buenos.`,
+      dueNight: game.nightNumber, severity: 'warn', role: 'MASTERMIND',
+    });
+  }
   game.pendingNightAfterNomination = false;
   game.autoVotes = { skipDay: [], skipNom: [], extend: [] };
   game.players.forEach(p => { p.discordChannel = null; });
@@ -1603,11 +1817,27 @@ function startDay(game) {
 }
 
 function startNight(game) {
-  // F5: Vórtice — cada día sin ejecución el Mal gana (solo noches ≥2)
   const hasAtheist = game.players.some(p => p.role === 'ATHEIST');
+  // Mente Maestra: si el día extra terminó sin ejecución, ganan los buenos.
+  if (!hasAtheist && game.mastermindDay != null && !game.mastermindDone && game.phase !== 'game_over') {
+    game.mastermindDone = true;
+    if (!game.executionAttemptToday) {
+      game.winner = 'good';
+      game.phase = 'game_over';
+      game.winReason = '🧩 Mente Maestra: nadie fue ejecutado en el día extra — ganan los buenos';
+      return game;
+    }
+    // Hubo ejecución pero no terminó la partida (empate resuelto sin muerte, etc.):
+    // el Demonio sigue muerto → ganan los buenos.
+    game.winner = 'good';
+    game.phase = 'game_over';
+    game.winReason = '🧩 Mente Maestra: el día extra terminó — el Demonio está muerto, ganan los buenos';
+    return game;
+  }
+  // F5: Vórtice — cada día sin ejecución el Mal gana (solo noches ≥2)
   if (!hasAtheist && game.nightNumber > 0 && game.phase !== 'game_over') {
     const vortox = game.players.find(p => p.alive && p.role === 'VORTOX' && !p.poisoned);
-    if (vortox && !game.executedToday) {
+    if (vortox && !game.executionAttemptToday && !game.executedToday) {
       game.winner = 'evil';
       game.phase = 'game_over';
       game.winReason = '☠ Vórtice: día sin ejecución';
@@ -1620,6 +1850,19 @@ function startNight(game) {
   // ANTES de que actúen los roles, para que el Envenenador re-aplique limpio.
   clearExpiringTokens(game, 'dusk');
   game.players.forEach(p => { p.safeTonight = false; });
+  // Juglar: un Esbirro fue ejecutado hoy → todos los demás (salvo Viajeros)
+  // quedan borrachos esta noche y el día de mañana (caduca al próximo anochecer).
+  if (game.minstrelPending) {
+    const minstrelId = game.minstrelPending;
+    game.minstrelPending = null;
+    for (const p of game.players) {
+      if (!p.alive || p.id === minstrelId || p.type === 'traveler') continue;
+      placeToken(p, {
+        type: 'DRUNK_NIGHT', roleId: 'MINSTREL', label: 'Borracho (Juglar)',
+        expiry: ['UNTIL_NEXT_DUSK'], sourceRole: 'MINSTREL', sourcePlayerId: minstrelId,
+      }, game);
+    }
+  }
   syncStatusFlags(game);
   game.players.filter(p => p.alive && p.role === 'BUTLER').forEach(p => { p.butlerMaster = null; });
   
@@ -1672,14 +1915,19 @@ function checkWinCondition(game) {
   if (game.phase === 'game_over') return true;
   if (game.players.some(p => p.role === 'ATHEIST')) return false;
   const living = game.players.filter(p => p.alive);
-  const demons  = living.filter(p => p.type === 'demon');
+  // El Zombuul aparentemente muerto cuenta como Demonio vivo.
+  const demons = game.players.filter(countsAsLivingDemon);
 
   if (demons.length === 0) {
+    // Mente Maestra viva y sobria: la partida espera 1 día más (día extra).
+    if (tryMastermindDefer(game)) return false;
     game.winner = 'good'; game.phase = 'game_over';
     game.winReason = 'Sin Demonios vivos';
     return true;
   }
   if (living.length <= 2) {
+    // Durante el día extra de la Mente Maestra la regla de 2 vivos no aplica.
+    if (game.mastermindPending || (game.mastermindDay != null && !game.mastermindDone)) return false;
     game.winner = 'evil'; game.phase = 'game_over';
     game.winReason = 'Solo 2 jugadores vivos';
     return true;
@@ -1701,6 +1949,20 @@ function mayorWin(game) {
 function killPlayer(game, playerId, reason) {
   const player = game.players.find(p => p.id === playerId);
   if (!player) throw new Error('Jugador no encontrado');
+  // Zombuul: la primera muerte es fingida; matarlo de nuevo (ya "muerto") es la real.
+  if (player.role === 'ZOMBUUL' && !player.zombuulReallyDead) {
+    if (player.alive && !player.zombuulFirstDied && !player.poisoned) {
+      player.zombuulFirstDied = true;
+      player.alive = false;
+      addDeferred(game, {
+        label: '🧟 El Zombuul aparenta estar muerto — ¡sigue vivo en secreto! Mátalo otra vez para su muerte real.',
+        dueNight: game.nightNumber, sourcePlayerId: player.id, severity: 'warn', role: 'ZOMBUUL',
+      });
+      checkWinCondition(game);
+      return game;
+    }
+    if (player.zombuulFirstDied) player.zombuulReallyDead = true;
+  }
   player.alive = false;
   checkWinCondition(game);
   return game;

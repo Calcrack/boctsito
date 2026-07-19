@@ -31,6 +31,7 @@ export default function ActionModal({ target, onClose, isNarrator }) {
   const [confirmKill, setConfirmKill] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmNarratorKill, setConfirmNarratorKill] = useState(false);
+  const [fakeShooterId, setFakeShooterId] = useState('');
 
   if (!game) return null;
   const { phase, nominations, activeNomination } = game;
@@ -61,8 +62,11 @@ export default function ActionModal({ target, onClose, isNarrator }) {
     : null;
   const canNarratorSlayer = !!slayerInGame && target.alive && target.id !== slayerInGame.id && ['day', 'nominations'].includes(phase);
   const isSelfEvil = target.id === playerId && me?.alignment === 'evil';
-  const canImpShot = !isNarrator && me?.alignment === 'evil' && me?.alive &&
-    !me?.impShotUsed && ['day', 'nominations'].includes(phase) && target.id !== me?.id && target.alive;
+  // El disparo fingido (malvado que finge ser Cazador) también lo ejecuta SOLO el narrador.
+  const fakeShooters = isNarrator
+    ? game.players.filter(p => p.alignment === 'evil' && p.alive && !p.impShotUsed && p.id !== target.id)
+    : [];
+  const canNarratorFakeShot = fakeShooters.length > 0 && target.alive && ['day', 'nominations'].includes(phase);
 
   const handleNominate = () => { send('NOMINATE', { nomineeId: target.id }); onClose(); };
   const handleVoteKill = () => {
@@ -75,7 +79,11 @@ export default function ActionModal({ target, onClose, isNarrator }) {
   const handleSuspect   = () => { if (accusedRole) { send('ACCUSE', { targetId: target.id, accusedRole }); onClose(); } };
   const handleNarratorSlayer = () => { send('SLAYER_ACTION', { slayerId: slayerInGame.id, targetId: target.id }); onClose(); };
   const handleBluff     = (roleId) => send('SET_BLUFF_ROLE', { roleId });
-  const handleImpShot   = () => { send('IMP_DAY_SHOT', { targetId: target.id }); onClose(); };
+  const handleFakeShot  = () => {
+    if (!fakeShooterId) return;
+    send('IMP_DAY_SHOT', { shooterId: fakeShooterId, targetId: target.id });
+    onClose();
+  };
 
   const handleNarratorKill   = () => { send('KILL_PLAYER', { playerId: target.id }); onClose(); };
   const killWarnings = (() => {
@@ -210,18 +218,6 @@ export default function ActionModal({ target, onClose, isNarrator }) {
             </div>
           )}
 
-          {/* IMP day shot */}
-          {canImpShot && (
-            <div style={{ borderBottom: 'var(--hairline-bone)', paddingBottom: 12 }}>
-              <button onClick={handleImpShot} className="btn-action primary" style={{ width: '100%' }}>
-                🏹 Disparar a {target.name} como Cazador
-              </button>
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', marginTop: 4, textAlign: 'center' }}>
-                Finge ser el Cazador — siempre falla — una vez por partida
-              </p>
-            </div>
-          )}
-
           {/* Suspicion */}
           {!isNarrator && !isSelfEvil && (
             <div>
@@ -287,6 +283,25 @@ export default function ActionModal({ target, onClose, isNarrator }) {
               </button>
               <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', marginTop: 4, textAlign: 'center' }}>
                 Ejecuta el tiro único del Cazador en nombre de {slayerInGame.name} — gasta su habilidad
+              </p>
+            </div>
+          )}
+
+          {/* Disparo fingido (malvado que finge ser Cazador) — solo el narrador, cuando el jugador se lo pide */}
+          {isNarrator && canNarratorFakeShot && (
+            <div style={{ borderBottom: 'var(--hairline-bone)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select value={fakeShooterId} onChange={e => setFakeShooterId(e.target.value)}
+                  style={{ flex: 1, background: 'var(--ink-700)', border: 'var(--hairline)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)' }}>
+                  <option value="">— Malvado que finge... —</option>
+                  {fakeShooters.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <button onClick={handleFakeShot} disabled={!fakeShooterId} className="btn-action" style={{ opacity: fakeShooterId ? 1 : 0.4 }}>
+                  🏹 Disparo fingido → {target.name}
+                </button>
+              </div>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', marginTop: 4, textAlign: 'center' }}>
+                Anuncia el disparo fallido de un malvado que finge ser el Cazador — una vez por jugador
               </p>
             </div>
           )}

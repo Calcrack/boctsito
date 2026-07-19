@@ -1465,12 +1465,14 @@ function handleMessage(type, payload, session) {
     }
 
     case 'IMP_DAY_SHOT': {
+      // Solo el narrador ejecuta el disparo fingido (el jugador se lo pide en persona).
+      if (!session.isNarrator) throw new Error('El disparo fingido lo ejecuta el narrador — pídeselo');
       const game = requireGame(session);
-      const shooter = game.players.find(p => p.id === session.playerId);
+      const shooter = game.players.find(p => p.id === payload.shooterId);
       const target  = game.players.find(p => p.id === payload.targetId);
-      if (!shooter || shooter.alignment !== 'evil') throw new Error('Solo jugadores malvados pueden usar esta acción');
-      if (!shooter.alive) throw new Error('Debes estar vivo');
-      if (shooter.impShotUsed) throw new Error('Ya usaste tu disparo esta partida');
+      if (!shooter || shooter.alignment !== 'evil') throw new Error('Solo jugadores malvados pueden fingir el disparo');
+      if (!shooter.alive) throw new Error('El tirador debe estar vivo');
+      if (shooter.impShotUsed) throw new Error('Ese jugador ya usó su disparo fingido esta partida');
       if (!['day', 'nominations', 'voting'].includes(game.phase)) throw new Error('Solo se puede usar de día');
       shooter.impShotUsed = true;
       broadcastGame();

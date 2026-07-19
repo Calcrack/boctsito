@@ -271,7 +271,10 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
       <div className="table-disc" style={{ '--table-radius': `${containerSize / 2}px` }}>
         {phase === 'voting' && game.activeNomination ? (() => {
           const nom = nominations.find(n => n.id === game.activeNomination);
-          const nominee = nom ? players.find(p => p.id === nom.nomineeId) : null;
+          const nominee = nom
+            ? (players.find(p => p.id === nom.nomineeId)
+               || (nom.nomineeId === 'NARRATOR' ? { name: nom.nomineeName || '🎙 Narrador', avatar: null } : null))
+            : null;
           if (!nominee) return null;
           return (
             <div className="table-center" style={{ flexDirection: 'column', gap: 6 }}>

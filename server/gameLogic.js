@@ -25,6 +25,7 @@ function createGame(narratorId, gameId) {
     narratorDrunkAs: null,
     narratorRolesForImp: [],
     channelLimits: {},
+    narratorDiscordIds: [],
     nightQueue: [],
     nightQueueIndex: 0,
     nightSubmissions: {},
@@ -1446,9 +1447,11 @@ function nominate(game, nominatorId, nomineeId) {
   if (game.activeNomination) throw new Error('Ya hay una nominación activa — resuélvela primero');
 
   const nominator = game.players.find(p => p.id === nominatorId);
-  const nominee   = game.players.find(p => p.id === nomineeId);
+  // El Narrador siempre es nominable (haya o no Ateo en juego).
+  const isNarratorNominee = nomineeId === 'NARRATOR';
+  const nominee = isNarratorNominee ? null : game.players.find(p => p.id === nomineeId);
   if (!nominator?.alive) throw new Error('Solo jugadores vivos pueden nominar');
-  if (!nominee?.alive)   throw new Error('El nominado debe estar vivo');
+  if (!isNarratorNominee && !nominee?.alive) throw new Error('El nominado debe estar vivo');
 
   const alreadyNominated = game.nominations.some(n => n.nominatorId === nominatorId);
   if (alreadyNominated) throw new Error('Ya has nominado a alguien hoy');
@@ -1472,7 +1475,7 @@ function nominate(game, nominatorId, nomineeId) {
   if (nominator.role === 'GOLEM') {
     if (nominator.golemUsed) throw new Error('El Gólem solo puede nominar una vez por partida');
     nominator.golemUsed = true;
-    if (nominee.type !== 'demon' && !nominator.poisoned) {
+    if (!isNarratorNominee && nominee.type !== 'demon' && !nominator.poisoned) {
       nominee.alive = false;
       clearBearerDeathTokens(nominee);
       addDeferred(game, { label: `🗿 ${nominee.name} murió al ser nominado por el Gólem (no era el Demonio)`, dueNight: game.nightNumber, severity: 'warn', role: 'GOLEM' });
@@ -1481,7 +1484,7 @@ function nominate(game, nominatorId, nomineeId) {
     }
   }
 
-  if (nominee.role === 'VIRGIN' && !nominee.virginUsed) {
+  if (!isNarratorNominee && nominee.role === 'VIRGIN' && !nominee.virginUsed) {
     // FIX: La Virgen gasta su poder en la PRIMERA nominación, sin importar quién la nomine
     nominee.virginUsed = true;
 
@@ -1503,9 +1506,10 @@ function nominate(game, nominatorId, nomineeId) {
     id: uuidv4(),
     nominatorId, nomineeId,
     nominatorName: nominator.name,
-    nomineeName: nominee.name,
-    nomineeAvatar: nominee.avatar || null,
+    nomineeName: isNarratorNominee ? '🎙 Narrador' : nominee.name,
+    nomineeAvatar: isNarratorNominee ? null : (nominee.avatar || null),
     nominatorAvatar: nominator.avatar || null,
+    isNarratorNominee,
     votes: [], against: [], ghostDeclines: [],
     resolved: false, tally: 0, executed: false,
     stage: 'arguments',            // 'arguments' → 'voting'
@@ -1617,6 +1621,22 @@ function executeNominationWinner(game) {
   }
 
   const winner = tied[0];
+
+  // Ejecución del Narrador: con Ateo (sano) en juego gana el bando bueno;
+  // sin Ateo el Narrador no muere pero la ejecución del día se gasta.
+  if (winner.nomineeId === 'NARRATOR') {
+    winner.executed = true;
+    game.executionAttemptToday = true;
+    const atheist = game.players.find(p => p.role === 'ATHEIST');
+    if (atheist && !atheist.poisoned) {
+      game.phase = 'game_over';
+      game.winner = 'good';
+      game.winReason = 'El pueblo ejecutó al Narrador con el Ateo en juego: gana el bando bueno.';
+      return { executed: { id: 'NARRATOR', name: 'Narrador' }, gameOver: true, winner: 'good', tie: false, narratorExecuted: true };
+    }
+    return { executed: { id: 'NARRATOR', name: 'Narrador' }, gameOver: false, winner: null, tie: false, narratorExecuted: true };
+  }
+
   const nominee = game.players.find(p => p.id === winner.nomineeId);
   if (!nominee) return { executed: null, gameOver: false, tie: false };
 
@@ -2125,6 +2145,7 @@ function getPublicState(game, viewerId, isNarrator) {
     spyRegistersAs: isNarrator ? game.spyRegistersAs : undefined,
     mayorKillTarget: isNarrator ? game.mayorKillTarget : undefined,
     channelLimits: isNarrator ? (game.channelLimits || {}) : undefined,
+    narratorDiscordIds: isNarrator ? (game.narratorDiscordIds || []) : undefined,
     narratorDrunkAs: isNarrator ? game.narratorDrunkAs : undefined,
     narratorRolesForImp: isNarrator ? (game.narratorRolesForImp || []) : undefined,
     setup: isNarrator ? (game.setup || { locked: false, seatOrder: [], assignments: {}, decisions: [] }) : undefined,

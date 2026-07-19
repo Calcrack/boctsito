@@ -15,7 +15,7 @@ const {
   placeToken, syncStatusFlags,
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, NARRATOR_USER_ID, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -147,12 +147,17 @@ function teleportToNightRooms(game) {
     if (p.alive && p.discordId) moveUserToOwnRoom(p.discordId, p.name).catch(() => {});
   });
 }
-// Amanecer: todos de vuelta a la Plaza.
+// Amanecer: todos de vuelta a la Plaza (incluidos los narradores).
 function teleportAllToPlaza(game) {
   game.players.forEach(p => {
     p.discordChannel = null;
     if (p.discordId) moveUserToChannel(p.discordId, 'PLAZA', game.channelLimits || {}).catch(() => {});
   });
+  teleportNarratorsTo('PLAZA');
+}
+// Mueve a todos los narradores a un canal (sin límites de aforo).
+function teleportNarratorsTo(channelKey) {
+  getNarratorIds().forEach(id => moveUserToChannel(id, channelKey, {}).catch(() => {}));
 }
 
 // ── WebSocket connection ───────────────────────────────────────────
@@ -654,6 +659,22 @@ function handleMessage(type, payload, session) {
           message: `${result.executed.name} es el Visir y no puede morir durante el día.`,
           type: 'warning',
         });
+      } else if (result.narratorExecuted) {
+        if (result.gameOver) {
+          broadcastToAll('BROADCAST_EVENT', {
+            title: '🎙 ¡El Narrador ha sido ejecutado!',
+            message: 'El Ateo estaba en juego — el pueblo acertó. Gana el bando bueno.',
+            type: 'execution',
+          });
+          recordGameWin(game, result.winner);
+          broadcastToAll('GAME_OVER', { winner: result.winner });
+        } else {
+          broadcastToAll('BROADCAST_EVENT', {
+            title: '🎙 El pueblo ejecutó al Narrador',
+            message: 'Pero el Narrador no puede morir… la ejecución del día se ha gastado.',
+            type: 'warning',
+          });
+        }
       } else if (result.executed) {
         broadcastToAll('BROADCAST_EVENT', {
           title: '💀 Ejecución',
@@ -875,13 +896,15 @@ function handleMessage(type, payload, session) {
       const channelLimits = game.channelLimits || {};
       if (session.isNarrator) {
         if (payload.moveAll) {
+          const dest = payload.channel || 'PLAZA';
           game.players.forEach(p => {
             p.discordChannel = payload.channel || null;
             if (p.discordId) {
-              const dest = payload.channel || 'PLAZA';
               moveUserToChannel(p.discordId, dest, channelLimits).catch(() => {});
             }
           });
+          // Los narradores acompañan al grupo cuando se mueve a todos.
+          teleportNarratorsTo(dest);
         } else if (payload.targetPlayerId) {
           const target = game.players.find(p => p.id === payload.targetPlayerId);
           if (!target) throw new Error('Jugador no encontrado');
@@ -1097,9 +1120,26 @@ function handleMessage(type, payload, session) {
       const game = requireGame(session);
       const p = game.players.find(x => x.id === payload.playerId);
       if (!p) throw new Error('Jugador no encontrado');
-      moveUserToOwnRoom(NARRATOR_USER_ID, p.name)
-        .then(r => sendTo(ws, 'NARRATOR_MOVED', { playerId: p.id, name: p.name, ...r }))
+      Promise.all(getNarratorIds().map(id => moveUserToOwnRoom(id, p.name)))
+        .then(results => {
+          const ok = results.some(r => r.ok);
+          const error = ok ? undefined : (results[0]?.error || 'No se pudo mover');
+          sendTo(ws, 'NARRATOR_MOVED', { playerId: p.id, name: p.name, ok, error });
+        })
         .catch(() => {});
+      break;
+    }
+
+    case 'SET_NARRATORS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const ids = Array.isArray(payload.discordIds) ? payload.discordIds : [];
+      setNarratorIds(ids)
+        .then(applied => {
+          game.narratorDiscordIds = applied;
+          broadcastGame();
+        })
+        .catch(err => sendTo(ws, 'ERROR', { message: err.message }));
       break;
     }
 
@@ -1379,10 +1419,7 @@ function handleMessage(type, payload, session) {
           game.autoVotes.skipDay = [];
           const t = autoTimers.get(MAIN_GAME_ID);
           if (t) { clearTimeout(t); autoTimers.delete(MAIN_GAME_ID); }
-          game.players.forEach(p => {
-            p.discordChannel = null;
-            if (p.discordId) moveUserToChannel(p.discordId, 'PLAZA', game.channelLimits || {}).catch(() => {});
-          });
+          teleportAllToPlaza(game);
           openNominations(game);
           const nomMin = Math.round((game.autoNomMs || AUTO_NOM_MS) / 60000);
           broadcastToAll('NOTIFICATION', { message: `⚡ 80% de acuerdo — nominaciones abiertas (${nomMin} min)`, type: 'info' });
@@ -1563,11 +1600,8 @@ function scheduleAutoDay(game) {
   broadcastGame();
   setAutoTimer(MAIN_GAME_ID, () => {
     if (!game.autoMode || game.phase !== 'day') return;
-    // Mover todos a la Plaza
-    game.players.forEach(p => {
-      p.discordChannel = null;
-      if (p.discordId) moveUserToChannel(p.discordId, 'PLAZA', game.channelLimits || {}).catch(() => {});
-    });
+    // Mover todos a la Plaza (narradores incluidos)
+    teleportAllToPlaza(game);
     openNominations(game);
     const nomMin = Math.round((game.autoNomMs || AUTO_NOM_MS) / 60000);
     broadcastToAll('NOTIFICATION', { message: `🏛️ Todos a la Plaza — nominaciones abiertas (${nomMin} min)`, type: 'info' });
@@ -1602,6 +1636,15 @@ function scheduleAutoNight(game) {
     broadcastToAll('BROADCAST_EVENT', { title: '⚖️ Empate', message: 'Empate en votos. Nadie es ejecutado.', type: 'warning' });
   } else if (result.vizierSurvived) {
     broadcastToAll('BROADCAST_EVENT', { title: '👑 El Visir sobrevive', message: `${result.executed.name} es el Visir y no puede morir durante el día.`, type: 'warning' });
+  } else if (result.narratorExecuted) {
+    if (result.gameOver) {
+      broadcastToAll('BROADCAST_EVENT', { title: '🎙 ¡El Narrador ha sido ejecutado!', message: 'El Ateo estaba en juego — el pueblo acertó. Gana el bando bueno.', type: 'execution' });
+      broadcastGame();
+      recordGameWin(game, result.winner);
+      broadcastToAll('GAME_OVER', { winner: result.winner });
+      return;
+    }
+    broadcastToAll('BROADCAST_EVENT', { title: '🎙 El pueblo ejecutó al Narrador', message: 'Pero el Narrador no puede morir… la ejecución del día se ha gastado.', type: 'warning' });
   } else if (result.executed) {
     broadcastToAll('BROADCAST_EVENT', {
       title: '💀 Ejecución',
@@ -1691,6 +1734,13 @@ async function startup() {
     }
   } catch (e) {
     console.error('[DB] Error:', e.message, e.stack);
+  }
+
+  // Restaurar narradores guardados (o dejar el narrador por defecto).
+  if (Array.isArray(mainGame.narratorDiscordIds) && mainGame.narratorDiscordIds.length) {
+    setNarratorIds(mainGame.narratorDiscordIds).catch(() => {});
+  } else {
+    mainGame.narratorDiscordIds = getNarratorIds();
   }
 
   // Cargar campañas personalizadas (MongoDB si MONGODB_URI está definido, si no, archivo local)

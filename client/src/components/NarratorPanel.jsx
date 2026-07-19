@@ -262,6 +262,9 @@ export default function NarratorPanel() {
             {/* Discord member quick-picker */}
             <DiscordMemberPicker discordMembers={discordMembers} players={players} send={send} />
 
+            {/* Narradores (multi): ven las habitaciones y se mueven con la Plaza */}
+            <NarratorsPicker game={game} discordMembers={discordMembers} send={send} />
+
             {/* Add players */}
             <div>
               <p className="panel-label">Jugadores <span className="count">{players.length}</span></p>
@@ -853,6 +856,7 @@ function ManualNominateCard({ game, send }) {
         <select value={nomineeId} onChange={e => setNomineeId(e.target.value)}
           style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '5px 6px' }}>
           <option value="">Nominado…</option>
+          <option value="NARRATOR">🎙 Narrador</option>
           {alive.map(p => <option key={p.id} value={p.id} disabled={p.id === nominatorId}>{p.name}</option>)}
         </select>
       </div>
@@ -1084,6 +1088,52 @@ function DiscordMemberPicker({ discordMembers, players, send }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Narradores de la partida: cualquier usuario de Discord de la lista puede
+// narrar (ve las habitaciones de noche y es teletransportado con la Plaza).
+function NarratorsPicker({ game, discordMembers, send }) {
+  const ids = Array.isArray(game.narratorDiscordIds) ? game.narratorDiscordIds : [];
+  const [selectId, setSelectId] = useState('');
+
+  const nameOf = id => discordMembers.find(m => m.id === id)?.displayName || id;
+  const addNarrator = () => {
+    if (!selectId || ids.includes(selectId)) return;
+    send('SET_NARRATORS', { discordIds: [...ids, selectId] });
+    setSelectId('');
+  };
+  const removeNarrator = id => send('SET_NARRATORS', { discordIds: ids.filter(x => x !== id) });
+
+  return (
+    <div style={{ padding: '8px 10px', background: 'rgba(201,162,74,0.06)', borderRadius: 4, border: '1px solid rgba(201,162,74,0.25)' }}>
+      <p className="panel-label" style={{ margin: '0 0 6px', color: 'var(--gold-hot)' }}>🎙 Narradores ({ids.length})</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+        {ids.length === 0 && (
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-500)', fontStyle: 'italic' }}>Narrador por defecto</span>
+        )}
+        {ids.map(id => (
+          <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-100)', background: 'rgba(0,0,0,0.25)', border: 'var(--hairline-bone)', borderRadius: 3, padding: '2px 6px' }}>
+            🎙 {nameOf(id)}
+            {ids.length > 1 && (
+              <button onClick={() => removeNarrator(id)} title="Quitar narrador"
+                style={{ background: 'none', border: 'none', color: 'var(--blood-hi)', cursor: 'pointer', fontSize: 10, padding: 0 }}>✕</button>
+            )}
+          </span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <select value={selectId} onChange={e => setSelectId(e.target.value)}
+          style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-200)', padding: '4px 6px' }}>
+          <option value="">Agregar narrador…</option>
+          {discordMembers.filter(m => !ids.includes(m.id)).map(m => (
+            <option key={m.id} value={m.id}>{m.displayName}</option>
+          ))}
+        </select>
+        <button onClick={addNarrator} disabled={!selectId} className="btn-action primary"
+          style={{ padding: '4px 10px', fontSize: 11, opacity: selectId ? 1 : 0.4 }}>+</button>
+      </div>
     </div>
   );
 }

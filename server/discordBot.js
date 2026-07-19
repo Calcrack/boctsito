@@ -5,8 +5,33 @@ const GUILD_ID = '1462151561575928034';
 
 // Categoría donde viven las "habitaciones" de noche (1 canal de voz por jugador).
 const NIGHT_CATEGORY_ID = '1515577274248859648';
-// El narrador: único que puede VER las habitaciones de noche.
-const NARRATOR_USER_ID = '723204863873384469';
+// Narradores: únicos que pueden VER las habitaciones de noche.
+// Lista dinámica: el narrador principal por defecto, ampliable desde la UI
+// (a veces narran otras personas).
+const DEFAULT_NARRATOR_USER_ID = '723204863873384469';
+let narratorUserIds = [DEFAULT_NARRATOR_USER_ID];
+
+function getNarratorIds() {
+  return [...narratorUserIds];
+}
+
+async function setNarratorIds(ids) {
+  const clean = [...new Set((ids || []).filter(id => typeof id === 'string' && /^\d{5,}$/.test(id)))];
+  narratorUserIds = clean.length ? clean : [DEFAULT_NARRATOR_USER_ID];
+  await refreshNightRoomPerms();
+  return getNarratorIds();
+}
+
+// Reaplica permisos de todas las habitaciones de noche al cambiar narradores.
+async function refreshNightRoomPerms() {
+  if (!isReady || !guild) return;
+  const rooms = guild.channels.cache.filter(c =>
+    c.parentId === NIGHT_CATEGORY_ID && c.type === ChannelType.GuildVoice
+  );
+  for (const channel of rooms.values()) {
+    await ensureRoomPerms(channel);
+  }
+}
 
 const CHANNELS = {
   PLAZA:        '1467693963610951711',
@@ -146,7 +171,7 @@ function sanitizeRoomName(name) {
 function roomPermissionOverwrites() {
   return [
     { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-    { id: NARRATOR_USER_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
+    ...narratorUserIds.map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] })),
   ];
 }
 
@@ -247,4 +272,4 @@ function getBotStatus() {
   return { connected: isReady, tag: client?.user?.tag || null };
 }
 
-module.exports = { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom, sendDM, getBotStatus, CHANNELS, NARRATOR_USER_ID, setVoiceStateCallback, setPlazaChannelPermission };
+module.exports = { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom, sendDM, getBotStatus, CHANNELS, getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission };

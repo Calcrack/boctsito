@@ -1866,6 +1866,14 @@ function startNight(game) {
   }
   game.phase = game.nightNumber === 0 ? 'first_night' : 'night';
   game.nightNumber++;
+  // Instantánea del día: de noche los jugadores ven la ruleta congelada tal
+  // como quedó de día — muertes y movimientos nocturnos se revelan al amanecer.
+  game.daySnapshot = game.players.map(p => ({
+    id: p.id,
+    alive: p.alive,
+    discordChannel: p.discordChannel || null,
+    deadVoteNominationId: p.deadVoteNominationId,
+  }));
   // ANOCHECER: limpia fichas UNTIL_NEXT_DUSK / ONE_DAY (veneno previo, etc.)
   // ANTES de que actúen los roles, para que el Envenenador re-aplique limpio.
   clearExpiringTokens(game, 'dusk');
@@ -2014,8 +2022,15 @@ function getPublicState(game, viewerId, isNarrator) {
     Object.values(game.nightSubmissions || {}).flatMap(s => s.targetIds || [])
   );
 
+  // De noche los jugadores ven la ruleta congelada como quedó de día:
+  // muertes/movimientos nocturnos no se muestran hasta el amanecer.
+  const nightFreeze = !isNarrator && ['first_night', 'night'].includes(phase) && Array.isArray(game.daySnapshot)
+    ? new Map(game.daySnapshot.map(s => [s.id, s]))
+    : null;
+
   const publicPlayers = players.map(p => {
     const isMe        = p.id === viewerId;
+    const frozen      = nightFreeze ? nightFreeze.get(p.id) : null;
     // El jugador NO ve su propio rol hasta que empieza la primera noche
     // (o cuando el narrador se lo revela explícitamente con REVEAL_ROLE).
     const meCanSeeOwnRole = isMe && (nightNumber >= 1 || p.showRole);
@@ -2032,10 +2047,10 @@ function getPublicState(game, viewerId, isNarrator) {
       id: p.id, name: p.name,
       discordId: p.discordId,
       avatar: p.avatar,
-      alive: p.alive,
-      discordChannel: p.discordChannel || null,
-      deadVoteNominationId: p.deadVoteNominationId,
-      diedThisNight: (game.nightDeaths || []).includes(p.id),
+      alive: frozen ? frozen.alive : p.alive,
+      discordChannel: frozen ? frozen.discordChannel : (p.discordChannel || null),
+      deadVoteNominationId: frozen ? frozen.deadVoteNominationId : p.deadVoteNominationId,
+      diedThisNight: frozen ? false : (game.nightDeaths || []).includes(p.id),
       poisoned:   isNarrator ? p.poisoned   : (isMe ? p.poisoned : false),
       protected:  isNarrator ? p.protected  : (isMe ? p.protected : false),
       isMaster:   isNarrator ? isMaster     : false,

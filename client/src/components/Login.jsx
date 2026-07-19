@@ -1,9 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 
+function TopOneCard({ emoji, label, color, entry, value }) {
+  if (!entry || !value) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      background: 'rgba(201,162,74,0.06)', border: `1px solid ${color}`,
+      borderRadius: 4, padding: '14px 16px',
+    }}>
+      <span style={{ fontSize: 26 }}>{emoji}</span>
+      <div style={{
+        width: 46, height: 46, borderRadius: '50%',
+        background: 'var(--ink-700)', border: `2px solid ${color}`,
+        overflow: 'hidden', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)',
+      }}>
+        {entry.avatar
+          ? <img src={entry.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : (entry.name?.[0] || '?').toUpperCase()
+        }
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-500)' }}>{label}</div>
+        <div style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-50)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
+      </div>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: 24, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+}
+
 function RankingsPanel({ onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showTop, setShowTop] = useState(false);
 
   useEffect(() => {
     fetch('/api/rankings')
@@ -15,6 +46,14 @@ function RankingsPanel({ onBack }) {
   const rows = data ? Object.values(data).sort((a, b) => (b.wins_as_good + b.wins_as_demon) - (a.wins_as_good + a.wins_as_demon)) : [];
   const medals = ['🥇', '🥈', '🥉'];
 
+  const topBy = (fn) => rows.reduce((best, r) => (fn(r) > fn(best || {}) ? r : best), null);
+  const winsGood  = r => r.wins_as_good  || 0;
+  const winsDemon = r => r.wins_as_demon || 0;
+  const winsTotal = r => (r.wins_as_good || 0) + (r.wins_as_demon || 0);
+  const topDemon = topBy(winsDemon);
+  const topGood  = topBy(winsGood);
+  const topAll   = topBy(winsTotal);
+
   return (
     <div style={{ background: 'rgba(0,0,0,0.3)', border: 'var(--hairline)', borderRadius: 4, padding: '20px' }}>
       <p className="panel-label" style={{ marginBottom: 16 }}>🏆 Rankings</p>
@@ -25,6 +64,17 @@ function RankingsPanel({ onBack }) {
         <p style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-400)', textAlign: 'center', padding: '24px 0', fontStyle: 'italic' }}>
           Aún no hay partidas registradas.
         </p>
+      ) : showTop ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <TopOneCard emoji="😈" label="Top 1 · Demonio"  color="var(--blood-hi)" entry={topDemon} value={winsDemon(topDemon || {})} />
+          <TopOneCard emoji="🏡" label="Top 1 · Aldeano"  color="var(--good)"     entry={topGood}  value={winsGood(topGood || {})} />
+          <TopOneCard emoji="👑" label="Top 1 · Total"    color="var(--gold)"     entry={topAll}   value={winsTotal(topAll || {})} />
+          {!topDemon && !topGood && !topAll && (
+            <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-400)', textAlign: 'center', fontStyle: 'italic', padding: '12px 0' }}>
+              Aún no hay victorias registradas.
+            </p>
+          )}
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map((r, i) => (
@@ -63,14 +113,17 @@ function RankingsPanel({ onBack }) {
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--bone-200)' }}>{(r.wins_as_good || 0) + (r.wins_as_demon || 0)}</div>
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Total</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--bone-400)' }}>{r.total_games || 0}</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Jugadas</div>
-                </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {!loading && rows.length > 0 && (
+        <button onClick={() => setShowTop(t => !t)} className="btn-action"
+          style={{ width: '100%', padding: '10px 0', marginTop: 14, fontSize: 13, letterSpacing: '0.08em' }}>
+          {showTop ? '📋 Ver lista completa' : '👑 Ver Top 1'}
+        </button>
       )}
 
       <button onClick={onBack}

@@ -4,6 +4,7 @@ import badMoonRising from './badMoonRising';
 import sectsViolets from './sectsViolets';
 import carousel from './carousel';
 import { roles as travelerRoles } from './travelers';
+import { extraRoles } from './extras';
 
 export const CAMPAIGNS = {
   [troubleBrewing.id]: troubleBrewing,
@@ -34,6 +35,10 @@ export const ALL_ROLES = (() => {
     }
   }
   for (const r of travelerRoles) {
+    if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
+  }
+  // Roles extra: fuera de las campañas base, pero usados en guiones propios.
+  for (const r of extraRoles) {
     if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
   }
   return out;

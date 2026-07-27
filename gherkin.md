@@ -14,7 +14,7 @@ La regla es siempre la del `.txt`; la página nunca decide por el narrador lo qu
 | `@panel` | Existe un mini-panel en la página: la **decisión es del narrador**, el **efecto lo aplica la página** |
 | `@narrador` | La página solo avisa/recuerda; el narrador lo ejecuta con las herramientas genéricas del mini-panel |
 | `@privado` | Requiere sala privada (`MOVE_TO_SECRET` / `MOVE_NARRATOR_TO_ROOM`) antes de resolverse |
-| `@pendiente` | El personaje **no está en ninguna campaña** de la app. Incluye qué añadir a `server/campaigns/*.js` |
+| `@extra` | El personaje vive en `server/campaigns/extras.js`: fuera de las 4 campañas, disponible en guiones propios |
 
 - `*` en una habilidad = "cada noche salvo la primera".
 - **"borracho o envenenado"** = el jugador tiene ficha `POISONED` o `DRUNK_NIGHT`, o es el Borracho (`drunkAs`):
@@ -3396,226 +3396,231 @@ y **nunca** los cuenta para el reparto de personajes.
 ---
 ---
 
-# PERSONAJES AÚN NO IMPLEMENTADOS
+# ROLES EXTRA (fuera de las campañas base)
 
-Estos 43 personajes están en `Mecanicas Personajes.txt` pero **no** existen en ninguna campaña de la app.
-Para activarlos hay que añadir su definición a `server/campaigns/<campaña>.js` y a
-`client/src/data/campaigns/<campaña>.js`, y darles el panel indicado.
+Estos 43 personajes de `Mecanicas Personajes.txt` **no pertenecen** a Trouble Brewing, Bad Moon Rising,
+Sects & Violets ni The Carousel, pero **ya están implementados**: definidos en `server/campaigns/extras.js`
+y `client/src/data/campaigns/extras.js`, registrados en `ALL_ROLES`, con orden de noche en
+`campaignImport.js` y mini-panel en `client/src/data/abilityPanels.js`.
+
+Un guion personalizado que los mencione los resuelve solo: ya no caen como "rol desconocido".
+Sus habilidades no se automatizan — el narrador las ejecuta desde el mini-panel con las acciones
+universales, guiado por el recordatorio de reglas de cada personaje.
 
 ## Feature: Alsaahir (Aldeano)
-  @pendiente
+  @extra
   «Cada día, si adivinas públicamente qué jugadores son Esbirros y cuáles Demonios, ganan los buenos.»
-  Panel necesario: botón "Adivinó correctamente" que declara la victoria del Bien.
+  Panel: botón "Adivinó correctamente" que declara la victoria del Bien.
 
 ## Feature: Ángel (Fabricado)
-  @pendiente
+  @extra
   «Algo malo puede pasarle a quien sea más responsable de matar a un jugador novato.»
-  Panel necesario: marca de "jugador novato" + acciones libres del narrador.
+  Panel: marca de "jugador novato" + acciones libres del narrador.
 
 ## Feature: Mendigo (Viajero)
-  @pendiente
+  @extra
   «Debes usar una ficha de votación para votar. Si un muerto te da la suya, descubres su alineación. Estás sobrio y sano.»
-  Panel necesario: transferencia de voto fantasma entre jugadores.
+  Panel: transferencia de voto fantasma entre jugadores.
 
 ## Feature: Mandamás / Big Wig (Viajero)
-  @pendiente
+  @extra
   «Cada nominado elige 1 jugador: hasta la votación solo puede hablar el elegido, y está loco de que el nominado es bueno o puede morir.»
-  Panel necesario: silenciar a todos salvo uno durante una nominación.
+  Panel: silenciar a todos salvo uno durante una nominación.
 
 ## Feature: Contrabandista / Bootlegger (Fabricado)
-  @pendiente
+  @extra
   «Este guion tiene personajes o reglas caseras.»
-  Panel necesario: campo de texto libre de reglas caseras visible para el narrador.
+  Panel: campo de texto libre de reglas caseras visible para el narrador.
 
 ## Feature: Budista (Fabricado)
-  @pendiente
+  @extra
   «En los primeros 2 minutos del día, los jugadores veteranos no pueden hablar.»
-  Panel necesario: marca de "veterano" por jugador + temporizador de silencio.
+  Panel: marca de "veterano" por jugador + temporizador de silencio.
 
 ## Feature: Burócrata (Viajero)
-  @pendiente
+  @extra
   «Cada noche elige 1 jugador (no a ti): su voto cuenta como 3 mañana.»
-  Panel necesario: multiplicador de voto por jugador.
+  Panel: multiplicador de voto por jugador.
 
 ## Feature: Risistencia / Cacklejack (Fabricado)
-  @pendiente
+  @extra
   «Cada día elige 1 jugador: un jugador diferente cambia de personaje esta noche.»
-  Panel necesario: cambio de rol en vivo (ya existe).
+  Panel: cambio de rol en vivo (ya existe).
 
 ## Feature: Deus Ex Fiasco (Fabricado)
-  @pendiente
+  @extra
   «Al menos una vez por partida, el Narrador cometerá un error, lo corregirá y lo admitirá públicamente.»
-  Panel necesario: recordatorio persistente al narrador + anuncio público.
+  Panel: recordatorio persistente al narrador + anuncio público.
 
 ## Feature: Djinn (Fabricado)
-  @pendiente
+  @extra
   «Utiliza una regla especial.»
-  Panel necesario: campo de texto libre con la regla, visible para todos.
+  Panel: campo de texto libre con la regla, visible para todos.
 
 ## Feature: Agorero / Doomsayer (Viajero)
-  @pendiente
+  @extra
   «Con 4 o más vivos, cada jugador vivo puede una vez por partida declarar en público que muera 1 jugador de su alineación.»
-  Panel necesario: un uso por jugador + selector restringido a su alineación.
+  Panel: un uso por jugador + selector restringido a su alineación.
 
 ## Feature: Duquesa (Viajero)
-  @pendiente
+  @extra
   «Cada día 3 jugadores pueden visitar al Narrador. De noche* cada visitante sabe cuántos son malvados, pero 1 recibe información falsa.»
-  Panel necesario: registro de visitantes + un número por visitante, uno marcado como falso.
+  Panel: registro de visitantes + un número por visitante, uno marcado como falso.
 
 ## Feature: Barquero / Ferryman (Fabricado)
-  @pendiente
+  @extra
   «En el último día, todos los jugadores muertos recuperan su voto.»
-  Panel necesario: botón "Devolver voto fantasma a todos".
+  Panel: botón "Devolver voto fantasma a todos".
 
 ## Feature: Fibbin (Fabricado)
-  @pendiente
+  @extra
   «Una vez por partida, 1 jugador bueno puede recibir información incorrecta.»
-  Panel necesario: interruptor "falsificar esta información" en cualquier paso nocturno.
+  Panel: interruptor "falsificar esta información" en cualquier paso nocturno.
 
 ## Feature: Violinista / Fiddler (Demonio)
-  @pendiente
+  @extra
   «Una vez por partida, el Demonio elige en secreto 1 jugador del bando contrario: todos deciden cuál de los 2 gana.»
-  Panel necesario: votación especial de dos candidatos que decide la partida.
+  Panel: votación especial de dos candidatos que decide la partida.
 
 ## Feature: Gánster (Viajero)
-  @pendiente
+  @extra
   «Una vez por día puedes matar a uno de tus vecinos vivos si el otro vecino vivo lo acepta.»
-  Panel necesario: selector limitado a vecinos + confirmación del otro vecino.
+  Panel: selector limitado a vecinos + confirmación del otro vecino.
 
 ## Feature: Jardinero (Fabricado)
-  @pendiente
+  @extra
   «El Narrador puede asignar 1 o más personajes a jugadores concretos.»
-  Panel necesario: asignación manual en el montaje (ya existe en el asistente).
+  Panel: asignación manual en el montaje (ya existe en el asistente).
 
 ## Feature: Gnomo (Esbirro)
-  @pendiente
+  @extra
   «Todos empiezan conociendo a un jugador de tu alineación. Puedes elegir matar a quien le nomine.»
-  Panel necesario: anuncio público inicial + botón de muerte al nominar.
+  Panel: anuncio público inicial + botón de muerte al nominar.
 
 ## Feature: Dios de Ug (Fabricado)
-  @pendiente
+  @extra
   «Un gorro Ug: quien lo lleva habla de un solo sonido pero vota doble; si falla, lo pierde.»
-  Panel necesario: ficha "gorro Ug" transferible + multiplicador de voto.
+  Panel: ficha "gorro Ug" transferible + multiplicador de voto.
 
 ## Feature: Pistolero / Gunslinger (Viajero)
-  @pendiente
+  @extra
   «Cada día, tras contar la primera votación, puedes elegir 1 jugador que votó: muere.»
-  Panel necesario: selector limitado a quienes votaron en esa nominación.
+  Panel: selector limitado a quienes votaron en esa nominación.
 
 ## Feature: Bibliotecario del Infierno (Fabricado)
-  @pendiente
+  @extra
   «Algo malo puede pasarle a quien hable cuando el Narrador pida silencio.»
-  Panel necesario: botón "pedir silencio" + acciones libres del narrador.
+  Panel: botón "pedir silencio" + acciones libres del narrador.
 
 ## Feature: Ermitaño / Hermit (Forastero)
-  @pendiente
+  @extra
   «Tienes todas las habilidades de Forastero. [−0 o −1 Forasteros]»
-  Panel necesario: lista de habilidades de Forastero acumuladas en un solo jugador.
+  Panel: lista de habilidades de Forastero acumuladas en un solo jugador.
 
 ## Feature: Hindú (Fabricado)
-  @pendiente
+  @extra
   «Los primeros 4 jugadores que mueran se reencarnan en Viajeros de su misma alineación.»
-  Panel necesario: conversión automática a Viajero al morir, con selector de personaje.
+  Panel: conversión automática a Viajero al morir, con selector de personaje.
 
 ## Feature: Truhanes / Knaves (Fabricado)
-  @pendiente
+  @extra
   «Hay 2 Narradores: uno miente y otro dice la verdad. Una vez por partida, en el crepúsculo, pueden intercambiarse.»
-  Panel necesario: la app ya admite varios narradores; falta marcar cuál miente y el intercambio.
+  Panel: la app ya admite varios narradores; falta marcar cuál miente y el intercambio.
 
 ## Feature: Señor de Typhon (Demonio)
-  @pendiente
+  @extra
   «Cada noche* elige 1 jugador: muere. [Los malvados están en línea, tú en el centro. +1 Esbirro]»
-  Panel necesario: validación del orden de asientos en el montaje.
+  Panel: validación del orden de asientos en el montaje.
 
 ## Feature: Ogro (Forastero)
-  @pendiente
+  @extra
   «En tu primera noche elige 1 jugador (no a ti): tomas su alineación sin saber cuál, incluso borracho o envenenado.»
-  Panel necesario: cambio de alineación silencioso (sin avisar al jugador).
+  Panel: cambio de alineación silencioso (sin avisar al jugador).
 
 ## Feature: Duendecillo / Pixie (Aldeano)
-  @pendiente
+  @extra
   «Empiezas conociendo 1 Aldeano en juego. Si estás loco de ser ese personaje, ganas su habilidad cuando muera.»
-  Panel necesario: locura impuesta + traspaso de habilidad al morir el original.
+  Panel: locura impuesta + traspaso de habilidad al morir el original.
 
 ## Feature: Papa / Pope (Fabricado)
-  @pendiente
+  @extra
   «Hay personajes buenos duplicados en juego. Pueden ser faroles.»
-  Panel necesario: permitir personajes repetidos en el reparto.
+  Panel: permitir personajes repetidos en el reparto.
 
 ## Feature: Princesa (Aldeano)
-  @pendiente
+  @extra
   «En tu primer día, si nominas y ejecutan a ese jugador, el Demonio no mata esta noche.»
-  Panel necesario: bloqueo del ataque del Demonio esa noche.
+  Panel: bloqueo del ataque del Demonio esa noche.
 
 ## Feature: Revolucionario (Fabricado)
-  @pendiente
+  @extra
   «2 jugadores vecinos son de la misma alineación. Una vez por partida uno aparecerá de la contraria.»
-  Panel necesario: marca de pareja + interruptor de falsificación puntual.
+  Panel: marca de pareja + interruptor de falsificación puntual.
 
 ## Feature: Chivo Expiatorio / Scapegoat (Viajero)
-  @pendiente
+  @extra
   «Si se ejecuta a un jugador de tu alineación, puedes morir tú en su lugar.»
-  Panel necesario: botón de sustitución en el momento de la ejecución.
+  Panel: botón de sustitución en el momento de la ejecución.
 
 ## Feature: Centinela / Sentinel (Fabricado)
-  @pendiente
+  @extra
   «Puede haber 1 Forastero más o menos.»
-  Panel necesario: modificador de reparto en el montaje.
+  Panel: modificador de reparto en el montaje.
 
 ## Feature: Espíritu de Marfil (Fabricado)
-  @pendiente
+  @extra
   «No puede haber más de 1 jugador malvado extra.»
-  Panel necesario: aviso de validación en el montaje.
+  Panel: aviso de validación en el montaje.
 
 ## Feature: Atrapa Tormentas / Storm Catcher (Aldeano)
-  @pendiente
+  @extra
   «Nombra un personaje bueno: si está en juego solo puede morir por ejecución, pero los malvados saben quién es.»
-  Panel necesario: ficha de inmunidad + anuncio al equipo malvado.
+  Panel: ficha de inmunidad + anuncio al equipo malvado.
 
 ## Feature: Ladrón / Thief (Viajero)
-  @pendiente
+  @extra
   «Cada noche elige 1 jugador (no a ti): su voto cuenta en negativo mañana.»
-  Panel necesario: multiplicador de voto negativo.
+  Panel: multiplicador de voto negativo.
 
 ## Feature: Tor (Fabricado)
-  @pendiente
+  @extra
   «Los jugadores no saben su personaje ni su alineación. Lo descubren al morir.»
-  Panel necesario: ocultar el propio personaje hasta la muerte (invierte la revelación actual).
+  Panel: ocultar el propio personaje hasta la muerte (invierte la revelación actual).
 
 ## Feature: Juguetero / Toymaker (Fabricado)
-  @pendiente
+  @extra
   «El Demonio puede no atacar una noche y debe hacerlo al menos 1 vez por partida. Los malvados reciben su información normal.»
-  Panel necesario: botón "el Demonio no ataca" + contador de usos obligatorio.
+  Panel: botón "el Demonio no ataca" + contador de usos obligatorio.
 
 ## Feature: Ventrílocuo / Ventriloquist (Fabricado)
-  @pendiente
+  @extra
   «Si un jugador está loco de ser un personaje nuevo durante su nominación, puede no morir si lo ejecutan hoy.»
-  Panel necesario: locura impuesta + anulación de la ejecución.
+  Panel: locura impuesta + anulación de la ejecución.
 
 ## Feature: Tonto del Pueblo / Village Idiot (Aldeano)
-  @pendiente
+  @extra
   «Cada noche elige 1 jugador: descubres su alineación. [+0 a +2 Tontos, uno de ellos borracho]»
-  Panel necesario: permitir varios ejemplares del mismo personaje, uno marcado como borracho.
+  Panel: permitir varios ejemplares del mismo personaje, uno marcado como borracho.
 
 ## Feature: Espectro / Wraith (Esbirro)
-  @pendiente
+  @extra
   «Puedes abrir los ojos de noche. Despiertas cuando lo hagan los demás malvados.»
-  Panel necesario: marca de "despierta con el Mal" en la cola nocturna.
+  Panel: marca de "despierta con el Mal" en la cola nocturna.
 
 ## Feature: Xaan (Demonio)
-  @pendiente
+  @extra
   «En la noche X todos los Aldeanos están envenenados hasta el crepúsculo. [X Forasteros]»
-  Panel necesario: envenenamiento masivo programado para una noche concreta.
+  Panel: envenenamiento masivo programado para una noche concreta.
 
 ## Feature: Fanático / Zealot (Fabricado)
-  @pendiente
+  @extra
   «Con 5 o más vivos, debes votar en todas las nominaciones.»
-  Panel necesario: voto obligatorio forzado en la votación por turnos.
+  Panel: voto obligatorio forzado en la votación por turnos.
 
 ## Feature: Zenomante / Zenomancer (Fabricado)
-  @pendiente
+  @extra
   «Uno o más jugadores tienen una misión: al completarla reciben información verdadera.»
-  Panel necesario: campo de misión por jugador + botón "misión completada".
+  Panel: campo de misión por jugador + botón "misión completada".
 
 ---
 ---

@@ -15,8 +15,16 @@ function getDistribution(playerCount, selectedRoles, campaignId) {
   const mods = campaign.outsiderModifiers || {};
   for (const [roleId, delta] of Object.entries(mods)) {
     if (selectedRoles.includes(roleId)) {
-      dist.outsiders = Math.min(dist.outsiders + delta, playerCount - dist.demons - dist.minions);
+      dist.outsiders = Math.max(0, Math.min(dist.outsiders + delta, playerCount - dist.demons - dist.minions));
       dist.townfolk = playerCount - dist.outsiders - dist.minions - dist.demons;
+    }
+  }
+  // Esbirros extra (Señor de Typhon +1). Salen de los Aldeanos.
+  const minionMods = campaign.minionModifiers || {};
+  for (const [roleId, delta] of Object.entries(minionMods)) {
+    if (selectedRoles.includes(roleId)) {
+      dist.minions = Math.max(1, dist.minions + delta);
+      dist.townfolk = Math.max(0, playerCount - dist.outsiders - dist.minions - dist.demons);
     }
   }
   return dist;

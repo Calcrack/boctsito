@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { ALL_ROLES, getCampaign } = require('./campaigns');
+const { ALL_ROLES, getCampaign, EXTRA_SETUP_MODIFIERS } = require('./campaigns');
 
 const CUSTOM_PATH           = path.join(__dirname, 'campaigns-custom.json');
 const GITHUB_TOKEN          = process.env.GITHUB_TOKEN;
@@ -27,6 +27,30 @@ const ID_ALIASES = {
   nodashii: 'NO_DASHII',
   fanggu: 'FANG_GU',
   tealady: 'TEA_LADY',
+  // Roles extra cuyo id canónico no coincide letra a letra con el interno.
+  lordoftyphon: 'LORD_OF_TYPHON',
+  villageidiot: 'VILLAGE_IDIOT',
+  spiritofivory: 'SPIRIT_OF_IVORY',
+  stormcatcher: 'STORM_CATCHER',
+  deusexfiasco: 'DEUS_EX_FIASCO',
+  hellslibrarian: 'HELLS_LIBRARIAN',
+  godofug: 'GOD_OF_UG',
+  bigwig: 'BIG_WIG',
+  bishop: 'BISHOP',
+  // Sinónimos y traducciones frecuentes.
+  slayer: 'SLAYER',
+  huntsman: 'HUNTSMAN',
+  nightwatchman: 'NIGHTWATCHMAN',
+  poppygrower: 'POPPY_GROWER',
+  organgrinder: 'ORGAN_GRINDER',
+  plaguedoctor: 'PLAGUE_DOCTOR',
+  bountyhunter: 'BOUNTY_HUNTER',
+  cultleader: 'CULT_LEADER',
+  highpriestess: 'HIGH_PRIESTESS',
+  lilmonsta: 'LIL_MONSTA',
+  alhadikhia: 'AL_HADIKHIA',
+  bonecollector: 'BONE_COLLECTOR',
+  mezepheles: 'MEZEPHELES',
 };
 
 // Roles homebrew/experimentales que no están en nuestras campañas base.
@@ -101,6 +125,25 @@ const NIGHT_PRIORITY = {
   BUTLER:        { first: 90, other: 90 },
   SPY:           { first: 95, other: 95 },
   MAYOR:         {},
+  // ── Roles extra ──────────────────────────────────────────────────
+  XAAN:            { first: 2,  other: 2  }, // envenena antes que nadie
+  LORD_OF_TYPHON:  { other: 42 },            // ataque de Demonio
+  FIDDLER:         { other: 49 },
+  WRAITH:          { first: 8,  other: 8  }, // solo observa, con el resto del Mal
+  GNOME:           { first: 9  },
+  OGRE:            { first: 11 },
+  HERMIT:          { first: 26, other: 26 },
+  STORM_CATCHER:   { first: 27 },
+  BUREAUCRAT:      { first: 84, other: 84 },
+  THIEF:           { first: 85, other: 85 },
+  PIXIE:           { first: 86 },
+  VILLAGE_IDIOT:   { first: 87, other: 87 },
+  DUCHESS:         { other: 88 },
+  TOYMAKER:        { other: 89 },
+  CACKLEJACK:      { other: 91 },
+  ZENOMANCER:      { other: 92 },
+  // Sin acción nocturna: ALSAAHIR, PRINCESS, GUNSLINGER, GANGSTER,
+  // SCAPEGOAT, DOOMSAYER, BEGGAR, BIG_WIG y el resto de fabulados.
 };
 
 function normalize(id) {
@@ -193,9 +236,25 @@ function parseScript(input, fallbackName = 'Campaña personalizada') {
   const outsiderModifiers = {};
   if (roles.BARON) outsiderModifiers.BARON = 2;
   if (roles.GODFATHER) outsiderModifiers.GODFATHER = 0; // ejemplo, no altera base
-  const setupNotes = ids.filter(id => roles[id].setupNote).map(id => `${roles[id].name}: ${roles[id].setupNote}`);
+  // Roles extra que alteran el reparto (Señor de Typhon +1 Esbirro, Ermitaño −1
+  // Forastero, Centinela ±1 Forastero…).
+  const minionModifiers = {};
+  for (const id of ids) {
+    const mod = EXTRA_SETUP_MODIFIERS[id];
+    if (!mod) continue;
+    if (mod.outsiders) outsiderModifiers[id] = mod.outsiders;
+    if (mod.minions)   minionModifiers[id]   = mod.minions;
+  }
+  const setupNotes = [
+    ...ids.filter(id => roles[id].setupNote).map(id => `${roles[id].name}: ${roles[id].setupNote}`),
+    ...ids.filter(id => EXTRA_SETUP_MODIFIERS[id]?.note).map(id => `${roles[id].name}: ${EXTRA_SETUP_MODIFIERS[id].note}`),
+  ];
+  // Recordatorios de narración de los roles que la página no automatiza.
+  for (const id of ids) {
+    if (roles[id].narratorNote) warnings.push(`ℹ ${roles[id].name}: ${roles[id].narratorNote}`);
+  }
 
-  return { name, author, roles, firstNightOrder, otherNightOrder, outsiderModifiers, setupNotes, warnings };
+  return { name, author, roles, firstNightOrder, otherNightOrder, outsiderModifiers, minionModifiers, setupNotes, warnings };
 }
 
 function mapTeam(team) {
@@ -351,6 +410,7 @@ function buildCampaign(input, fallbackName) {
     firstNightOrder: parsed.firstNightOrder,
     otherNightOrder: parsed.otherNightOrder,
     outsiderModifiers: parsed.outsiderModifiers,
+    minionModifiers: parsed.minionModifiers,
     setupNotes: parsed.setupNotes,
     warnings: parsed.warnings,
     queueFirst, queueOther,

@@ -24,7 +24,7 @@ export const extraRoles = [
     ability: 'Cada noche* elige un jugador: muere. [Los personajes malvados están en línea. Tú estás en el centro. +1 Esbirro. −? a +? Forasteros]', night: { passive: true } },
   { id: 'FIDDLER', name: 'Violinista', alignment: 'evil', type: 'demon', img: null,
     ability: 'Una vez por partida, de noche, elige un jugador del bando contrario: todos deciden en votación cuál de los 2 gana.', night: { passive: true } },
-  { id: 'XAAN', name: 'Xaan', alignment: 'evil', type: 'demon', img: null,
+  { id: 'XAAN', name: 'Xaan', alignment: 'evil', type: 'minion', img: null,
     ability: 'En la noche X todos los Aldeanos están envenenados hasta el crepúsculo. [X Forasteros]', night: { passive: true } },
   { id: 'BEGGAR', name: 'Mendigo', alignment: 'good', type: 'traveler', img: null,
     ability: 'Debes usar una ficha de votación para votar. Si un jugador muerto te da la suya, descubres su alineación. Estás sobrio y sano.', night: { passive: true } },
@@ -86,7 +86,7 @@ export const extraRoles = [
     ability: 'El Demonio puede decidir no atacar una noche, y debe hacerlo al menos 1 vez por partida. Los malvados reciben su información inicial normal.', night: { passive: true } },
   { id: 'VENTRILOQUIST', name: 'Ventrílocuo', alignment: 'good', type: 'fabled', img: null,
     ability: 'Si un jugador está loco de ser un personaje nuevo durante su nominación, puede no morir si lo ejecutan hoy.', night: { passive: true } },
-  { id: 'ZEALOT', name: 'Fanático', alignment: 'good', type: 'fabled', img: null,
+  { id: 'ZEALOT', name: 'Fanático', alignment: 'good', type: 'outsider', img: null,
     ability: 'Si hay 5 o más jugadores vivos, debes votar en todas las nominaciones.', night: { passive: true } },
   { id: 'ZENOMANCER', name: 'Zenomante', alignment: 'good', type: 'fabled', img: null,
     ability: 'Uno o más jugadores tienen una misión. Cuando la completan, reciben información verdadera.', night: { passive: true } },];

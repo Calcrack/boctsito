@@ -273,7 +273,8 @@ export const ABILITY_PANELS = {
     note: 'Los malvados van en línea con él en el centro. +1 Esbirro. Valida los asientos en el montaje.' },
   FIDDLER: { phases: NIGHT, targets: 1, once: 'fiddlerUsed',
     note: 'Elige un jugador del bando contrario: todos votan cuál de los 2 gana la partida.' },
-  XAAN: { phases: NIGHT, targets: 1, action: 'KILL',
+  // Xaan es Esbirro y NO mata: en la noche X envenena a todos los Aldeanos.
+  XAAN: { phases: NIGHT, targets: 0,
     note: 'En la noche X (= nº de Forasteros) envenena a TODOS los Aldeanos hasta el anochecer.' },
   BEGGAR: { phases: '*', targets: 1, deadOnly: true,
     note: 'Si un muerto le da su voto fantasma, aprende su alineación. Está sobrio y sano.' },

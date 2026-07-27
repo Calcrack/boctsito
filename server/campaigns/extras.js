@@ -86,8 +86,9 @@ const EXTRA_ROLES = {
     reminders: ['Elegido para el duelo'],
     narratorNote: 'Abre una votación especial entre los dos candidatos: el bando del ganador gana la partida.',
   },
+  // Xaan es ESBIRRO, no Demonio.
   XAAN: {
-    id: 'XAAN', name: 'Xaan', alignment: 'evil', type: 'demon',
+    id: 'XAAN', name: 'Xaan', alignment: 'evil', type: 'minion',
     ability: 'En la noche X todos los Aldeanos están envenenados hasta el crepúsculo. [X Forasteros]',
     firstNight: true, otherNights: true,
     reminders: ['Noche X', 'Envenenado'],
@@ -291,8 +292,10 @@ const EXTRA_ROLES = {
     firstNight: false, otherNights: false,
     reminders: ['Loco', 'Sobrevive la ejecución'],
   },
+  // Fanático es FORASTERO (su voto obligatorio es una desventaja para el Bien),
+  // no un Fabulado que modifique las reglas de la mesa.
   ZEALOT: {
-    id: 'ZEALOT', name: 'Fanático', alignment: 'good', type: 'fabled',
+    id: 'ZEALOT', name: 'Fanático', alignment: 'good', type: 'outsider',
     ability: 'Si hay 5 o más jugadores vivos, debes votar en todas las nominaciones.',
     firstNight: false, otherNights: false,
     reminders: ['Voto obligatorio'],

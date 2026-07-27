@@ -2705,41 +2705,6 @@ El narrador dispone de un **catálogo grande de deseos preestablecidos** y de un
   Escenario: Envenenado
     Entonces el nombre puede ser de un malvado
 
-## Feature: Hechicero / Wizard (Aldeano) — Carousel
-  «Una vez por partida pide en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.»
-  Panel: ver la sección completa "SISTEMA DE DESEOS".
-
-  @privado
-  Escenario: Pedir el deseo
-    Dado el Hechicero vivo que aún no ha deseado
-    Cuando pulsa "Pedir un deseo" y escribe el texto
-    Entonces solo el narrador lo recibe
-
-  @panel @privado
-  Escenario: El narrador lo atiende en su habitación
-    Cuando el narrador pulsa "Ir a su habitación"
-    Entonces la página lo mueve al canal privado del Hechicero
-    Y allí decide conceder o denegar
-
-  @panel
-  Escenario: Conceder con catálogo
-    Cuando el narrador concede desde el catálogo
-    Entonces la página aplica el efecto y propone precio y pista, ambos editables
-
-  @panel
-  Escenario: Conceder libre
-    Cuando el narrador usa la pestaña "Libre"
-    Entonces puede encadenar cualquier efecto del mini-panel sobre cualquier jugador
-
-  @panel
-  Escenario: El deseo nunca se hace público solo
-    Entonces la página no anuncia nada salvo que el narrador lo ordene
-
-  @auto
-  Escenario: Un solo deseo
-    Dado un deseo ya concedido o denegado en firme
-    Entonces el botón de pedir deseo desaparece
-
 ## Feature: Damisela (Forastero) — Carousel
   «Todos los Esbirros saben que hay una Damisela en juego. Si un Esbirro adivina quién eres, tu equipo pierde.»
   Panel: botón "Un Esbirro adivina" con selector de Esbirro y de objetivo.
@@ -2861,6 +2826,41 @@ El narrador dispone de un **catálogo grande de deseos preestablecidos** y de un
   @panel
   Escenario: El narrador ajusta los faroles
     Entonces puede cambiar los tres personajes de cada Esbirro desde el panel
+
+## Feature: Hechicero / Wizard (Esbirro) — Carousel
+  «Una vez por partida pide en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.»
+  Panel: ver la sección completa "SISTEMA DE DESEOS".
+
+  @privado
+  Escenario: Pedir el deseo
+    Dado el Hechicero vivo que aún no ha deseado
+    Cuando pulsa "Pedir un deseo" y escribe el texto
+    Entonces solo el narrador lo recibe
+
+  @panel @privado
+  Escenario: El narrador lo atiende en su habitación
+    Cuando el narrador pulsa "Ir a su habitación"
+    Entonces la página lo mueve al canal privado del Hechicero
+    Y allí decide conceder o denegar
+
+  @panel
+  Escenario: Conceder con catálogo
+    Cuando el narrador concede desde el catálogo
+    Entonces la página aplica el efecto y propone precio y pista, ambos editables
+
+  @panel
+  Escenario: Conceder libre
+    Cuando el narrador usa la pestaña "Libre"
+    Entonces puede encadenar cualquier efecto del mini-panel sobre cualquier jugador
+
+  @panel
+  Escenario: El deseo nunca se hace público solo
+    Entonces la página no anuncia nada salvo que el narrador lo ordene
+
+  @auto
+  Escenario: Un solo deseo
+    Dado un deseo ya concedido o denegado en firme
+    Entonces el botón de pedir deseo desaparece
 
 ## Feature: Pólvora / Boomdandy (Esbirro) — Carousel
   «Si eres ejecutado, todos menos 3 mueren.»
@@ -3118,7 +3118,7 @@ El narrador dispone de un **catálogo grande de deseos preestablecidos** y de un
   Escenario: Aviso a un jugador bueno
     Entonces un jugador bueno al azar recibe «Hay una Viuda en juego»
 
-## Feature: Yaggababble (Esbirro) — Carousel
+## Feature: Yaggababble (Demonio) — Carousel
   «Empiezas sabiendo una frase secreta. Por cada vez que la dijiste hoy, muere un jugador.»
   Panel: al anochecer — contador de repeticiones + selector de víctimas.
 
@@ -3607,12 +3607,12 @@ universales, guiado por el recordatorio de reglas de cada personaje.
   «Puedes abrir los ojos de noche. Despiertas cuando lo hagan los demás malvados.»
   Panel: marca de "despierta con el Mal" en la cola nocturna.
 
-## Feature: Xaan (Demonio)
+## Feature: Xaan (Esbirro)
   @extra
   «En la noche X todos los Aldeanos están envenenados hasta el crepúsculo. [X Forasteros]»
   Panel: envenenamiento masivo programado para una noche concreta.
 
-## Feature: Fanático / Zealot (Fabricado)
+## Feature: Fanático / Zealot (Forastero)
   @extra
   «Con 5 o más vivos, debes votar en todas las nominaciones.»
   Panel: voto obligatorio forzado en la votación por turnos.

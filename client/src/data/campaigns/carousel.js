@@ -54,8 +54,6 @@ export const roles = [
     ability: 'Empiezas sabiendo si el jugador malvado más cercano está a tu izquierda o a tu derecha.', night: { passive: true } },
   { id: 'STEWARD', name: 'Administrador', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/steward.png',
     ability: 'Empiezas conociendo a 1 jugador bueno.', night: { passive: true } },
-  { id: 'WIZARD', name: 'Hechicero', alignment: 'good', type: 'townfolk', img: null,
-    ability: 'Una vez por partida pide en privado un deseo al Narrador: puede tener precio y deja pistas.', night: { passive: true } },
 
   // ── FORASTEROS ──────────────────────────────────────────────────────
   { id: 'DAMSEL', name: 'Damisela', alignment: 'good', type: 'outsider', img: '/assets/roles/carousel/damsel.png',
@@ -101,10 +99,14 @@ export const roles = [
     ability: 'Todos saben que eres Visir. No puedes morir durante el día.', night: { evil: true } },
   { id: 'WIDOW', name: 'Viuda', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/widow.png',
     ability: 'Noche 1: mira Grimorio y elige jugador; se envenena.', night: { action: 'WIDOW', targets: 1, evil: true } },
-  { id: 'YAGGABABBLE', name: 'Yaggababble', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/yaggababble.png',
-    ability: 'Comienzas sabiendo frase secreta. Cada vez que la dijiste hoy, alguien muere.', night: { action: 'YAGGABABBLE', targets: 1, evil: true } },
+  // Espejo del servidor: el Hechicero es Esbirro malvado.
+  { id: 'WIZARD', name: 'Hechicero', alignment: 'evil', type: 'minion', img: null,
+    ability: 'Una vez por partida pide en privado un deseo al Narrador: puede tener precio y deja pistas.', night: { passive: true } },
 
   // ── DEMONIOS ────────────────────────────────────────────────────────
+  // Yaggababble es Demonio, no Esbirro.
+  { id: 'YAGGABABBLE', name: 'Yaggababble', alignment: 'evil', type: 'demon', img: '/assets/roles/carousel/yaggababble.png',
+    ability: 'Comienzas sabiendo frase secreta. Cada vez que la dijiste hoy, alguien muere.', night: { action: 'YAGGABABBLE', targets: 1, evil: true } },
   { id: 'AL_HADIKHIA', name: 'Al-Hadikhia', alignment: 'evil', type: 'demon', img: '/assets/roles/carousel/al-hadikhia.png',
     ability: 'Cada noche*: elige 3 jugadores que eligen vivir/morir silenciosamente.', night: { action: 'AL_HADIKHIA_KILL', targets: 3, evil: true } },
   { id: 'KAZALI', name: 'Kazali', alignment: 'evil', type: 'demon', img: '/assets/roles/carousel/kazali.png',

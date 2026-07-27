@@ -601,7 +601,7 @@
       },
       "HUNTSMAN": {
         "id": "HUNTSMAN",
-        "name": "Cazador",
+        "name": "Cazador de Damiselas",
         "alignment": "good",
         "type": "townfolk",
         "ability": "Una vez por partida, elige un jugador: la Damisela se convierte en un Aldeano que no está en juego.",
@@ -628,15 +628,16 @@
       },
       "PRINCESS": {
         "id": "PRINCESS",
-        "name": "princess",
+        "name": "Princesa",
         "alignment": "good",
         "type": "townfolk",
-        "ability": "(Rol desconocido — define su habilidad y fichas a mano)",
+        "ability": "En tu primer día, si nominas y ejecutan a ese jugador, el Demonio no mata esta noche.",
         "firstNight": false,
         "otherNights": false,
-        "reminders": [],
-        "homebrew": true,
-        "unknown": true
+        "reminders": [
+          "El Demonio no mata"
+        ],
+        "narratorNote": "Solo su PRIMER día. Si se cumple, salta el ataque del Demonio esa noche."
       },
       "SOLDIER": {
         "id": "SOLDIER",
@@ -834,17 +835,19 @@
           "demonBluffs": 3
         }
       },
-      "LORDOFTYPHON": {
-        "id": "LORDOFTYPHON",
-        "name": "lordoftyphon",
-        "alignment": "good",
-        "type": "townfolk",
-        "ability": "(Rol desconocido — define su habilidad y fichas a mano)",
+      "LORD_OF_TYPHON": {
+        "id": "LORD_OF_TYPHON",
+        "name": "Señor de Typhon",
+        "alignment": "evil",
+        "type": "demon",
+        "ability": "Cada noche* elige un jugador: muere. [Los personajes malvados están en línea. Tú estás en el centro. +1 Esbirro. −? a +? Forasteros]",
         "firstNight": false,
-        "otherNights": false,
-        "reminders": [],
-        "homebrew": true,
-        "unknown": true
+        "otherNights": true,
+        "reminders": [
+          "Muere"
+        ],
+        "setupNote": "Los malvados se sientan en línea con el Señor de Typhon en el centro. +1 Esbirro.",
+        "narratorNote": "Valida el orden de asientos en el montaje antes de bloquear el reparto."
       }
     },
     "firstNightOrder": [
@@ -867,6 +870,7 @@
       "PUKKA",
       "COURTIER",
       "IMP",
+      "LORD_OF_TYPHON",
       "ASSASSIN",
       "FORTUNE_TELLER",
       "UNDERTAKER",
@@ -880,10 +884,12 @@
     "outsiderModifiers": {
       "BARON": 2
     },
-    "setupNotes": [],
+    "setupNotes": [
+      "Señor de Typhon: Los malvados se sientan en línea con el Señor de Typhon en el centro. +1 Esbirro."
+    ],
     "warnings": [
-      "⚠ Rol desconocido \"princess\": añadido como stub. Gestiónalo manualmente.",
-      "⚠ Rol desconocido \"lordoftyphon\": añadido como stub. Gestiónalo manualmente."
+      "ℹ Princesa: Solo su PRIMER día. Si se cumple, salta el ataque del Demonio esa noche.",
+      "ℹ Señor de Typhon: Valida el orden de asientos en el montaje antes de bloquear el reparto."
     ],
     "queueFirst": [
       "POISONER",
@@ -904,6 +910,7 @@
       "PUKKA",
       "COURTIER",
       "IMP",
+      "LORD_OF_TYPHON",
       "ASSASSIN",
       "FORTUNE_TELLER",
       "UNDERTAKER",
@@ -981,6 +988,9 @@
         "minions": 3,
         "demons": 1
       }
+    },
+    "minionModifiers": {
+      "LORD_OF_TYPHON": 1
     }
   }
 }

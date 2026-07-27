@@ -2501,6 +2501,8 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
     campaignWarnings: isNarrator ? (activeCampaign.warnings || []) : undefined,
     campaignDistribution: isNarrator ? (activeCampaign.distribution || {}) : undefined,
     campaignOutsiderModifiers: isNarrator ? (activeCampaign.outsiderModifiers || {}) : undefined,
+    // Esbirros extra (Señor de Typhon +1): el asistente los suma a la composición.
+    campaignMinionModifiers: isNarrator ? (activeCampaign.minionModifiers || {}) : undefined,
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);

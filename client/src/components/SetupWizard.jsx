@@ -22,6 +22,16 @@ export default function SetupWizard({ game, send, onClose }) {
   const assignments = setup.assignments || {};
   const decisions = setup.decisions || [];
 
+  // La campaña del SERVIDOR manda: es la única que conoce los roles de un
+  // guion importado (Hechicero, Señor de Typhon, homebrew…). La tabla estática
+  // del cliente solo rellena lo que falte. Sin esto, un rol que la tabla del
+  // cliente desconozca se dibuja en el saco pero NO cuenta para la composición.
+  const roleInfo = useMemo(() => {
+    const map = { ...ROLE_BY_ID };
+    for (const r of roleList) map[r.id] = { ...(ROLE_BY_ID[r.id] || {}), ...r };
+    return map;
+  }, [roleList]);
+
   const [step, setStep] = useState(0);
   // El "saco" = roles disponibles para asignar. Arranca de lo ya asignado.
   const [bag, setBag] = useState(() => new Set(Object.values(assignments)));
@@ -32,17 +42,25 @@ export default function SetupWizard({ game, send, onClose }) {
 
   const dist = (game.campaignDistribution || {})[players.length] || null;
   const mods = game.campaignOutsiderModifiers || {};
+  const minionMods = game.campaignMinionModifiers || {};
   const needed = useMemo(() => {
     if (!dist) return null;
     const d = { ...dist };
     for (const [rid, delta] of Object.entries(mods)) {
       if (bag.has(rid)) {
-        d.outsiders = Math.min(d.outsiders + delta, players.length - d.demons - d.minions);
+        d.outsiders = Math.max(0, Math.min(d.outsiders + delta, players.length - d.demons - d.minions));
         d.townfolk = players.length - d.outsiders - d.minions - d.demons;
       }
     }
+    // Esbirros extra (Señor de Typhon +1). Salen de los Aldeanos.
+    for (const [rid, delta] of Object.entries(minionMods)) {
+      if (bag.has(rid)) {
+        d.minions = Math.max(1, d.minions + delta);
+        d.townfolk = Math.max(0, players.length - d.outsiders - d.minions - d.demons);
+      }
+    }
     return d;
-  }, [dist, mods, bag, players.length]);
+  }, [dist, mods, minionMods, bag, players.length]);
 
   const allAssigned = seats.length > 0 && seats.every(s => assignments[s.id]);
   const unresolved = decisions.filter(d => !isResolved(d)).length;
@@ -55,7 +73,7 @@ export default function SetupWizard({ game, send, onClose }) {
       n.add(rid);
       if (rid === 'ATHEIST') {
         for (const id of [...n]) {
-          if (ROLE_BY_ID[id]?.alignment === 'evil') n.delete(id);
+          if (roleInfo[id]?.alignment === 'evil') n.delete(id);
         }
       }
     }
@@ -101,14 +119,14 @@ export default function SetupWizard({ game, send, onClose }) {
         {/* Cuerpo con scroll propio */}
         <div className="wizard-body">
           {step === 0 && (
-            <BagStep roleList={roleList} bag={bag} toggleBag={toggleBag} needed={needed} playerCount={players.length} />
+            <BagStep roleList={roleList} roleInfo={roleInfo} bag={bag} toggleBag={toggleBag} needed={needed} playerCount={players.length} />
           )}
           {step === 1 && (
-            <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList}
+            <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList} roleInfo={roleInfo}
               moveSeat={moveSeat} assignSeat={assignSeat} />
           )}
           {step === 2 && (
-            <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} send={send} />
+            <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} roleInfo={roleInfo} send={send} />
           )}
           {step === 3 && (
             <ReviewStep seats={seats} assignments={assignments} decisions={decisions}
@@ -130,13 +148,13 @@ export default function SetupWizard({ game, send, onClose }) {
 }
 
 // ── Paso 1: el saco ──────────────────────────────────────────────────
-function BagStep({ roleList, bag, toggleBag, needed, playerCount }) {
+function BagStep({ roleList, roleInfo, bag, toggleBag, needed, playerCount }) {
   const atheistInBag = bag.has('ATHEIST');
   const have = {
-    townfolk: [...bag].filter(id => ROLE_BY_ID[id]?.type === 'townfolk').length,
-    outsider: [...bag].filter(id => ROLE_BY_ID[id]?.type === 'outsider').length,
-    minion:   [...bag].filter(id => ROLE_BY_ID[id]?.type === 'minion').length,
-    demon:    [...bag].filter(id => ROLE_BY_ID[id]?.type === 'demon').length,
+    townfolk: [...bag].filter(id => roleInfo[id]?.type === 'townfolk').length,
+    outsider: [...bag].filter(id => roleInfo[id]?.type === 'outsider').length,
+    minion:   [...bag].filter(id => roleInfo[id]?.type === 'minion').length,
+    demon:    [...bag].filter(id => roleInfo[id]?.type === 'demon').length,
   };
   const needMap = needed ? { townfolk: needed.townfolk, outsider: needed.outsiders, minion: needed.minions, demon: needed.demons } : null;
   const visibleTypes = atheistInBag ? TYPES.filter(t => t.k === 'townfolk' || t.k === 'outsider') : TYPES;
@@ -179,11 +197,11 @@ function BagStep({ roleList, bag, toggleBag, needed, playerCount }) {
 }
 
 // ── Paso 2: asignar a asientos ───────────────────────────────────────
-function SeatStep({ seats, assignments, bag, roleList, moveSeat, assignSeat }) {
+function SeatStep({ seats, assignments, bag, roleList, roleInfo, moveSeat, assignSeat }) {
   const usedRoles = new Set(Object.values(assignments));
   const bagRoles = roleList.filter(r => bag.has(r.id));
   // Asientos válidos para la Marioneta = vecinos del Demonio.
-  const demonSeatIdx = seats.findIndex(s => ROLE_BY_ID[assignments[s.id]]?.type === 'demon');
+  const demonSeatIdx = seats.findIndex(s => roleInfo[assignments[s.id]]?.type === 'demon');
   const adjToDemon = new Set();
   if (demonSeatIdx >= 0 && seats.length > 1) {
     adjToDemon.add(seats[(demonSeatIdx - 1 + seats.length) % seats.length].id);
@@ -197,7 +215,7 @@ function SeatStep({ seats, assignments, bag, roleList, moveSeat, assignSeat }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {seats.map((s, i) => {
           const roleId = assignments[s.id];
-          const role = roleId ? ROLE_BY_ID[roleId] : null;
+          const role = roleId ? roleInfo[roleId] : null;
           const isMarionette = roleId === 'MARIONETTE';
           const badSeat = isMarionette && demonSeatIdx >= 0 && !adjToDemon.has(s.id);
           return (
@@ -229,11 +247,11 @@ function SeatStep({ seats, assignments, bag, roleList, moveSeat, assignSeat }) {
 }
 
 // ── Paso 3: decisiones de montaje ────────────────────────────────────
-function DecisionsStep({ decisions, seats, assignments, roleList, send }) {
-  const goodNotInPlay = roleList.filter(r => r.alignment === 'good' && !Object.values(assignments).includes(r.id) && !ROLE_BY_ID[r.id]?.misperception);
+function DecisionsStep({ decisions, seats, assignments, roleList, roleInfo, send }) {
+  const goodNotInPlay = roleList.filter(r => r.alignment === 'good' && !Object.values(assignments).includes(r.id) && !roleInfo[r.id]?.misperception);
   const demonsInCampaign = roleList.filter(r => r.type === 'demon');
   const minionsInCampaign = roleList.filter(r => r.type === 'minion');
-  const outsidersInPlay = seats.filter(s => ROLE_BY_ID[assignments[s.id]]?.type === 'outsider').map(s => assignments[s.id]);
+  const outsidersInPlay = seats.filter(s => roleInfo[assignments[s.id]]?.type === 'outsider').map(s => assignments[s.id]);
 
   const setDec = (id, patch) => send('SETUP_SET_DECISION', { id, patch });
   const suggest = (id) => send('SETUP_SUGGEST', { id });

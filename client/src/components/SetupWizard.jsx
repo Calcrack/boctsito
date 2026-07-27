@@ -199,7 +199,10 @@ function BagStep({ roleList, roleInfo, bag, toggleBag, needed, playerCount }) {
 // ── Paso 2: asignar a asientos ───────────────────────────────────────
 function SeatStep({ seats, assignments, bag, roleList, roleInfo, moveSeat, assignSeat }) {
   const usedRoles = new Set(Object.values(assignments));
-  const bagRoles = roleList.filter(r => bag.has(r.id));
+  // El saco va primero, pero el desplegable ofrece TODA la campaña: si olvidas
+  // meter un personaje en el saco no debe quedar inalcanzable aquí.
+  const bagRoles  = roleList.filter(r => bag.has(r.id));
+  const restRoles = roleList.filter(r => !bag.has(r.id));
   // Asientos válidos para la Marioneta = vecinos del Demonio.
   const demonSeatIdx = seats.findIndex(s => roleInfo[assignments[s.id]]?.type === 'demon');
   const adjToDemon = new Set();
@@ -229,9 +232,16 @@ function SeatStep({ seats, assignments, bag, roleList, roleInfo, moveSeat, assig
               <select value={roleId || ''} onChange={e => assignSeat(s.id, e.target.value || null)}
                 style={{ fontSize: 10, background: 'var(--ink-600)', border: '1px solid', borderColor: role ? (role.alignment === 'evil' ? 'var(--blood-dim)' : 'var(--hairline-bone)') : 'var(--hairline-bone)', borderRadius: 2, color: role ? (role.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--bone-200)') : 'var(--bone-500)', padding: '3px 5px', maxWidth: 150 }}>
                 <option value="">— sin asignar —</option>
-                {bagRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
+                <optgroup label="En el saco">
+                  {bagRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Resto de la campaña">
+                  {restRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
+                    <option key={r.id} value={r.id}>{r.name} ({typeLabel(r.type)})</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           );

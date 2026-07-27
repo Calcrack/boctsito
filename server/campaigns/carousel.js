@@ -123,12 +123,6 @@ const roles = {
     ability: 'Cada noche, elige un jugador: si es Esbirro, lo aprendes. Todos los Esbirros elegidos pierden habilidad.',
     firstNight: false, otherNights: true,
   },
-  BOFFIN: {
-    id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'good', type: 'townfolk',
-    ability: 'El Demonio tiene la habilidad de un bueno no en juego. Ambos lo saben desde noche 1.',
-    firstNight: true, otherNights: false,
-    setup: { boffinAbility: true },
-  },
   SHUGENJA: {
     id: 'SHUGENJA', name: 'Shugenja', alignment: 'good', type: 'townfolk',
     ability: 'Empiezas sabiendo si el jugador malo más cercano está a tu izquierda o a tu derecha.',
@@ -189,6 +183,12 @@ const roles = {
   },
 
   // ── ESBIRROS ────────────────────────────────────────────────────────────
+  BOFFIN: {
+    id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'evil', type: 'minion',
+    ability: 'El Demonio (incluso borracho o envenenado) tiene la habilidad de un personaje bueno que no está en juego. Ambos sabéis cuál.',
+    firstNight: true, otherNights: false,
+    setup: { boffinAbility: true },
+  },
   BOOMDANDY: {
     id: 'BOOMDANDY', name: 'Pólvora', alignment: 'evil', type: 'minion',
     ability: 'Si eres ejecutado, todos excepto 3 mueren.',

@@ -50,8 +50,6 @@ export const roles = [
     ability: 'Esbirros & Demonios no se conocen. Si mueres, se conocen esa noche.', night: { passive: true } },
   { id: 'PREACHER', name: 'Predicador', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/preacher.png',
     ability: 'Cada noche: elige jugador; si es Esbirro, lo sabes. Esbirros pierden habilidad.', night: { action: 'PREACHER', targets: 1 } },
-  { id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'good', type: 'townfolk', img: null,
-    ability: 'El Demonio tiene la habilidad de un personaje bueno que no está en juego. Ambos lo saben desde la noche 1.', night: { passive: true } },
   { id: 'SHUGENJA', name: 'Shugenja', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/shugenja.png',
     ability: 'Empiezas sabiendo si el jugador malvado más cercano está a tu izquierda o a tu derecha.', night: { passive: true } },
   { id: 'STEWARD', name: 'Administrador', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/steward.png',
@@ -78,6 +76,8 @@ export const roles = [
     ability: 'Cada Esbirro recibe 3 bluffs.' },
 
   // ── ESBIRROS ────────────────────────────────────────────────────────
+  { id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'evil', type: 'minion', img: null,
+    ability: 'El Demonio (incluso borracho o envenenado) tiene la habilidad de un personaje bueno que no está en juego. Ambos sabéis cuál.', night: { passive: true, evil: true } },
   { id: 'BOOMDANDY', name: 'Pólvora', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/boomdandy.png',
     ability: 'Si eres ejecutado, todos excepto 3 mueren.', night: { evil: true } },
   { id: 'FEARMONGER', name: 'Sembrador de Miedo', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/fearmonger.png',

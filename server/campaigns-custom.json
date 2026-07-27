@@ -789,9 +789,9 @@
       "BOFFIN": {
         "id": "BOFFIN",
         "name": "Rata de Laboratorio",
-        "alignment": "good",
-        "type": "townfolk",
-        "ability": "El Demonio tiene la habilidad de un bueno no en juego. Ambos lo saben desde noche 1.",
+        "alignment": "evil",
+        "type": "minion",
+        "ability": "El Demonio (incluso borracho o envenenado) tiene la habilidad de un personaje bueno que no está en juego. Ambos sabéis cuál.",
         "firstNight": true,
         "otherNights": false,
         "setup": {

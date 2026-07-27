@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BarberPanel, RoshamboBox } from './NarratorTools';
 import { useGame } from '../context/GameContext';
 import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST, getCampaign } from '../data/roles';
 import { formatIdentity, MASK } from '../utils/identity';
@@ -496,6 +497,10 @@ export default function NarratorPanel() {
                 </div>
               </div>
             )}
+
+            {/* Pasos pendientes que no pueden esperar: Barbero y Roshambo */}
+            <BarberPanel />
+            <RoshamboBox />
 
             {/* Jugadores: orden de rueda + roles + fichas/tokens + matar/revivir */}
             <div>

@@ -4,6 +4,7 @@ import { ALL_ROLES } from '../data/roles';
 import GameTable from './GameTable';
 import RoleReveal from './RoleReveal';
 import NightScreen from './NightScreen';
+import { RoshamboBox, WishRequestBox } from './NarratorTools';
 import DiscordChannels from './DiscordChannels';
 import PlayerChip from './PlayerChip';
 import { playDaySound, playNightSound } from '../utils/sounds';
@@ -236,6 +237,37 @@ function NominationCard({ nom, game }) {
   );
 }
 
+// Vista nocturna del jugador: su pantalla de noche + la ruleta CONGELADA.
+// El servidor sirve el estado tal como quedó al anochecer (daySnapshot), así que
+// las muertes y movimientos de esta noche no se ven hasta el amanecer.
+function NightView({ player }) {
+  const [showTable, setShowTable] = useState(true);
+  return (
+    <div style={{ minHeight: '100vh' }}>
+      <NightScreen player={player} />
+      <div style={{ padding: '0 16px 32px', background: 'var(--ink-900, #0a0a12)' }}>
+        <button
+          onClick={() => setShowTable(s => !s)}
+          className="btn-night"
+          style={{ width: '100%', marginBottom: 10, fontSize: 11, letterSpacing: '0.12em' }}>
+          {showTable ? '▲ Ocultar la mesa' : '▼ Ver la mesa'}
+        </button>
+        {showTable && (
+          <>
+            <p style={{
+              fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', fontStyle: 'italic',
+              textAlign: 'center', margin: '0 0 10px',
+            }}>
+              🌙 Vista del atardecer — se actualizará al amanecer
+            </p>
+            <GameTable isNarrator={false} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PlayerPanel() {
   const { state, send, logout } = useGame();
   const { game, playerId, error } = state;
@@ -249,7 +281,7 @@ export default function PlayerPanel() {
 
   if (!me) return <div style={{ padding: 32, fontFamily: 'var(--serif)', color: 'var(--bone-400)' }}>Conectando...</div>;
   if (me.showRole) return <RoleReveal player={me} />;
-  if (phase === 'first_night' || phase === 'night') return <NightScreen player={me} />;
+  if (phase === 'first_night' || phase === 'night') return <NightView player={me} />;
 
   const myRole = me.role ? ALL_ROLES.find(r => r.id === (me.displayRole || me.role)) : null;
   const isNight = false;
@@ -348,6 +380,12 @@ export default function PlayerPanel() {
       {/* ── Right panel ── */}
       <aside className="right-panel" style={{ padding: '18px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {game.autoPhaseInfo && <PhaseCountdown key={game.autoPhaseInfo.endsAt} autoPhaseInfo={game.autoPhaseInfo} pendingNight={game.pendingNightAfterNomination} />}
+
+        {/* Psicópata ejecutado: piedra-papel-tijera contra su nominador */}
+        <RoshamboBox />
+
+        {/* Hechicero: pedir deseo / pista pública del deseo */}
+        <WishRequestBox />
 
         {/* Active voting */}
         {isVoting && activeNom && (

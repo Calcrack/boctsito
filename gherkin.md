@@ -1,2415 +1,3729 @@
 # Gherkin — Boctsito (Blood on the Clocktower)
 
-Especificación ejecutable del comportamiento de la página para **todos los roles** de las 4 campañas + Viajeros.
-Fuente canónica: `Mecanicas Personajes.txt`.
+Especificación ejecutable **narrador-first** del comportamiento de la página para los **181 personajes**
+de `Mecanicas Personajes.txt` (4 campañas + Viajeros + roles aún no implementados).
 
-**Convenciones:**
-- `@auto` — la página lo aplica automáticamente (motor `server/gameLogic.js`).
-- `@narrador` — la página guía al narrador (NightWalkthrough / fichas / avisos), pero la decisión es humana.
+Todo escenario describe **qué ve y qué pulsa el narrador**, no solo qué hace el rol.
+La regla es siempre la del `.txt`; la página nunca decide por el narrador lo que el `.txt` deja a su criterio.
+
+## Convenciones
+
+| Tag | Significado |
+|---|---|
+| `@auto` | El motor lo resuelve solo (`server/gameLogic.js`), sin intervención humana |
+| `@panel` | Existe un mini-panel en la página: la **decisión es del narrador**, el **efecto lo aplica la página** |
+| `@narrador` | La página solo avisa/recuerda; el narrador lo ejecuta con las herramientas genéricas del mini-panel |
+| `@privado` | Requiere sala privada (`MOVE_TO_SECRET` / `MOVE_NARRATOR_TO_ROOM`) antes de resolverse |
+| `@pendiente` | El personaje **no está en ninguna campaña** de la app. Incluye qué añadir a `server/campaigns/*.js` |
+
 - `*` en una habilidad = "cada noche salvo la primera".
-- "borracho o envenenado" = el jugador tiene ficha `POISONED` o `DRUNK_NIGHT` (o es el Borracho `drunkAs`): su habilidad NO funciona y su información puede ser falsa.
+- **"borracho o envenenado"** = el jugador tiene ficha `POISONED` o `DRUNK_NIGHT`, o es el Borracho (`drunkAs`):
+  su habilidad NO funciona y su información puede ser falsa. La página **siempre** genera algo plausible, nunca "nada".
+- **Rol real vs rol creído**: `role` es la verdad del grimorio; `believedRole` es lo que el jugador ve
+  (Marioneta, Lunático, Borracho). El mini-panel del narrador muestra los dos.
+- **Mini-panel** = el modal que se abre al pulsar la ficha de un jugador en la ruleta (`ActionModal`).
 
 ---
+---
+
+# PLATAFORMA
+
+Todo lo de esta sección aplica a **cualquier** partida, independientemente de la campaña.
+
+## Feature: Mini-panel de jugador (clic del narrador sobre la ruleta)
+
+  El narrador pulsa cualquier ficha de la ruleta, viva o muerta, en cualquier fase.
+  El modal tiene 4 pestañas: **Info · Acciones · Rol · Habilidad**.
+
+  @panel
+  Escenario: Abrir el mini-panel muestra la ficha completa del jugador
+    Dado el narrador en cualquier fase de la partida
+    Cuando pulsa sobre la ficha de un jugador en la ruleta
+    Entonces el modal se abre en la pestaña "Info"
+    Y muestra nombre, avatar y número de asiento
+    Y muestra si está vivo o muerto y si conserva su voto fantasma
+    Y muestra su **estado de conexión**: ● conectado / ○ desconectado / ⏱ ausente
+    Y muestra su **rol real** y, si difiere, su **rol creído** con la etiqueta de por qué difiere
+    Y muestra todas sus fichas activas con su caducidad en texto claro
+    Y muestra las sospechas que otros jugadores han marcado sobre él
+    Y muestra en qué canal de Discord está ahora mismo
+
+  @panel
+  Escenario: Rol real distinto del rol creído
+    Dado un jugador con rol real "Marioneta" y rol creído "Lavandera"
+    Cuando el narrador abre su mini-panel
+    Entonces la pestaña "Info" muestra «Real: Marioneta (Esbirro) · Cree ser: Lavandera»
+    Y advierte «Este jugador no sabe que es malvado»
+
+  @panel
+  Escenario: El Borracho muestra su personaje falso
+    Dado un jugador con rol real "Borracho" y `drunkAs` = "Monje"
+    Cuando el narrador abre su mini-panel
+    Entonces muestra «Real: Borracho (Forastero) · Cree ser: Monje»
+    Y advierte «Su habilidad de Monje NO funciona nunca»
+
+  @panel
+  Escenario: Un jugador NO puede abrir el mini-panel de narrador
+    Dado un jugador (no narrador) en cualquier fase
+    Cuando pulsa sobre otra ficha de la ruleta
+    Entonces solo ve la sección de jugador (marcar sospecha, votar cuando toque)
+    Y nunca ve rol, fichas, conexión ni acciones de narrador
+
+## Feature: Acciones universales del mini-panel
+
+  Disponibles para **todos** los personajes, en la pestaña "Acciones".
+
+  @panel
+  Escenario: Matar a un jugador con avisos previos
+    Dado el narrador con el mini-panel de un jugador vivo abierto
+    Cuando pulsa "Matar jugador"
+    Entonces la página pide confirmación
+    Y antes de confirmar lista los motivos por los que podría no morir:
+      | 🛡 Protegido esta noche (Monje / Posadero / Marinero / Abogado del Diablo) |
+      | ⚔ Soldado: inmune a ataques del Demonio                                   |
+      | 🃏 Bufón: su primera muerte se anula                                      |
+      | 👹 Es el Demonio: al morir se aplican los sucesores                        |
+    Y solo mata al confirmar
+
+  @panel
+  Escenario: Revivir a un jugador
+    Dado un jugador muerto
+    Cuando el narrador pulsa "Revivir jugador"
+    Entonces vuelve a estar vivo y recupera su voto fantasma
+    Y queda registrado en el registro de la partida
+
+  @panel
+  Escenario: Aplicar estados sin que sea de noche
+    Dado el narrador con el mini-panel abierto en cualquier fase
+    Cuando pulsa "Envenenar", "Emborrachar", "Proteger" o "Limpiar estados"
+    Entonces la página coloca o quita la ficha correspondiente al instante
+    Y la caducidad es la estándar de esa ficha (veneno: hasta el próximo anochecer; protección: al amanecer)
+
+  @panel
+  Escenario: Fichas manuales del grimorio
+    Dado el narrador con el mini-panel abierto
+    Cuando añade una ficha manual desde el catálogo de fichas
+    Entonces la ficha queda marcada como manual y **nunca caduca sola**
+    Y solo desaparece cuando el narrador la quita
+
+  @panel @privado
+  Escenario: Llevar a un jugador al confesionario
+    Dado el narrador con el mini-panel abierto
+    Cuando pulsa "Confesionario"
+    Entonces la página mueve a ese jugador a la sala privada en Discord
+    Y ofrece "Ir con él" para mover también al narrador
+
+  @panel
+  Escenario: Expulsar la sesión de un jugador
+    Dado un jugador con la sesión abierta
+    Cuando el narrador pulsa "Expulsar sesión"
+    Entonces ese jugador vuelve a la pantalla de acceso
+    Y su asiento y su rol se conservan intactos para cuando vuelva a entrar
+
+## Feature: Cambiar el rol de un jugador a media partida
+
+  Pestaña "Rol" del mini-panel. Sustituye a la reasignación en bloque, que reiniciaba la partida.
+
+  @panel
+  Escenario: Cambio de rol notificado
+    Dado la partida en curso en cualquier fase
+    Cuando el narrador abre la pestaña "Rol", elige "Monje" y marca "Avisar al jugador"
+    Entonces el jugador pasa a ser Monje al instante
+    Y **sigue vivo o muerto como estaba**, conserva sus fichas y la fase no cambia
+    Y ese jugador recibe un aviso destacado: «Tu personaje ha cambiado: ahora eres el Monje»
+    Y ningún otro jugador se entera
+    Y queda registrado en el registro de la partida
+
+  @panel
+  Escenario: Cambio de rol silencioso
+    Dado el narrador cambiando el rol de un jugador
+    Cuando desmarca "Avisar al jugador"
+    Entonces el rol cambia en el grimorio
+    Y el jugador **no recibe ningún aviso** y sigue viendo su rol anterior
+
+  @panel
+  Escenario: Cambiar solo el rol creído
+    Dado el narrador cambiando el rol de un jugador
+    Cuando elige el modo "Solo rol creído"
+    Entonces el rol real no se toca
+    Y el jugador pasa a creer que es el nuevo personaje
+    Y esto es lo que se usa para el Descerebrado, la Marioneta y el Lunático
+
+  @panel
+  Escenario: Cambio de rol que altera el número de Demonios
+    Dado un solo Demonio vivo en la partida
+    Cuando el narrador intenta cambiar su rol a un Aldeano
+    Entonces la página avisa: «Esto dejará la partida sin Demonios vivos — ¿continuar?»
+    Y solo aplica el cambio al confirmar
+    Y después evalúa el fin de partida con las reglas de sucesión
+
+  @panel
+  Escenario: Convertir a un jugador en el Borracho
+    Dado el narrador cambiando un rol a "Borracho"
+    Entonces la página le asigna automáticamente un Aldeano falso que no esté en juego
+    Y el jugador ve ese Aldeano falso, no el Borracho
+
+  @auto
+  Escenario: El cambio de rol recalcula los personajes que no están en juego
+    Cuando el narrador cambia el rol de cualquier jugador
+    Entonces la lista de personajes no-en-juego se recalcula
+    Y los faroles del Demonio dejan de ofrecer un personaje que ahora sí está en juego
+
+## Feature: Mini-panel por habilidad
+
+  Pestaña "Habilidad". Los controles dependen del personaje del jugador y de la fase.
+
+  @panel
+  Escenario: El panel se adapta al personaje
+    Dado el narrador abriendo la pestaña "Habilidad"
+    Entonces ve los controles propios de ese personaje, por ejemplo:
+      | Envenenador   | selector de 1 objetivo                                        |
+      | Adivina       | 2 objetivos + interruptor "responder SÍ / NO"                  |
+      | Monje         | selector de 1 objetivo (no a sí mismo)                         |
+      | Lavandera     | 2 nombres + selector del personaje que se muestra              |
+      | Cazador       | selector de objetivo + botón "Disparar"                        |
+      | Visir         | botón "Ejecutar sin votación"                                  |
+      | Invocador     | selector de objetivo + selector del Demonio en que se convierte |
+      | Hechicero     | panel de deseos (catálogo + libre)                             |
+      | Psicópata     | "Matar en público" y, si fue ejecutado, el Roshambo            |
+    Y bajo los controles muestra el recordatorio de reglas de ese personaje
+
+  @panel
+  Escenario: Personaje sin habilidad activa en esta fase
+    Dado un Soldado (habilidad pasiva)
+    Cuando el narrador abre la pestaña "Habilidad"
+    Entonces ve el texto de su habilidad y sus recordatorios
+    Y no ve controles de acción, sino el aviso «Habilidad pasiva — nada que ejecutar»
+
+  @panel
+  Escenario: El panel avisa si la habilidad no va a funcionar
+    Dado un Monje envenenado
+    Cuando el narrador abre su pestaña "Habilidad"
+    Entonces la página avisa en rojo «Envenenado: su protección NO funcionará»
+    Y aun así permite ejecutar la acción (para que el jugador no lo note)
+
+  @panel
+  Escenario: Habilidad de una sola vez ya gastada
+    Dado un Cazador que ya disparó
+    Cuando el narrador abre su pestaña "Habilidad"
+    Entonces el botón "Disparar" está deshabilitado
+    Y muestra «Ya usó su disparo (noche 2)»
+    Y ofrece "Devolver el uso" por si el narrador quiere corregir
+
+## Feature: Ruleta congelada de noche para los jugadores
+
+  @auto
+  Escenario: Todos los jugadores ven la ruleta durante la noche
+    Dado que empieza la noche
+    Cuando un jugador mira su pantalla
+    Entonces ve su pantalla nocturna **y** la ruleta de jugadores completa
+    Y la ruleta muestra el estado exacto que tenía al anochecer
+
+  @auto
+  Escenario: La ruleta no se actualiza hasta el amanecer
+    Dado que un jugador muere durante la noche
+    Cuando el resto de jugadores mira la ruleta
+    Entonces siguen viéndolo **vivo**
+    Y no ven movimientos de canal, votos fantasma gastados ni nuevas muertes
+    Cuando el narrador pulsa "Amanecer"
+    Entonces la ruleta se actualiza de golpe con todo lo ocurrido
+
+  @auto
+  Escenario: El narrador siempre ve la ruleta en vivo
+    Dado que es de noche y acaba de morir un jugador
+    Cuando el narrador mira la ruleta
+    Entonces lo ve muerto al instante, sin congelación
+
+  @auto
+  Escenario: La ruleta congelada indica que está congelada
+    Dado un jugador mirando la ruleta de noche
+    Entonces la página muestra el cartel «Vista del atardecer — se actualizará al amanecer»
+
+  @auto
+  Escenario: Un muerto también ve la ruleta congelada
+    Dado un jugador que murió ayer
+    Cuando es de noche
+    Entonces ve la misma ruleta congelada que los vivos
+
+## Feature: Presencia, conexión y sesiones
+
+  @auto
+  Escenario: El narrador ve quién está conectado
+    Dado 10 jugadores en la partida y 2 con la pestaña cerrada
+    Cuando el narrador mira la ruleta o el listado lateral
+    Entonces esos 2 aparecen marcados ○ desconectado
+    Y los otros 8 aparecen ● conectado
+
+  @auto
+  Escenario: La desconexión se refleja sin recargar
+    Dado el narrador mirando la ruleta
+    Cuando un jugador cierra su pestaña
+    Entonces su marca pasa a ○ desconectado al momento
+
+  @auto
+  Escenario: Reconexión
+    Dado un jugador desconectado
+    Cuando vuelve a entrar con su mismo nombre
+    Entonces recupera su asiento, su rol y su estado
+    Y su marca vuelve a ● conectado
+
+  @auto
+  Escenario: Jugador que no responde
+    Dado un jugador cuya sesión sigue abierta pero no responde al latido
+    Entonces la página lo marca ⏱ ausente en vez de ● conectado
+
+  @narrador
+  Escenario: Jugador desconectado cuando le toca votar
+    Dado una votación por turnos y el jugador de turno desconectado
+    Entonces la página avisa al narrador «X está desconectado»
+    Y el narrador puede votar en su nombre o saltar su turno
+
+  @auto
+  Escenario: La conexión es información solo del narrador
+    Dado un jugador cualquiera mirando la ruleta
+    Entonces **no** ve el estado de conexión de nadie
+
+## Feature: Registro y avisos del narrador
+
+  @auto
+  Escenario: Toda acción del narrador queda registrada
+    Cuando el narrador mata, revive, cambia un rol, concede un deseo o aplica una ficha
+    Entonces se añade una línea con la hora al registro de la partida
+    Y ese registro solo lo ve el narrador
+
+  @auto
+  Escenario: Los avisos pendientes no desaparecen solos
+    Dado un aviso de "recuerda despertar al Demonio por el Barbero"
+    Cuando pasan las fases
+    Entonces el aviso sigue visible hasta que el narrador lo marca como hecho
+
+---
+
+# FIN DE PARTIDA Y SUCESIÓN DEL DEMONIO
+
+**Regla maestra: la muerte del Demonio NO termina la partida por sí sola.**
+Cuando muere un Demonio (por ejecución, por habilidad, o porque el narrador lo mata a mano),
+la página resuelve esta cadena **en este orden** y solo declara victoria si ninguna rama la detiene.
+
+| # | Comprobación | Resultado |
+|---|---|---|
+| 1 | ¿El Demonio muerto tiene sucesor propio? (Lleech → anfitrión, Pequeña Monsta → portador, Legión → queda otro Legión, Kazali/Ojo/Motín/Al-Hadikhia según su regla) | Sucede y **la partida continúa** |
+| 2 | ¿Fang Gu / Vigormortis ya se transfirieron en su ataque? | Ya hay Demonio vivo, nada que hacer |
+| 3 | ¿Hay Dama Escarlata viva, sana y con **5 o más** vivos? | Hereda **el mismo personaje del Demonio muerto** y la partida continúa |
+| 4 | ¿El nuevo Demonio hereda una habilidad de Rata de Laboratorio? | Se coloca la ficha y se avisa al narrador |
+| 5 | ¿Hay Mente Maestra viva, sobria y sana? | **Sin anuncio**: se juega 1 día extra |
+| 6 | ¿Hay Ateo en juego? | La página **nunca** termina la partida sola |
+| 7 | Nada de lo anterior | Ganan los buenos |
 
 ## Feature: Reglas globales de victoria
 
   @auto
-  Escenario: El Bien gana cuando no quedan Demonios vivos
-    Dado una partida en curso sin Ateo en juego
-    Y ningún jugador con la Mente Maestra viva y sobria
-    Cuando el último Demonio muere (ejecución, habilidad o muerte manual del narrador)
-    Entonces la página declara ganador al equipo del Bien
-    Y muestra la pantalla de fin de partida a todos
+  Escenario: El Bien gana solo cuando no queda ningún sucesor
+    Dado una partida sin Ateo, sin Dama Escarlata viva y sin Mente Maestra viva
+    Cuando muere el último Demonio
+    Entonces la página declara ganador al Bien
+    Y muestra la pantalla de fin de partida a todos con el motivo
 
   @auto
   Escenario: El Mal gana cuando solo quedan 2 jugadores vivos
-    Dado una partida en curso con el Demonio vivo
-    Cuando el número de jugadores vivos baja a 2
-    Entonces la página declara ganador al equipo del Mal
+    Dado una partida con el Demonio vivo
+    Cuando el número de vivos baja a 2
+    Entonces la página declara ganador al Mal
 
   @auto
-  Escenario: Con Ateo en juego, la página nunca termina la partida sola
-    Dado una partida con el Ateo en juego (no hay malvados reales)
-    Cuando muere cualquier jugador o queda cualquier número de vivos
-    Entonces la página NO declara ganador automáticamente
-    Y solo el narrador puede terminar la partida (DECLARE_WINNER)
+  Escenario: Con Ateo en juego la página nunca termina la partida sola
+    Dado el Ateo en juego (no hay malvados reales)
+    Cuando muere cualquier jugador, o quedan 2 vivos, o "muere el Demonio"
+    Entonces la página **NO** declara ganador
+    Y solo el narrador puede terminar la partida a mano
 
   @auto
-  Escenario: El Demonio ejecutado con Dama Escarlata viva y 5+ vivos NO termina la partida
-    Dado 5 o más jugadores vivos
-    Y la Dama Escarlata viva
+  Escenario: Muerte manual del Demonio por el narrador
+    Dado el narrador matando al Demonio desde el mini-panel
+    Entonces se aplica la misma cadena de sucesión que en una ejecución
+    Y la página no se salta ningún paso por ser una muerte manual
+
+## Feature: Sucesión — Dama Escarlata
+
+  @auto
+  Escenario: Hereda el personaje exacto del Demonio muerto
+    Dado 5 o más vivos y la Dama Escarlata viva y sana
+    Y el Demonio en juego es el Vortox
+    Cuando el Vortox muere
+    Entonces la Dama Escarlata se convierte en **Vortox** (no en Diablillo)
+    Y la partida continúa sin ningún anuncio de victoria
+    Y la página avisa al narrador del cambio y le recuerda despertarla esta noche
+
+  @auto
+  Escenario: Menos de 5 vivos — no hereda
+    Dado 4 vivos y la Dama Escarlata viva
+    Cuando el Demonio muere
+    Entonces la Dama Escarlata sigue siendo Esbirro
+    Y se pasa a comprobar la Mente Maestra
+
+  @auto
+  Escenario: Dama Escarlata envenenada — no hereda
+    Dado la Dama Escarlata envenenada y 7 vivos
+    Cuando el Demonio muere
+    Entonces no hereda nada y la página lo avisa al narrador
+
+  @auto
+  Escenario: Dama Escarlata y Mente Maestra a la vez
+    Dado 6 vivos, Dama Escarlata viva y sana, y Mente Maestra viva y sobria
     Cuando el Demonio es ejecutado
-    Entonces la Dama Escarlata se convierte en el nuevo Diablillo
-    Y la partida continúa sin anuncio de victoria
+    Entonces hereda la Dama Escarlata
+    Y la Mente Maestra **no** se activa (sigue habiendo Demonio vivo)
+
+## Feature: Sucesión — Mente Maestra
 
   @auto
-  Escenario: El Demonio muere con Mente Maestra viva — la partida espera 1 día más
+  Escenario: El Demonio muere y se juega un día más en secreto
     Dado la Mente Maestra viva, sobria y sana
-    Y no hay Dama Escarlata viva con 5+ jugadores
-    Cuando el Demonio muere (nominación y ejecución, o muerte manual del narrador)
-    Entonces la página NO termina la partida
-    Y NO anuncia que el Demonio ha muerto
-    Y registra un aviso privado al narrador: "se juega 1 día más"
-    Y al día siguiente se resuelve según la Feature "Mente Maestra"
+    Y ninguna Dama Escarlata que pueda heredar
+    Cuando el Demonio muere
+    Entonces la página **NO** termina la partida
+    Y **NO** anuncia que el Demonio ha muerto
+    Y avisa en privado al narrador: «se juega 1 día más»
+    Y la regla de "2 vivos = ganan los malos" queda suspendida durante ese día
+
+  @auto
+  Escenario: En el día extra se ejecuta a un malvado
+    Dado el día extra de la Mente Maestra en curso
+    Cuando se ejecuta a un jugador malvado
+    Entonces ganan los buenos
+
+  @auto
+  Escenario: En el día extra se ejecuta a un bueno
+    Dado el día extra de la Mente Maestra en curso
+    Cuando se ejecuta a un jugador bueno
+    Entonces ganan los malos
+
+  @auto
+  Escenario: En el día extra no se ejecuta a nadie
+    Dado el día extra de la Mente Maestra en curso
+    Cuando termina el día sin ejecución
+    Entonces ganan los buenos
+
+  @auto
+  Escenario: La ejecución cuenta aunque el ejecutado no muera
+    Dado el día extra y un Santo ejecutado que no muere por una protección
+    Entonces la ejecución cuenta igual y decide la partida
+
+## Feature: Sucesión — Demonios con sucesor propio
+
+  @panel
+  Escenario: Sangijuela — muere su anfitrión
+    Dado la Sangijuela con su anfitrión marcado
+    Cuando el anfitrión muere
+    Entonces la Sangijuela muere también
+    Y la página aplica la cadena de sucesión completa
+
+  @panel
+  Escenario: Pequeña Monsta — muere su portador
+    Dado la Pequeña Monsta en manos de un Esbirro portador
+    Cuando el portador muere
+    Entonces el narrador elige en el panel qué Esbirro vivo recoge la ficha
+    Y mientras haya portador vivo la página cuenta que hay Demonio vivo
+    Y si no queda ningún Esbirro vivo, se aplica la cadena de sucesión
+
+  @auto
+  Escenario: Legión — sigue habiendo Demonio mientras quede un Legión
+    Dado varios jugadores con el personaje Legión
+    Cuando uno de ellos es ejecutado
+    Entonces la partida continúa
+    Y solo cuando muere el último Legión se comprueba la victoria
+
+  @panel
+  Escenario: Fang Gu — el Forastero atacado se convierte
+    Dado el Fang Gu atacando a un Forastero por primera vez
+    Entonces el Forastero muere o se convierte en Fang Gu según la regla
+    Y si se convierte, el Fang Gu original muere y **la partida continúa**
+    Y la página avisa al narrador de quién es el nuevo Demonio
+
+  @panel
+  Escenario: Vigormortis — sus Esbirros muertos conservan habilidad
+    Dado el Vigormortis matando a un Esbirro
+    Entonces ese Esbirro muerto conserva su habilidad
+    Y la página lo marca con ficha para que el narrador siga despertándolo
+    Cuando el Vigormortis muere
+    Entonces se aplica la cadena de sucesión normal
+
+  @panel
+  Escenario: Kazali, Ojo, Motín, Al-Hadikhia
+    Dado uno de estos Demonios en juego
+    Cuando muere
+    Entonces la página aplica primero su regla propia de sustitución si la tiene
+    Y solo si no la hay pasa a la Dama Escarlata y la Mente Maestra
+
+  @auto
+  Escenario: Zombuul — su primera muerte es fingida
+    Dado el Zombuul vivo y sano
+    Cuando muere por primera vez
+    Entonces se registra como muerto para todos
+    Y la página **sigue contándolo como Demonio vivo**
+    Y avisa al narrador de que su segunda muerte es la real
+
+  @panel
+  Escenario: Rata de Laboratorio — el nuevo Demonio hereda su habilidad
+    Dado la Rata de Laboratorio en juego
+    Cuando un nuevo Demonio nace por la Dama Escarlata o por el Barbero
+    Entonces ese nuevo Demonio tiene también una habilidad de Rata de Laboratorio
+    Y la página coloca la ficha y avisa al narrador de que puede ser distinta a la anterior
+
+## Feature: Terminar la partida a mano
+
+  @panel
+  Escenario: El narrador declara ganador
+    Dado la partida en curso en cualquier estado
+    Cuando el narrador pulsa "Ganan los buenos" o "Ganan los malos"
+    Entonces la página pide confirmación y muestra la pantalla de fin de partida
+    Y este camino funciona siempre, incluso con Ateo en juego
+
+  @auto
+  Escenario: La pantalla de fin de partida revela todo
+    Cuando la partida termina por cualquier vía
+    Entonces todos los jugadores ven todos los personajes reales
+    Y ven los roles creídos de quien los tuviera
+    Y ven el motivo exacto de la victoria
 
 ---
 
-## Feature: Fases y fichas de estado (motor)
+# MOTOR: FASES, FICHAS Y VOTACIÓN
+
+## Feature: Fases y fichas de estado
 
   @auto
   Escenario: El veneno dura la noche y el día siguiente
     Dado que el Envenenador envenena a la Empática en la noche 2
     Entonces la Empática está envenenada durante la noche 2 y el día 3
-    Cuando comienza la noche 3 (anochecer)
+    Cuando comienza la noche 3
     Entonces la ficha de veneno caduca antes de que actúen los roles
 
   @auto
-  Escenario: La protección del Monje caduca al amanecer
+  Escenario: La protección caduca al amanecer
     Dado que el Monje protege al Soldado esta noche
     Cuando amanece
     Entonces la ficha "A salvo" desaparece
 
   @auto
   Escenario: Las fichas manuales del narrador nunca caducan solas
-    Dado que el narrador colocó una ficha manual sobre un jugador
+    Dado una ficha manual colocada por el narrador
     Cuando pasan amaneceres y anocheceres
-    Entonces la ficha sigue hasta que el narrador la quite
-
----
-
-## Feature: Nominaciones y votación (mecánica base)
+    Entonces la ficha sigue hasta que el narrador la quita
 
   @auto
-  Escenario: Umbral de ejecución = 50% de los vivos, redondeado hacia arriba
+  Escenario: Las fichas que dependen del portador se limpian al morir
+    Dado un jugador con la ficha de "Amo del Mayordomo"
+    Cuando ese jugador muere
+    Entonces la ficha desaparece
+
+  @auto
+  Escenario: Una ficha de reemplazo sustituye a la anterior del mismo tipo
+    Dado el Envenenador que envenenó a Ana anoche
+    Cuando esta noche envenena a Bea
+    Entonces Ana deja de estar envenenada y Bea lo está
+
+## Feature: Nominaciones y votación
+
+  @auto
+  Escenario: Umbral de ejecución = mitad de los vivos redondeando hacia arriba
     Dado 7 jugadores vivos
     Cuando una nominación recibe 4 votos
-    Entonces alcanza el umbral (4 ≥ ⌈7/2⌉)
+    Entonces alcanza el umbral
 
   @auto
-  Escenario: Un muerto solo vota una vez el resto de la partida y solo a favor
+  Escenario: Un muerto solo vota una vez en toda la partida y solo a favor
     Dado un jugador muerto que no ha usado su voto fantasma
-    Cuando vota a favor en una nominación
+    Cuando vota a favor
     Entonces su voto cuenta y pierde el voto fantasma
     Y si intenta votar de nuevo la página lo rechaza
 
   @auto
   Escenario: Empate de votos = nadie es ejecutado
-    Dado dos nominaciones resueltas con el mismo máximo de votos sobre el umbral
+    Dado dos nominaciones con el mismo máximo de votos sobre el umbral
     Cuando el narrador finaliza las nominaciones
     Entonces nadie es ejecutado y se anuncia el empate
 
   @auto
-  Escenario: Cada jugador vivo solo puede nominar una vez por día
+  Escenario: Cada vivo solo nomina una vez al día
     Dado que un jugador ya nominó hoy
     Cuando intenta nominar de nuevo
-    Entonces la página rechaza la nominación
+    Entonces la página lo rechaza
+
+  @panel
+  Escenario: El narrador es nominable
+    Dado las nominaciones abiertas
+    Entonces el narrador aparece como objetivo posible en el selector
+    Y si es ejecutado se resuelve según el Ateo o como día perdido
+
+  @panel
+  Escenario: Solo el narrador registra nominaciones
+    Dado un jugador que quiere nominar
+    Entonces lo pide en voz alta
+    Y el narrador lo registra en la página eligiendo nominador y nominado
+
+  @panel
+  Escenario: Votación por turnos en sentido horario
+    Dado una nominación abierta
+    Entonces la página marca el turno de cada votante empezando por el nominador
+    Y el narrador puede votar en nombre de un jugador o avanzar su turno
 
 ---
 
-## Feature: Orden de la primera noche — Trouble Brewing
+# SISTEMA DE DESEOS (Hechicero)
 
-  El motor despierta en cola interactiva, en este orden exacto:
-  POISONER → WASHERWOMAN → LIBRARIAN → INVESTIGATOR → COOK → EMPATH → FORTUNE_TELLER → BUTLER → SPY.
-  Antes de la cola: info de Esbirros/Demonio (se reconocen entre sí) y bluffs del Demonio.
+El deseo se pide **siempre en privado al narrador**. La página nunca lo hace público por su cuenta.
+El narrador dispone de un **catálogo grande de deseos preestablecidos** y de un **panel libre** para cualquier otro.
+
+## Feature: Pedir el deseo
+
+  @privado
+  Escenario: El jugador escribe su deseo
+    Dado el Hechicero vivo que aún no ha gastado su deseo
+    Cuando pulsa "Pedir un deseo" y escribe el texto
+    Entonces el deseo se envía **solo al narrador**
+    Y ningún otro jugador ve nada
+    Y el Hechicero ve «Tu deseo ha llegado al Narrador»
+
+  @privado
+  Escenario: El narrador recibe el aviso
+    Dado un deseo pendiente
+    Entonces el narrador ve un aviso destacado con el texto completo del deseo
+    Y el aviso no desaparece hasta que lo resuelve
+
+  @privado
+  Escenario: El narrador va a la habitación del Hechicero
+    Dado un deseo pendiente
+    Cuando el narrador pulsa "Ir a su habitación"
+    Entonces la página mueve al narrador al canal privado de ese jugador
+    Y el narrador puede hablarlo con él antes de decidir
+
+  @privado
+  Escenario: El deseo se puede pedir de día o de noche
+    Dado el Hechicero vivo
+    Entonces puede pedir su deseo en cualquier fase
+    Y de noche el narrador lo atiende en su turno de la cola nocturna
+
+  @panel
+  Escenario: Deseo hablado, no escrito
+    Dado un Hechicero que prefiere decirlo en voz
+    Entonces el narrador puede abrir el panel de deseos directamente
+    Y escribir él mismo el texto del deseo en nombre del jugador
+
+## Feature: Resolver el deseo
+
+  @panel @privado
+  Escenario: Las tres salidas del narrador
+    Dado un deseo pendiente
+    Entonces el narrador tiene tres botones:
+      | Conceder              | aplica efectos, precio y pista        |
+      | Denegar y pedir otro  | el Hechicero conserva su deseo        |
+      | Denegar definitivo    | el Hechicero se queda sin deseos      |
+
+  @panel
+  Escenario: Denegar y pedir otro
+    Cuando el narrador pulsa "Denegar y pedir otro"
+    Entonces el Hechicero recibe «Ese deseo no puede concederse — pide otro»
+    Y vuelve a tener el botón de pedir deseo disponible
+
+  @panel
+  Escenario: Denegar definitivo
+    Cuando el narrador pulsa "Denegar definitivo"
+    Entonces el Hechicero recibe «Ya no te quedan deseos»
+    Y el botón de pedir deseo desaparece
+
+  @panel
+  Escenario: Conceder desde el catálogo
+    Cuando el narrador pulsa "Conceder" y elige una entrada del catálogo
+    Entonces la página aplica el efecto mecánico ya programado de esa entrada
+    Y rellena automáticamente un **precio sugerido** y una **pista pública sugerida**
+    Y el narrador puede editar ambos antes de aplicar
+
+  @panel
+  Escenario: Conceder libre
+    Cuando el narrador elige la pestaña "Libre"
+    Entonces dispone de todas las acciones universales del mini-panel sobre cualquier jugador
+    Y de dos campos de texto: pista pública y precio
+    Y puede encadenar varios efectos antes de cerrar el deseo
+
+  @panel
+  Escenario: El narrador decide si se anuncia
+    Dado un deseo concedido
+    Entonces el narrador elige entre:
+      | No decir nada                              |
+      | Anunciar que hubo un deseo, sin pista      |
+      | Anunciar el deseo y dar la pista pública   |
+    Y la página solo difunde lo que el narrador elija
+
+  @panel
+  Escenario: Anunciar el deseo más tarde
+    Dado un deseo concedido sin anunciar
+    Entonces el aviso "deseo sin anunciar" sigue en el panel del narrador
+    Y puede anunciarlo en cualquier momento posterior
+
+  @panel
+  Escenario: El precio es privado por defecto
+    Dado un deseo concedido con precio
+    Entonces solo el narrador ve el precio
+    Y puede revelárselo al Hechicero o no, con un botón aparte
+
+  @panel
+  Escenario: El Hechicero muere con el deseo activo
+    Dado un deseo concedido y el Hechicero muerto
+    Entonces la página pregunta al narrador «¿El deseo sigue en juego?»
+    Y no retira ningún efecto por su cuenta
 
   @auto
-  Escenario: El Envenenador actúa antes que todos los roles de información
-    Dado la primera noche con Envenenador y Empática en juego
-    Cuando el Envenenador envenena a la Empática
-    Entonces la Empática despierta DESPUÉS y su número de vecinos malvados puede ser falso
+  Escenario: Un solo deseo por partida
+    Dado un Hechicero cuyo deseo ya fue concedido
+    Entonces el botón de pedir deseo ya no aparece
+
+## Feature: Catálogo de deseos preestablecidos
+
+  Cada entrada trae efecto programado, precio sugerido y pista pública sugerida, todos editables.
+
+  @panel
+  Escenario: Catálogo completo disponible al conceder
+    Dado el narrador concediendo un deseo
+    Entonces el catálogo ofrece al menos estas entradas, agrupadas:
+
+    **Información**
+      | Ver el Grimorio                       | ve todos los roles el resto de la partida |
+      | Saber quién es el Demonio             | recibe el nombre exacto                   |
+      | Saber la alineación de un jugador     | recibe bueno/malvado de quien elija       |
+      | Saber qué personajes no están en juego| recibe 3 personajes ausentes              |
+      | Ver toda la información de una noche  | recibe copia de lo que recibieron todos   |
+      | Saber quién nominó a quién en secreto | historial completo                        |
+
+    **Cambiar personajes**
+      | Convertirse en el Demonio             | mata al Demonio actual y le da su personaje |
+      | Cambiar el personaje de un jugador    | abre el selector de rol                     |
+      | Intercambiar dos personajes           | conserva alineaciones                       |
+      | Robar la habilidad de otro jugador    | copia su personaje, el otro lo pierde       |
+      | Duplicar su propia habilidad          | puede usarla dos veces                      |
+      | Volver bueno a un malvado             | cambia alineación                           |
+      | Volver malvado a un bueno             | cambia alineación                           |
+
+    **Vida y muerte**
+      | Matar a un jugador                    | muerte inmediata                       |
+      | Resucitar a un jugador                | vuelve a estar vivo                    |
+      | Inmunidad a la muerte esta noche      | ficha de protección                    |
+      | Que el Demonio no pueda matarle nunca | ficha permanente                       |
+      | Nadie muere esta noche                | bloquea todas las muertes nocturnas    |
+      | Anular la próxima ejecución           | el ejecutado no muere                  |
+
+    **Estados**
+      | Emborrachar a todos los buenos        | ficha de borrachera a todo el Bien     |
+      | Envenenar a un jugador cada noche     | ficha recurrente                       |
+      | Curar a un jugador                    | limpia veneno y borrachera             |
+      | Ocultar su personaje al Demonio       | no aparece en la info del Mal          |
+
+    **Votación y fases**
+      | Voto doble el resto de la partida     | su voto cuenta por 2                   |
+      | Recuperar el voto fantasma            | vuelve a poder votar de muerto         |
+      | Todos los muertos recuperan su voto   | voto fantasma para todos               |
+      | Forzar una ejecución sin votación     | el narrador elige al ejecutado         |
+      | Saltar la noche                       | se pasa directo al día siguiente       |
+      | Alargar el día                        | más tiempo de debate                   |
+
+    **Partida**
+      | Ganar la partida                      | victoria del bando del Hechicero       |
+      | Que gane el otro bando                | victoria del bando contrario           |
+      | Repetir el día de hoy                 | se revierte la fase                    |
+
+  @panel
+  Escenario: Deseo del catálogo con efecto sobre otro jugador
+    Dado el narrador eligiendo "Cambiar el personaje de un jugador"
+    Entonces la página pide sobre qué jugador y a qué personaje
+    Y al aplicar usa el mismo cambio de rol en vivo, con o sin aviso al afectado
+
+  @panel
+  Escenario: Deseo "Convertirse en el Demonio"
+    Dado el Hechicero deseando ser el Demonio
+    Cuando el narrador concede esa entrada del catálogo
+    Entonces el Demonio actual muere
+    Y el Hechicero recibe su personaje de Demonio y su alineación malvada
+    Y la página **no** termina la partida, porque sigue habiendo Demonio vivo
+    Y sugiere la pista «el aprendiz se ha transformado en maestro»
+
+  @panel
+  Escenario: Deseo "Ganar la partida"
+    Cuando el narrador concede esa entrada
+    Entonces puede fijar el ganador al final del día en vez de al instante
+    Y la pista sugerida acota el Demonio a 3 nombres, para que el Bien conserve una oportunidad
+
+  @panel
+  Escenario: Deseo "Ver el Grimorio"
+    Cuando el narrador concede esa entrada
+    Entonces el Hechicero ve todos los personajes reales en su ruleta
+    Y el resto de jugadores no nota nada
+
+---
+
+# ÓRDENES NOCTURNOS
+
+## Feature: Cola nocturna (motor)
 
   @auto
-  Escenario: Los roles de solo-primera-noche no despiertan después
+  Escenario: La cola solo incluye a quien tiene algo que hacer
+    Cuando empieza una noche
+    Entonces la cola contiene a los personajes vivos que actúan esa noche, en el orden de su campaña
+    Y los muertos con habilidad conservada (Vigormortis) también entran
+
+  @panel
+  Escenario: El narrador avanza la cola manualmente
+    Dado la cola nocturna en curso
+    Entonces el narrador ve de quién es el turno y su panel de habilidad
+    Y puede saltar a cualquier jugador de la cola sin seguir el orden
+
+  @auto
+  Escenario: Los roles de solo-primera-noche no vuelven a despertar
     Dado Lavandera, Bibliotecario, Investigador y Cocinero en juego
     Cuando comienza la noche 2
-    Entonces ninguno de ellos aparece en la cola nocturna
+    Entonces ninguno de ellos aparece en la cola
+
+  @panel
+  Escenario: Insertar un paso extra a mitad de noche
+    Dado un efecto pendiente (Barbero, Criacuervos, Invocador)
+    Entonces la página inserta ese paso en la cola de esta noche
+    Y avisa al narrador antes de cerrar la noche si queda alguno sin resolver
+
+## Feature: Orden de la primera noche — Trouble Brewing
+
+  Orden: información de Esbirros y Demonio + faroles →
+  ENVENENADOR → LAVANDERA → BIBLIOTECARIO → INVESTIGADOR → COCINERO → EMPÁTICA → ADIVINA → MAYORDOMO → ESPÍA.
 
   @auto
-  Escenario: El Demonio no actúa la primera noche en Trouble Brewing
+  Escenario: El Envenenador actúa antes que los roles de información
+    Dado la primera noche con Envenenador y Empática
+    Cuando el Envenenador envenena a la Empática
+    Entonces la Empática despierta después y su número puede ser falso
+
+  @auto
+  Escenario: El Diablillo no actúa la primera noche
     Dado el Diablillo en juego
-    Cuando se construye la cola de la primera noche
-    Entonces el Diablillo no está en la cola (solo recibe bluffs e info de Esbirros)
+    Entonces no aparece en la cola de la primera noche
+    Y solo recibe faroles e información de sus Esbirros
 
 ## Feature: Orden de las otras noches — Trouble Brewing
 
-  Orden: POISONER → MONK → IMP → RAVENKEEPER → FORTUNE_TELLER → EMPATH → UNDERTAKER → BUTLER → SPY.
+  Orden: ENVENENADOR → MONJE → DIABLILLO → CRIACUERVOS → ADIVINA → EMPÁTICA → ENTERRADOR → MAYORDOMO → ESPÍA.
 
   @auto
-  Escenario: El Monje protege antes de que el Diablillo ataque
+  Escenario: El Monje protege antes de que ataque el Diablillo
     Dado la noche 3 con Monje y Diablillo vivos
-    Cuando el Monje protege al Alcalde y luego el Diablillo ataca al Alcalde
+    Cuando el Monje protege al Alcalde y el Diablillo lo ataca
     Entonces el Alcalde no muere
 
   @auto
   Escenario: El Criacuervos despierta solo si murió esta noche
-    Dado que el Diablillo mata al Criacuervos
-    Entonces la página pide al Criacuervos elegir un jugador antes del amanecer
-    Y recibe el rol de ese jugador
-
-  @auto
-  Escenario: El Enterrador solo despierta si hubo ejecución hoy
-    Dado que nadie fue ejecutado hoy
-    Cuando se construye la cola nocturna
-    Entonces el Enterrador no está en la cola
+    Dado el Criacuervos atacado esta noche
+    Entonces la página lo inserta en la cola tras el ataque
+    Y elige un jugador cuyo personaje aprende
 
 ## Feature: Orden de la primera noche — Bad Moon Rising
 
-  Orden: LUNATIC → PUKKA → SAILOR → COURTIER → GODFATHER → DEVILS_ADVOCATE → GRANDMOTHER → CHAMBERMAID.
+  Orden: información del Mal + faroles → LUNÁTICO → ABOGADO DEL DIABLO → POOKA/asignaciones →
+  MARINERO → SIRVIENTA → COTILLA(info) → CORTESANO → PROFESOR → DAMA DEL TÉ → BUFÓN.
 
   @auto
-  Escenario: El Lunático actúa antes que el Demonio real
-    Dado el Lunático y el Pukka en juego
-    Cuando se construye la cola de la primera noche
-    Entonces el Lunático va antes que el Pukka
-
-  @auto
-  Escenario: El Pukka envenena desde la primera noche
-    Dado el Pukka en juego la primera noche
-    Cuando el Pukka elige a la Abuela
-    Entonces la Abuela queda envenenada y su información de nieto puede ser falsa (la Sirvienta y la Abuela actúan después)
+  Escenario: El Lunático recibe información falsa de Demonio
+    Dado el Lunático en juego
+    Entonces cree ser el Demonio y recibe faroles como si lo fuera
+    Y el Demonio real sabe quién es el Lunático
 
 ## Feature: Orden de las otras noches — Bad Moon Rising
 
-  Orden: SAILOR → COURTIER → INNKEEPER → DEVILS_ADVOCATE → LUNATIC → EXORCIST → ZOMBUUL → PUKKA → SHABALOTH → PO → ASSASSIN → GODFATHER → GAMBLER → GOSSIP → PROFESSOR → MINSTREL → TEA_LADY → PACIFIST → FOOL → MOONCHILD → GRANDMOTHER → CHAMBERMAID.
+  Orden: ABOGADO DEL DIABLO → POSADERO → MARINERO → EXORCISTA → DEMONIO → TAHÚR →
+  SIRVIENTA → CORTESANO → PROFESOR → COTILLA → JUGLAR.
 
   @auto
-  Escenario: El Posadero protege antes de que actúe el Demonio
-    Dado la noche 2 con Posadero y Shabaloth vivos
-    Cuando el Posadero elige a dos jugadores y el Shabaloth ataca a uno de ellos
-    Entonces el atacado no muere (ficha SAFE_TONIGHT)
-
-  @auto
-  Escenario: El Exorcista bloquea al Demonio antes de que despierte
-    Dado el Exorcista elige al Zombuul (que es el Demonio)
-    Entonces el Zombuul queda marcado como Exorcizado y no ataca esta noche
-
-  @auto
-  Escenario: El Asesino actúa después del Demonio
-    Dado el Asesino decide matar la noche 4
-    Cuando se resuelve la cola
-    Entonces el ataque del Asesino se aplica tras los ataques del Demonio (ignora protecciones)
+  Escenario: El Exorcista actúa antes que el Demonio
+    Dado el Exorcista eligiendo al Demonio esta noche
+    Entonces el Demonio no despierta ni mata esta noche
 
 ## Feature: Orden de la primera noche — Sects & Violets
 
-  Orden: PHILOSOPHER → SNAKE_CHARMER → EVIL_TWIN → WITCH → CERENOVUS → CLOCKMAKER → DREAMER → SEAMSTRESS → MATHEMATICIAN.
+  Orden: información del Mal + faroles → ENCANTADOR DE SERPIENTES → FILÓSOFO → RELOJERO →
+  SOÑADOR → COSTURERA → MATEMÁTICO → PREGONERO → ORÁCULO → NIÑA DE LAS FLORES.
 
   @auto
-  Escenario: El Filósofo actúa primero por si gana una habilidad de información
-    Dado el Filósofo en juego
-    Cuando se construye la cola de la primera noche
-    Entonces el Filósofo es el primero de la cola
-
-  @auto
-  Escenario: El Relojero recibe su información tras colocarse las maldiciones
-    Dado Relojero, Bruja y Descerebrado en juego
-    Cuando se resuelve la primera noche
-    Entonces el Relojero recibe la distancia Demonio↔Esbirro después de que Bruja y Descerebrado eligieran
+  Escenario: El Encantador de Serpientes puede robar el personaje del Demonio
+    Dado el Encantador eligiendo al Demonio la primera noche
+    Entonces intercambian personaje y alineación
+    Y la página avisa al narrador de quién es ahora el Demonio
 
 ## Feature: Orden de las otras noches — Sects & Violets
 
-  Orden: PHILOSOPHER → SNAKE_CHARMER → WITCH → CERENOVUS → PIT_HAG → FANG_GU → NO_DASHII → VORTOX → VIGORMORTIS → SWEETHEART → SAGE → BARBER → JUGGLER → DREAMER → FLOWERGIRL → TOWN_CRIER → ORACLE → SEAMSTRESS → MATHEMATICIAN.
+  Orden: DESCEREBRADO → BRUJO DEL CALDERO → BRUJA → ENCANTADOR DE SERPIENTES → FILÓSOFO →
+  DEMONIO → BARBERO → SOÑADOR → COSTURERA → MATEMÁTICO → PREGONERO → ORÁCULO → NIÑA DE LAS FLORES.
 
   @auto
-  Escenario: El Brujo del Caldero transforma antes de que ataque el Demonio
-    Dado la noche 3 con Brujo del Caldero y Vortox vivos
-    Cuando el Brujo del Caldero transforma a un jugador
-    Entonces la transformación ocurre antes del ataque del Vortox
-
-  @auto
-  Escenario: El Sabio recibe su información tras morir a manos del Demonio
-    Dado que el Fang Gu mata al Sabio esta noche
-    Entonces el Sabio (después de los ataques de Demonio) recibe 2 jugadores, uno de los cuales es el Demonio
+  Escenario: El Barbero actúa después del ataque del Demonio
+    Dado el Barbero muerto esta noche por el Demonio
+    Entonces el paso del intercambio se resuelve inmediatamente después
 
 ## Feature: Orden de la primera noche — The Carousel
 
-  Orden: POPPY_GROWER → MAGICIAN → BOFFIN → KAZALI → LEGION → LIL_MONSTA → LLEECH → RIOT → LEVIATHAN → MEZEPHELES → SUMMONER → YAGGABABBLE → SHUGENJA → STEWARD → PUZZLEMASTER → ALCHEMIST → BOUNTY_HUNTER → KNIGHT → NOBLE → DAMSEL → SNITCH → BALLOONIST → GENERAL → HIGH_PRIESTESS → KING → WIDOW.
+  Orden: FAROLES → INVOCADOR → CULTIVADOR DE ADORMIDERA → MAGO → MARIONETA → VIUDA →
+  ADMINISTRADOR → NOBLE → SHUGENJA → AERONAUTA → CAZARRECOMPENSAS → PREDICADOR →
+  GUARDIÁN NOCTURNO → SACERDOTISA MAYOR → ALQUIMISTA → HECHICERO(si pide deseo).
 
   @auto
-  Escenario: El Cultivador de Adormidera actúa antes que la info del mal
-    Dado el Cultivador de Adormidera en juego
-    Cuando se genera la información de la primera noche
-    Entonces los Esbirros y el Demonio NO reciben quiénes son sus compañeros
-
-  @auto
-  Escenario: La Viuda mira el Grimorio al final de la primera noche
-    Dado la Viuda en juego
-    Cuando se construye la cola de la primera noche
-    Entonces la Viuda es la última (ve el Grimorio con todas las fichas ya colocadas)
-
-  @auto
-  Escenario: La Marioneta no entra en la cola interactiva
-    Dado la Marioneta en juego
-    Cuando se construye la cola de la primera noche
-    Entonces la Marioneta no despierta (cree ser buena; el Demonio la conoce)
+  Escenario: El Cultivador de Adormidera oculta al equipo malvado
+    Dado el Cultivador en juego
+    Entonces los Esbirros y el Demonio **no** se conocen entre sí
+    Y la página omite ese paso de la primera noche
 
 ## Feature: Orden de las otras noches — The Carousel
 
-  Orden: POPPY_GROWER → PREACHER → LYCANTHROPE → ENGINEER → HUNTSMAN → LLEECH → KAZALI → LEGION → LIL_MONSTA → OJO → AL_HADIKHIA → MEZEPHELES → FEARMONGER → HARPY → ORGAN_GRINDER → SUMMONER → YAGGABABBLE → ACROBAT → CANNIBAL → BOUNTY_HUNTER → CULT_LEADER → NIGHTWATCHMAN → BALLOONIST → GENERAL → HIGH_PRIESTESS → KING.
+  Orden: SEMBRADOR DE MIEDO → ORGANILLERO → MEZEFELES → ARPÍA → INVOCADOR(noche 3) →
+  DEMONIO → CANÍBAL → BANSHEE → GRANJERO → INGENIERO → GUARDIÁN NOCTURNO →
+  SACERDOTISA MAYOR → AERONAUTA → LICÁNTROPO → HECHICERO(si pide deseo).
 
   @auto
-  Escenario: El Predicador actúa antes que los Esbirros
-    Dado el Predicador elige al Sembrador de Miedo esta noche
-    Entonces el Sembrador de Miedo pierde su habilidad antes de poder usarla
+  Escenario: El Invocador crea el Demonio en la noche 3
+    Dado una partida que empezó sin Demonio, con Invocador
+    Cuando llega la noche 3
+    Entonces el Invocador elige jugador y el narrador elige en qué Demonio se convierte
 
-  @auto
-  Escenario: El Licántropo actúa antes que el Demonio
-    Dado el Licántropo elige a un jugador bueno esta noche
-    Entonces ese jugador muere y el ataque del Demonio de esta noche no mata
-
-  @auto
-  Escenario: El Ingeniero cambia los roles en juego antes de que actúe el Demonio
-    Dado el Ingeniero usa su habilidad esta noche
-    Entonces los nuevos Esbirros/Demonio quedan definidos antes de los ataques
-
+---
 ---
 
 # CAMPAÑA: TROUBLE BREWING
 
-## Feature: Lavandera (Aldeano)
-  «Primera noche: ves 2 jugadores, uno de los cuales es un Aldeano específico.»
+## Feature: Lavandera (Aldeano) — TB
+  «Empiezas sabiendo que 1 de 2 jugadores es un personaje concreto de Aldeano.»
+  Panel: primera noche — 2 jugadores + selector del personaje mostrado.
+
+  @panel
+  Escenario: El narrador prepara la información
+    Dado la primera noche y la Lavandera sobria
+    Cuando el narrador abre su pestaña "Habilidad"
+    Entonces la página propone un par correcto (un Aldeano real + un señuelo) y el personaje a mostrar
+    Y el narrador puede cambiar cualquiera de los tres antes de enviar
 
   @auto
-  Escenario: Información verdadera la primera noche
-    Dado la Lavandera sobria y sana la primera noche
-    Cuando se resuelve su turno en la cola
-    Entonces recibe 2 nombres y un rol de Aldeano, y al menos uno de los dos ES ese Aldeano
+  Escenario: Información verdadera
+    Dado la Lavandera sobria
+    Entonces recibe 2 nombres y 1 personaje, y uno de esos dos es realmente ese personaje
 
   @auto
-  Escenario: Lavandera envenenada recibe información falsa
-    Dado que el Envenenador eligió a la Lavandera la primera noche
-    Cuando la Lavandera recibe su información
-    Entonces la pareja mostrada puede no contener al Aldeano indicado
+  Escenario: Borracha o envenenada
+    Dado la Lavandera envenenada la primera noche
+    Entonces la página genera igualmente 2 nombres y 1 personaje plausibles
+    Y la información puede ser completamente falsa
+    Y el panel avisa al narrador «Envenenada: esta info es falsa»
 
   @auto
-  Escenario: El Espía puede registrar como Aldeano para la Lavandera
-    Dado el Espía en juego registrando como bueno
-    Cuando la Lavandera recibe su par
-    Entonces el Espía puede aparecer mostrado como un rol de Aldeano falso
+  Escenario: No vuelve a despertar
+    Cuando comienza la noche 2
+    Entonces la Lavandera no está en la cola
 
-## Feature: Bibliotecario (Aldeano)
-  «Primera noche: ves 2 jugadores, uno de los cuales es un Forastero específico.»
+  @panel
+  Escenario: El Recluso puede aparecer como el Aldeano mostrado
+    Dado el Recluso en juego
+    Entonces el narrador puede elegir al Recluso como el "Aldeano" del par
 
-  @auto
-  Escenario: Detecta un Forastero real
-    Dado el Bibliotecario sobrio y sano y el Santo en juego
-    Cuando recibe su información la primera noche
-    Entonces uno de los 2 jugadores mostrados es el Santo
+## Feature: Bibliotecario (Aldeano) — TB
+  «Empiezas sabiendo que 1 de 2 jugadores es un personaje concreto de Forastero.»
+  Panel: primera noche — 2 jugadores + selector de Forastero, o botón "No hay Forasteros".
+
+  @panel
+  Escenario: Preparar la información
+    Dado la primera noche con al menos un Forastero en juego
+    Entonces el panel propone 2 nombres y el Forastero a mostrar, editables
 
   @auto
   Escenario: Sin Forasteros en juego
-    Dado una partida sin Forasteros
-    Cuando el Bibliotecario recibe su información
-    Entonces recibe "0" / ningún Forastero (o información falsa si está borracho)
-
-## Feature: Investigador (Aldeano)
-  «Primera noche: ves 2 jugadores, uno de los cuales es un Esbirro específico.»
+    Dado ningún Forastero en la partida
+    Entonces el Bibliotecario recibe "0" y la página lo indica así
 
   @auto
-  Escenario: Detecta un Esbirro real
-    Dado el Investigador sobrio y sano y el Barón en juego
-    Cuando recibe su información
-    Entonces uno de los 2 mostrados es el Barón
+  Escenario: Envenenado
+    Dado el Bibliotecario envenenado
+    Entonces recibe un par y un Forastero que pueden ser falsos, o un falso "0"
+
+  @panel
+  Escenario: El Espía puede aparecer como Forastero
+    Dado el Espía en juego
+    Entonces el narrador puede incluirlo en el par como si fuera Forastero
+
+## Feature: Investigador (Aldeano) — TB
+  «Empiezas sabiendo que 1 de 2 jugadores es un personaje concreto de Esbirro.»
+  Panel: primera noche — 2 jugadores + selector de Esbirro.
+
+  @panel
+  Escenario: Preparar la información
+    Dado la primera noche y un Esbirro en juego
+    Entonces el panel propone el Esbirro real más un señuelo, editables
 
   @auto
-  Escenario: El Recluso puede registrar como Esbirro
-    Dado el Recluso en juego registrando como malvado esta noche
-    Cuando el Investigador recibe su par
-    Entonces el Recluso puede aparecer como un Esbirro (p. ej. Envenenador)
+  Escenario: Envenenado
+    Dado el Investigador envenenado
+    Entonces recibe un par y un Esbirro que pueden ser falsos
 
-## Feature: Cocinero (Aldeano)
-  «Primera noche: sabes cuántas parejas de malvados son vecinos.»
+  @panel
+  Escenario: El Recluso puede aparecer como el Esbirro
+    Dado el Recluso en juego
+    Entonces el narrador puede señalarlo como el Esbirro del par
 
-  @auto
-  Escenario: Dos malvados sentados juntos
-    Dado el Diablillo y el Envenenador en asientos contiguos
-    Cuando el Cocinero recibe su número
-    Entonces recibe "1"
-
-  @auto
-  Escenario: Cocinero borracho
-    Dado que el Cocinero es en realidad el Borracho (drunkAs COOK)
-    Cuando recibe su número
-    Entonces el número puede ser falso
-
-## Feature: Empática (Aldeano)
-  «Cada noche: cuántos de tus 2 vecinos vivos son malvados.»
+## Feature: Cocinero (Aldeano) — TB
+  «Empiezas sabiendo cuántos pares de jugadores malvados son vecinos.»
+  Panel: primera noche — número calculado + campo editable.
 
   @auto
-  Escenario: Vecinos vivos se recalculan al morir gente
-    Dado que el vecino izquierdo de la Empática murió ayer
-    Cuando la Empática recibe su número esta noche
-    Entonces se cuenta el siguiente vecino VIVO en esa dirección
+  Escenario: Cuenta automática de pares
+    Dado la primera noche y el Cocinero sobrio
+    Entonces la página calcula los pares de malvados sentados juntos
+    Y el panel muestra ese número ya calculado
 
   @auto
-  Escenario: Empática envenenada
-    Dado la Empática envenenada esta noche
-    Cuando recibe su número
-    Entonces el número puede ser incorrecto (0-2 aleatorio distinto del real)
+  Escenario: Envenenado
+    Dado el Cocinero envenenado
+    Entonces la página genera un número distinto del real, dentro de un rango creíble
 
-## Feature: Adivina (Aldeano)
-  «Cada noche: elige 2 jugadores y sabes si alguno es el Demonio.»
+  @panel
+  Escenario: El narrador ajusta el número
+    Dado el Recluso o el Espía en juego
+    Entonces el narrador puede subir o bajar el número manualmente antes de enviarlo
 
-  @auto
-  Escenario: Detecta al Demonio
-    Dado la Adivina sobria y sana
-    Cuando elige al Diablillo y a un Aldeano
-    Entonces recibe "SÍ hay Demonio"
-
-  @auto
-  Escenario: Señuelo (red herring) registra como Demonio
-    Dado que el narrador marcó a un jugador bueno como señuelo en el montaje
-    Cuando la Adivina elige al señuelo y a otro bueno
-    Entonces recibe "SÍ hay Demonio" aunque ninguno lo sea
+## Feature: Empática (Aldeano) — TB
+  «Cada noche descubres cuántos de tus 2 vecinos vivos son malvados.»
+  Panel: cada noche — número calculado + campo editable.
 
   @auto
-  Escenario: Adivina envenenada
+  Escenario: Cuenta a los vecinos vivos, saltando muertos
+    Dado la Empática con un vecino muerto
+    Entonces la página cuenta el siguiente vivo en esa dirección
+
+  @auto
+  Escenario: Envenenada
+    Dado la Empática envenenada
+    Entonces recibe un número falso pero posible (0, 1 o 2)
+
+  @auto
+  Escenario: El número cambia al morir gente
+    Dado que muere un vecino de la Empática
+    Cuando llega la noche siguiente
+    Entonces el número se recalcula con los nuevos vecinos vivos
+
+## Feature: Adivina (Aldeano) — TB
+  «Cada noche elige 2 jugadores: descubres si alguno es el Demonio. Hay un bueno que te aparece como Demonio.»
+  Panel: cada noche — 2 objetivos + interruptor SÍ/NO forzable + marca del señuelo.
+
+  @panel
+  Escenario: El narrador fija el señuelo la primera noche
+    Dado la primera noche con Adivina en juego
+    Entonces el panel pide marcar qué jugador bueno aparece como Demonio
+    Y esa marca se conserva toda la partida
+
+  @auto
+  Escenario: Respuesta automática
+    Dado la Adivina eligiendo a dos jugadores
+    Entonces la página responde SÍ si alguno es el Demonio o es el señuelo
+    Y NO en caso contrario
+
+  @panel
+  Escenario: El narrador fuerza la respuesta
+    Dado un caso raro (Recluso, Espía, Demonio recién sucedido)
+    Entonces el narrador puede forzar SÍ o NO desde el interruptor
+    Y la página envía lo que el narrador decida
+
+  @auto
+  Escenario: Envenenada
     Dado la Adivina envenenada
-    Cuando elige 2 jugadores
-    Entonces la respuesta es aleatoria (puede ser falsa)
+    Entonces recibe una respuesta que puede ser falsa
 
-## Feature: Enterrador (Aldeano)
-  «Cada noche*: sabes qué rol fue ejecutado hoy.»
-
-  @auto
-  Escenario: Recibe el rol del ejecutado
-    Dado que la Virgen fue ejecutada hoy
-    Cuando el Enterrador despierta esta noche
-    Entonces recibe "Virgen"
+## Feature: Enterrador (Aldeano) — TB
+  «Cada noche* descubres qué personaje fue ejecutado hoy.»
+  Panel: cada noche tras una ejecución — personaje mostrado, editable.
 
   @auto
-  Escenario: Sin ejecución no despierta
-    Dado que hoy nadie fue ejecutado
-    Cuando se construye la cola nocturna
-    Entonces el Enterrador no está en la cola
-
-## Feature: Monje (Aldeano)
-  «Cada noche*: elige 1 jugador (no tú). Protegido del Demonio esta noche.»
+  Escenario: Aprende el personaje del ejecutado
+    Dado que hoy se ejecutó a un jugador
+    Entonces esa noche el Enterrador recibe su personaje
 
   @auto
-  Escenario: Protege del ataque del Diablillo
-    Dado el Monje protege al Cazador
-    Cuando el Diablillo ataca al Cazador esta noche
-    Entonces el Cazador no muere
+  Escenario: Nadie fue ejecutado
+    Dado un día sin ejecución
+    Entonces el Enterrador no despierta y la página lo salta
+
+  @panel
+  Escenario: Ejecutado que no murió
+    Dado un Santo o un Bufón ejecutado que sobrevivió
+    Entonces el narrador decide en el panel si el Enterrador recibe algo
 
   @auto
-  Escenario: Monje envenenado no protege
-    Dado el Monje envenenado esta noche
-    Cuando "protege" a un jugador y el Diablillo lo ataca
-    Entonces el jugador muere
+  Escenario: Envenenado
+    Dado el Enterrador envenenado
+    Entonces recibe un personaje falso
+
+## Feature: Monje (Aldeano) — TB
+  «Cada noche* elige a otro jugador: queda a salvo del Demonio esta noche.»
+  Panel: cada noche* — 1 objetivo distinto de sí mismo.
 
   @auto
-  Escenario: La protección no evita al Asesino
-    Dado el Monje protege a un jugador
-    Cuando el Asesino elige a ese jugador
-    Entonces el jugador muere igualmente
-
-## Feature: Criacuervos (Aldeano)
-  «Si mueres de noche: elige 1 jugador y descubres su rol.»
+  Escenario: La protección bloquea el ataque
+    Dado el Monje protegiendo al Alcalde
+    Cuando el Demonio ataca al Alcalde
+    Entonces no muere nadie
 
   @auto
-  Escenario: Muere de noche y aprende un rol
-    Dado que el Diablillo mata al Criacuervos
-    Cuando el Criacuervos elige al Espía... 
-    Entonces recibe el rol real (o el falso si el Espía registra como bueno / si el Criacuervos está envenenado)
+  Escenario: No protege de otras muertes
+    Dado el Monje protegiendo a un jugador
+    Cuando ese jugador es ejecutado o muere por el Asesino
+    Entonces muere igual
 
   @auto
-  Escenario: El Borracho que cree ser Criacuervos recibe rol falso
-    Dado el Borracho con drunkAs Criacuervos muere de noche
-    Cuando elige un jugador
-    Entonces recibe un rol falso
-
-## Feature: Virgen (Aldeano)
-  «La 1ª vez que te nominan, si el nominador es Aldeano, es ejecutado de inmediato.»
+  Escenario: Monje envenenado
+    Dado el Monje envenenado
+    Entonces la ficha "A salvo" se coloca igualmente pero **no** protege
+    Y el panel avisa al narrador
 
   @auto
-  Escenario: Nominada por un Aldeano
+  Escenario: No puede protegerse a sí mismo
+    Entonces el selector del panel excluye al propio Monje
+
+## Feature: Criacuervos (Aldeano) — TB
+  «Si mueres de noche, despiertas y eliges un jugador: descubres su personaje.»
+  Panel: se inserta en la cola en cuanto muere de noche.
+
+  @auto
+  Escenario: Despierta al morir de noche
+    Dado el Criacuervos atacado por el Demonio
+    Entonces la página lo inserta en la cola de esta noche
+    Y avisa al narrador de que debe despertarlo
+
+  @panel
+  Escenario: Elige objetivo y recibe su personaje
+    Cuando elige a un jugador
+    Entonces recibe el personaje real de ese jugador
+    Y el narrador puede sustituirlo si el Recluso o el Espía están implicados
+
+  @auto
+  Escenario: Muerte de día no activa la habilidad
+    Dado el Criacuervos ejecutado de día
+    Entonces no despierta
+
+  @auto
+  Escenario: Envenenado
+    Dado el Criacuervos envenenado al morir
+    Entonces recibe un personaje falso
+
+## Feature: Virgen (Aldeano) — TB
+  «La primera vez que te nomine un Aldeano, ese jugador es ejecutado inmediatamente.»
+  Panel: aviso automático al registrar la nominación.
+
+  @auto
+  Escenario: La nomina un Aldeano
     Dado la Virgen sana y sin usar su poder
     Cuando un Aldeano la nomina
-    Entonces el nominador muere ejecutado inmediatamente y no hay votación
-    Y el poder de la Virgen queda gastado
+    Entonces ese nominador muere inmediatamente
+    Y la nominación no llega a votarse
+    Y el poder queda gastado
 
   @auto
-  Escenario: Nominada por un Forastero o malvado
-    Dado la Virgen sana y sin usar su poder
-    Cuando un Forastero la nomina
-    Entonces nadie muere pero el poder queda gastado igualmente
+  Escenario: La nomina alguien que no es Aldeano
+    Cuando un Forastero, Esbirro o Demonio la nomina
+    Entonces nadie muere
+    Y el poder **queda gastado igualmente** (es la primera nominación)
 
   @auto
   Escenario: Virgen envenenada
     Dado la Virgen envenenada
     Cuando un Aldeano la nomina
-    Entonces nadie muere y el poder queda gastado
+    Entonces no muere nadie y el poder se gasta
 
-## Feature: Cazador / Slayer (Aldeano)
-  «Una vez por partida, de día: elige 1 jugador. Si es el Demonio, muere.»
+  @panel
+  Escenario: El Recluso la nomina
+    Dado el Recluso nominando a la Virgen
+    Entonces el narrador decide si registra como Aldeano y muere, o no
 
-  @auto
-  Escenario: Dispara al Demonio
-    Dado el Cazador sobrio, sano y sin usar su tiro
-    Cuando dispara al Diablillo durante el día
-    Entonces el Diablillo muere
-    Y si no hay Dama Escarlata (5+ vivos) ni Mente Maestra, el Bien gana
+## Feature: Cazador / Slayer (Aldeano) — TB
+  «Una vez por partida, de día, elige un jugador: si es el Demonio, muere.»
+  Panel: **solo el narrador dispara**, cuando el jugador lo pide en voz alta.
 
-  @auto
-  Escenario: Dispara al Demonio con Dama Escarlata viva
-    Dado 5+ vivos y la Dama Escarlata viva
-    Cuando el Cazador mata al Diablillo
-    Entonces la Dama Escarlata se convierte en Diablillo y la partida sigue
-
-  @auto
-  Escenario: Dispara envenenado
-    Dado el Cazador envenenado
-    Cuando dispara al Demonio
-    Entonces no pasa nada y el tiro queda gastado
+  @panel
+  Escenario: El narrador ejecuta el disparo
+    Dado el Cazador vivo, de día, sin haber disparado
+    Cuando el narrador abre el mini-panel del objetivo y pulsa "Disparo del Cazador"
+    Entonces si el objetivo es el Demonio, muere
+    Y si no lo es, no pasa nada
+    Y el uso queda gastado en ambos casos
 
   @auto
-  Escenario: El Borracho que cree ser Cazador
-    Dado el Borracho con drunkAs Cazador
-    Cuando dispara a cualquiera
-    Entonces no pasa nada y el tiro queda gastado
+  Escenario: Ningún jugador puede disparar por su cuenta
+    Dado un jugador con el Cazador
+    Entonces su interfaz **no** tiene botón de disparo
+    Y solo puede pedirlo en voz alta
 
-## Feature: Soldado (Aldeano)
-  «No puedes morir por ataques del Demonio.»
-
-  @auto
-  Escenario: El Diablillo lo ataca
-    Dado el Soldado sobrio y sano
-    Cuando el Diablillo lo ataca de noche
-    Entonces no muere
+  @panel
+  Escenario: Disparo fingido de un malvado
+    Dado un malvado que finge ser el Cazador
+    Cuando el narrador usa "Disparo fingido" eligiendo al malvado como tirador
+    Entonces se anuncia el disparo y no muere nadie
+    Y ese malvado no puede volver a fingir
 
   @auto
-  Escenario: Soldado envenenado
-    Dado el Soldado envenenado
-    Cuando el Diablillo lo ataca
-    Entonces muere
+  Escenario: Cazador envenenado
+    Dado el Cazador envenenado disparando al Demonio
+    Entonces el Demonio no muere y el uso se gasta
+
+  @panel
+  Escenario: El Recluso recibe el disparo
+    Dado el Recluso disparado por el Cazador
+    Entonces el narrador decide si muere (registrando como Demonio) o no
+
+## Feature: Soldado (Aldeano) — TB
+  «Eres inmune a los ataques del Demonio.»
 
   @auto
-  Escenario: El Soldado sí puede ser ejecutado
-    Dado el Soldado vivo
-    Cuando es ejecutado por votación
-    Entonces muere con normalidad
-
-## Feature: Alcalde (Aldeano)
-  «Si solo quedan 3 vivos y no hay ejecución, gana el Bien. Si mueres de noche, otro puede morir en tu lugar.»
+  Escenario: El Demonio ataca al Soldado
+    Entonces el Soldado no muere y el Demonio gasta su ataque
 
   @auto
-  Escenario: Victoria del Alcalde
-    Dado 3 jugadores vivos con el Alcalde sano entre ellos
-    Cuando el día termina sin ejecución (el narrador inicia la noche)
-    Entonces la página declara la victoria del Bien automáticamente
+  Escenario: El Soldado muere por otras vías
+    Cuando es ejecutado o atacado por el Asesino
+    Entonces muere normalmente
+
+  @panel
+  Escenario: Aviso al matarlo a mano
+    Dado el narrador matando al Soldado desde el mini-panel
+    Entonces la página avisa «Soldado: inmune a ataques del Demonio» antes de confirmar
+
+## Feature: Alcalde (Aldeano) — TB
+  «Si solo quedan 3 vivos y no hay ejecución, tu equipo gana. Si mueres de noche, otro puede morir en tu lugar.»
+  Panel: botón "Victoria del Alcalde" + selector de sustituto.
+
+  @panel
+  Escenario: Redirigir el ataque nocturno
+    Dado el Demonio atacando al Alcalde
+    Entonces el narrador elige en el panel si muere el Alcalde u otro jugador
+    Y la página aplica la muerte al elegido
+
+  @panel
+  Escenario: Victoria por 3 vivos sin ejecución
+    Dado 3 jugadores vivos, el Alcalde entre ellos, y el día termina sin ejecución
+    Entonces el botón "Victoria del Alcalde" está disponible
+    Y al pulsarlo ganan los buenos
 
   @auto
-  Escenario: Rebote del ataque nocturno
-    Dado el Diablillo ataca al Alcalde sano
-    Cuando se resuelve el ataque
-    Entonces el Alcalde puede no morir y otro jugador (no Demonio) muere en su lugar
-
-  @auto
-  Escenario: Alcalde envenenado no rebota
+  Escenario: Alcalde envenenado
     Dado el Alcalde envenenado
-    Cuando el Diablillo lo ataca
-    Entonces muere él
+    Entonces ni redirige ataques ni gana por 3 vivos
 
-## Feature: Mayordomo (Forastero)
-  «Cada noche elige un Amo. Solo puedes votar si tu Amo vota.»
-
-  @auto
-  Escenario: Voto restringido
-    Dado el Mayordomo eligió a Ana como Amo anoche
-    Cuando el Mayordomo intenta votar a favor sin que Ana haya votado
-    Entonces la página rechaza su voto
+## Feature: Mayordomo (Forastero) — TB
+  «Cada noche elige un jugador: mañana solo puedes votar si ese jugador vota.»
+  Panel: cada noche — 1 objetivo distinto de sí mismo.
 
   @auto
-  Escenario: Vota después de su Amo
-    Dado Ana (Amo) ya votó a favor en la nominación
-    Cuando el Mayordomo vota a favor
-    Entonces su voto se acepta
+  Escenario: El Amo no vota
+    Dado el Mayordomo con su Amo elegido
+    Cuando el Amo no vota en una nominación
+    Entonces el voto del Mayordomo se rechaza
 
   @auto
-  Escenario: Mayordomo envenenado vota libre
+  Escenario: El Amo vota
+    Cuando el Amo vota a favor
+    Entonces el Mayordomo puede votar libremente
+
+  @auto
+  Escenario: Mayordomo envenenado
     Dado el Mayordomo envenenado
-    Cuando vota sin que su Amo vote
-    Entonces el voto se acepta
+    Entonces puede votar sin restricción y la ficha se coloca igual
 
-## Feature: Borracho (Forastero)
-  «Crees ser un Aldeano. No lo eres. Tu información es falsa.»
+  @panel
+  Escenario: El narrador ve quién es el Amo
+    Entonces el mini-panel del Amo muestra la ficha «Es el Amo del Mayordomo»
 
-  @auto
-  Escenario: Recibe un rol de Aldeano falso al repartir
-    Dado el Borracho en la bolsa
-    Cuando se reparten los roles
-    Entonces el jugador ve un rol de Aldeano que NO está en juego (drunkAs)
-    Y el narrador ve "Borracho (cree ser X)"
+## Feature: Borracho (Forastero) — TB
+  «No sabes que eres el Borracho. Crees ser un Aldeano, pero tu habilidad no funciona.»
 
   @auto
-  Escenario: Toda su información es falsa
-    Dado el Borracho cree ser la Empática
-    Cuando "actúa" cada noche
-    Entonces despierta como si fuera la Empática pero sus números pueden ser falsos
+  Escenario: Cree ser otro personaje
+    Dado el Borracho en juego
+    Entonces el jugador ve un Aldeano que no está realmente en juego
+    Y nunca ve la palabra "Borracho"
 
   @auto
-  Escenario: Sus acciones no tienen efecto
-    Dado el Borracho cree ser el Monje
-    Cuando "protege" a un jugador
-    Entonces el jugador NO queda protegido realmente
+  Escenario: Su información siempre puede ser falsa
+    Dado el Borracho que cree ser la Empática
+    Entonces recibe números plausibles pero no fiables
 
-## Feature: Recluso (Forastero)
-  «Puedes registrar como malvado / Esbirro / Demonio.»
+  @panel
+  Escenario: El narrador ve la verdad
+    Entonces el mini-panel muestra «Real: Borracho · Cree ser: Empática»
+    Y avisa de que su habilidad nunca funciona
 
-  @auto
-  Escenario: La Adivina lo detecta como Demonio
-    Dado el Recluso registrando como malvado esta noche
-    Cuando la Adivina lo elige
-    Entonces puede recibir "SÍ hay Demonio"
+## Feature: Recluso (Forastero) — TB
+  «Puedes aparecer como malvado y como un personaje de Esbirro o Demonio.»
+  Panel: interruptor "cómo registra" en el mini-panel del narrador.
 
-  @auto
-  Escenario: El Enterrador puede ver un rol malvado
-    Dado el Recluso ejecutado hoy y registrando como Esbirro
-    Cuando el Enterrador despierta
-    Entonces puede recibir un rol de Esbirro (p. ej. Envenenador)
-
-## Feature: Santo (Forastero)
-  «Si eres ejecutado, el Bien pierde.»
+  @panel
+  Escenario: El narrador decide cómo registra
+    Dado el Recluso en juego
+    Entonces el narrador fija si aparece como bueno o como malvado
+    Y puede cambiarlo en cualquier momento
+    Y puede fijar además qué personaje malvado aparenta
 
   @auto
-  Escenario: Ejecutado sano
-    Dado el Santo sobrio y sano
-    Cuando es ejecutado por votación
-    Entonces la página declara inmediatamente la victoria del Mal
+  Escenario: La información generada respeta la decisión
+    Dado el Recluso marcado como "registra malvado"
+    Cuando la Empática cuenta vecinos malvados
+    Entonces el Recluso cuenta como malvado
 
   @auto
-  Escenario: Ejecutado envenenado
+  Escenario: Ejecutar al Recluso no gana la partida
+    Cuando el Recluso es ejecutado
+    Entonces muere como un jugador bueno cualquiera
+
+## Feature: Santo (Forastero) — TB
+  «Si te ejecutan, tu equipo pierde.»
+
+  @auto
+  Escenario: Santo ejecutado
+    Dado el Santo sano
+    Cuando es ejecutado
+    Entonces ganan los malvados de inmediato
+
+  @auto
+  Escenario: Santo envenenado ejecutado
     Dado el Santo envenenado
     Cuando es ejecutado
-    Entonces la partida continúa (no gana el Mal)
+    Entonces muere sin que su equipo pierda
 
   @auto
-  Escenario: Muerto de noche no pasa nada
-    Dado el Santo vivo
-    Cuando el Diablillo lo mata de noche
-    Entonces la partida continúa con normalidad
+  Escenario: Santo muerto de noche
+    Cuando el Demonio mata al Santo
+    Entonces no pasa nada especial
 
-## Feature: Envenenador (Esbirro)
-  «Cada noche: envenena 1 jugador esa noche y el día siguiente.»
+  @panel
+  Escenario: Aviso antes de la ejecución
+    Dado el Santo nominado
+    Entonces el panel del narrador avisa «⚠ Es el Santo: si muere ejecutado, ganan los malos»
 
-  @auto
-  Escenario: Envenena información
-    Dado el Envenenador elige a la Adivina
-    Cuando la Adivina actúa esta noche
-    Entonces su respuesta puede ser falsa
-
-  @auto
-  Escenario: El veneno se mueve cada noche
-    Dado el Envenenador envenenó a Ana anoche
-    Cuando esta noche envenena a Beto
-    Entonces Ana queda limpia y solo Beto está envenenado
+## Feature: Envenenador (Esbirro) — TB
+  «Cada noche elige un jugador: queda envenenado esta noche y el día siguiente.»
+  Panel: cada noche — 1 objetivo (puede ser él mismo).
 
   @auto
-  Escenario: Envenena habilidades pasivas
-    Dado el Envenenador elige al Soldado
-    Cuando el Diablillo ataca al Soldado esa noche
-    Entonces el Soldado muere
-
-## Feature: Espía (Esbirro)
-  «Cada noche ve el Grimorio. Puede registrar como bueno.»
+  Escenario: El veneno anula la habilidad
+    Dado el Envenenador envenenando a la Empática
+    Entonces la Empática recibe información falsa esta noche y el día siguiente
 
   @auto
-  Escenario: Ve el Grimorio completo
-    Dado el Espía vivo
-    Cuando despierta cada noche
-    Entonces recibe la lista de todos los jugadores con rol y estado real
+  Escenario: El veneno se traslada cada noche
+    Cuando el Envenenador envenena a otro
+    Entonces el anterior deja de estar envenenado
 
   @auto
-  Escenario: Registra como bueno para la información
-    Dado el Espía en juego
-    Cuando la Lavandera / el Investigador / la Adivina lo evalúan
-    Entonces puede aparecer como Aldeano bueno
-
-## Feature: Dama Escarlata (Esbirro)
-  «Si hay 5+ vivos y el Demonio muere, te conviertes en el Demonio.»
+  Escenario: Actúa el primero
+    Entonces la página lo pone al principio de la cola nocturna
 
   @auto
-  Escenario: Hereda por ejecución
-    Dado 5+ vivos y la Dama Escarlata viva
-    Cuando el Diablillo es ejecutado
-    Entonces ella se convierte en Diablillo y la partida NO termina
+  Escenario: El Envenenador muere
+    Cuando muere
+    Entonces su veneno actual caduca al siguiente anochecer y no envenena más
+
+## Feature: Espía (Esbirro) — TB
+  «Cada noche ves el Grimorio. Puedes aparecer como bueno y como un personaje de Aldeano o Forastero.»
+  Panel: interruptor "cómo registra" + acceso al grimorio.
 
   @auto
-  Escenario: Hereda por disparo del Cazador
-    Dado 5+ vivos y la Dama Escarlata viva
-    Cuando el Cazador mata al Diablillo de día
-    Entonces ella se convierte en Diablillo y la partida sigue
+  Escenario: Ve el grimorio de noche
+    Dado el Espía vivo y sano
+    Cuando es de noche
+    Entonces ve todos los personajes reales en su ruleta
+
+  @panel
+  Escenario: El narrador decide cómo registra
+    Entonces puede fijar que aparezca como bueno y con qué personaje bueno
 
   @auto
-  Escenario: Con 4 vivos no hereda
-    Dado exactamente 4 jugadores vivos
-    Cuando el Demonio es ejecutado
-    Entonces el Bien gana (la Dama Escarlata no se transforma)
+  Escenario: Espía envenenado
+    Dado el Espía envenenado
+    Entonces la página le muestra un grimorio falso o nada, a criterio del narrador
 
-## Feature: Barón (Esbirro)
-  «+2 Forasteros en el montaje.»
-
-  @auto
-  Escenario: Modifica la distribución
-    Dado una partida de 9 jugadores (5/2/1/1) con Barón seleccionado
-    Cuando se calcula la distribución
-    Entonces quedan 3 Aldeanos y 4 Forasteros (los +2 reemplazan Aldeanos)
+## Feature: Dama Escarlata (Esbirro) — TB
+  «Si hay 5 o más vivos y el Demonio muere, te conviertes en ese Demonio.»
+  Ver la sección "Sucesión — Dama Escarlata".
 
   @auto
-  Escenario: Su muerte no revierte el montaje
-    Dado el Barón muerto el día 2
-    Cuando continúa la partida
-    Entonces los Forasteros extra siguen en juego
+  Escenario: Hereda con 5 o más vivos
+    Dado 5 vivos y la Dama sana
+    Cuando el Demonio muere
+    Entonces se convierte en ese mismo personaje de Demonio y la partida sigue
 
-## Feature: Diablillo (Demonio)
-  «Cada noche*: elige 1 jugador: muere. Si te suicidas, un Esbirro se convierte en Diablillo.»
+  @auto
+  Escenario: No hereda con menos de 5 vivos
+    Dado 4 vivos
+    Cuando el Demonio muere
+    Entonces la Dama sigue siendo Esbirro
+
+  @panel
+  Escenario: Aviso al narrador
+    Cuando la Dama hereda
+    Entonces el panel avisa «Nueva Demonio: <nombre> — despiértala esta noche»
+
+## Feature: Barón (Esbirro) — TB
+  «Hay 2 Forasteros extra en juego.»
+
+  @auto
+  Escenario: Ajuste de reparto
+    Dado el Barón elegido en el montaje
+    Entonces la página añade 2 Forasteros y quita 2 Aldeanos
+    Y muestra el reparto corregido en el asistente de montaje
+
+## Feature: Diablillo (Demonio) — TB
+  «Cada noche* elige un jugador: muere. Si te eliges a ti, un Esbirro se convierte en Diablillo.»
+  Panel: cada noche* — 1 objetivo, él mismo incluido.
 
   @auto
   Escenario: Ataque normal
-    Dado el Diablillo sobrio la noche 2
-    Cuando ataca a un Aldeano sin protección
-    Entonces el Aldeano muere y se anuncia al amanecer
+    Cuando el Diablillo elige a un jugador sin protección
+    Entonces ese jugador muere
 
-  @auto
-  Escenario: Suicidio pasa el testigo (star-pass)
-    Dado el Diablillo y el Envenenador vivos
+  @panel
+  Escenario: Salto de estrella
     Cuando el Diablillo se elige a sí mismo
-    Entonces el Diablillo muere y el Envenenador se convierte en el nuevo Diablillo
+    Entonces muere
+    Y el narrador elige en el panel qué Esbirro vivo se convierte en Diablillo
+    Y la partida **continúa**
 
   @auto
-  Escenario: Diablillo envenenado no mata
-    Dado el Diablillo envenenado (p. ej. por el Encantador de Serpientes en otra campaña)
-    Cuando ataca
-    Entonces nadie muere
+  Escenario: Ataque a un protegido
+    Cuando ataca a alguien con ficha "A salvo" o al Soldado
+    Entonces no muere nadie
+
+  @auto
+  Escenario: No actúa la primera noche
+    Entonces no aparece en la cola de la primera noche
+
+---
+---
 
 # CAMPAÑA: BAD MOON RISING
 
-## Feature: Abuela (Aldeano)
-  «Primera noche: conoces 1 jugador bueno y su rol. Si el Demonio lo mata, tú mueres también.»
+## Feature: Abuela (Aldeano) — BMR
+  «Empiezas conociendo a un jugador bueno y su personaje. Si el Demonio lo mata, tú también mueres.»
+  Panel: primera noche — selector del nieto; ficha permanente sobre él.
+
+  @panel
+  Escenario: El narrador marca al nieto
+    Dado la primera noche con la Abuela sobria
+    Entonces el panel propone un jugador bueno y su personaje, editables
+    Y coloca una ficha permanente «Nieto de la Abuela» sobre él
 
   @auto
-  Escenario: Conoce a su nieto
-    Dado la Abuela sobria la primera noche
-    Cuando el narrador elige al nieto en su turno
-    Entonces la Abuela recibe nombre y rol del nieto
-
-  @auto
-  Escenario: El Demonio mata al nieto
-    Dado el nieto marcado en la partida
-    Cuando el Demonio mata al nieto de noche
-    Entonces la Abuela muere también esa misma noche
-
-  @auto
-  Escenario: Abuela envenenada no muere con el nieto
-    Dado la Abuela envenenada
+  Escenario: Muere el nieto de noche
     Cuando el Demonio mata al nieto
-    Entonces la Abuela no muere
-
-## Feature: Marinero (Aldeano)
-  «Cada noche: elige un vivo. O tú o él está borracho hasta el anochecer. No puedes morir.»
-
-  @narrador
-  Escenario: El narrador decide quién se emborracha
-    Dado el Marinero elige al Tahúr
-    Cuando el narrador resuelve el paso del Marinero
-    Entonces coloca la ficha de borracho en el Marinero O en el Tahúr hasta el próximo anochecer
+    Entonces la Abuela muere esa misma noche
+    Y la página lo avisa al narrador
 
   @auto
-  Escenario: Marinero sobrio no puede morir
-    Dado el Marinero sobrio y sano
-    Cuando el Demonio lo ataca de noche
-    Entonces no muere (safeTonight del patrón del Marinero)
+  Escenario: El nieto muere ejecutado
+    Cuando el nieto es ejecutado de día
+    Entonces la Abuela **no** muere
 
   @auto
-  Escenario: Marinero borracho puede morir
-    Dado el Marinero borracho por su propia habilidad
-    Cuando es ejecutado
-    Entonces muere con normalidad
+  Escenario: Abuela envenenada
+    Dado la Abuela envenenada cuando muere su nieto
+    Entonces no muere
 
-## Feature: Sirvienta (Aldeano)
-  «Cada noche: elige 2 vivos (no tú): sabes cuántos despertaron por su habilidad.»
+## Feature: Marinero (Aldeano) — BMR
+  «Cada noche elige un jugador: tú o él estáis borrachos hasta el anochecer. No puedes morir.»
+  Panel: cada noche — 1 objetivo + selector de a quién emborracha.
 
-  @narrador
-  Escenario: Cuenta despertares
-    Dado la Sirvienta elige al Exorcista y al Bufón la noche 2
-    Cuando el Exorcista despertó y el Bufón no
-    Entonces la Sirvienta recibe "1"
+  @panel
+  Escenario: El narrador elige quién se emborracha
+    Cuando el Marinero elige a un jugador
+    Entonces el narrador decide en el panel si se emborracha el Marinero o el elegido
 
-  @narrador
-  Escenario: Sirvienta envenenada
+  @auto
+  Escenario: El Marinero no puede morir
+    Cuando el Demonio ataca al Marinero o es ejecutado
+    Entonces no muere
+    Y el panel avisa al narrador antes de una muerte manual
+
+  @auto
+  Escenario: Marinero envenenado
+    Dado el Marinero envenenado
+    Entonces puede morir normalmente y no emborracha a nadie
+
+## Feature: Sirvienta (Aldeano) — BMR
+  «Cada noche elige 2 jugadores: descubres cuántos despertaron esta noche por su habilidad.»
+  Panel: cada noche — 2 objetivos + número calculado y editable.
+
+  @auto
+  Escenario: Cuenta despertares reales
+    Dado la Sirvienta eligiendo a dos jugadores
+    Entonces la página cuenta cuántos de ellos actuaron esta noche
+    Y muestra el número al narrador ya calculado
+
+  @auto
+  Escenario: Envenenada
     Dado la Sirvienta envenenada
-    Cuando elige 2 jugadores
-    Entonces el número puede ser falso
+    Entonces recibe un número falso entre 0 y 2
 
-## Feature: Exorcista (Aldeano)
-  «Cada noche*: elige un jugador (≠ anoche). Si es el Demonio, no despierta esta noche.»
+  @panel
+  Escenario: Casos ambiguos
+    Dado un jugador que despertó pero sin usar habilidad (Lunático)
+    Entonces el narrador ajusta el número a mano
+
+## Feature: Exorcista (Aldeano) — BMR
+  «Cada noche* elige un jugador distinto del anterior: si es el Demonio, no despierta esta noche.»
+  Panel: cada noche* — 1 objetivo, excluyendo el de anoche.
 
   @auto
-  Escenario: Bloquea al Demonio
-    Dado el Exorcista elige al Pukka
-    Entonces el Pukka queda Exorcizado: sabe quién es el Exorcista y no actúa esta noche
-    Y el ataque del Pukka esta noche no ocurre
+  Escenario: Acierta con el Demonio
+    Cuando el Exorcista elige al Demonio
+    Entonces el Demonio no despierta ni mata esta noche
+    Y el Demonio ve la cara del Exorcista
 
   @auto
-  Escenario: Elige a un no-Demonio
-    Dado el Exorcista elige a un Esbirro
-    Entonces no pasa nada esta noche
-
-  @narrador
   Escenario: No puede repetir objetivo
-    Dado el Exorcista eligió a Ana anoche
-    Cuando la página muestra su panel esta noche
-    Entonces el narrador debe hacer que elija a un jugador distinto
-
-## Feature: Posadero (Aldeano)
-  «Cada noche*: elige 2 jugadores: no pueden morir esta noche, pero 1 está borracho hasta el anochecer.»
+    Entonces el selector excluye al jugador elegido la noche anterior
 
   @auto
-  Escenario: Protege a dos y emborracha a uno
-    Dado el Posadero elige a Ana y Beto, y el narrador marca borracho a Beto
-    Cuando el Demonio ataca a Ana esta noche
-    Entonces Ana no muere
-    Y Beto está borracho hasta el próximo anochecer
+  Escenario: Exorcista envenenado
+    Dado el Exorcista envenenado eligiendo al Demonio
+    Entonces el Demonio actúa con normalidad
+
+## Feature: Posadero (Aldeano) — BMR
+  «Cada noche* elige 2 jugadores: no pueden morir esta noche, pero uno está borracho.»
+  Panel: cada noche* — 2 objetivos + selector de cuál queda borracho.
+
+  @panel
+  Escenario: Proteger a dos y emborrachar a uno
+    Cuando el Posadero elige a dos jugadores
+    Entonces ambos quedan a salvo esta noche
+    Y el narrador elige en el panel cuál de los dos queda borracho
 
   @auto
-  Escenario: El Asesino ignora al Posadero
-    Dado el Posadero protege a Ana
-    Cuando el Asesino mata a Ana
-    Entonces Ana muere (el Asesino ignora toda protección)
+  Escenario: El Demonio ataca a un protegido
+    Entonces no muere nadie
 
-## Feature: Tahúr (Aldeano)
-  «Cada noche*: elige un jugador y adivina su rol. Si fallas, mueres.»
+  @auto
+  Escenario: Posadero envenenado
+    Entonces ni protege ni emborracha, aunque las fichas se coloquen
 
-  @narrador
-  Escenario: Adivina correcto
-    Dado el Tahúr elige a Ana y adivina "Envenenadora"
-    Cuando Ana es realmente la Envenenadora
-    Entonces el Tahúr no muere
+## Feature: Tahúr (Aldeano) — BMR
+  «Cada noche* elige un jugador y adivina su personaje: si fallas, mueres.»
+  Panel: cada noche* — 1 objetivo + selector de personaje adivinado.
 
-  @narrador
-  Escenario: Adivina incorrecto
-    Dado el Tahúr elige a Ana y adivina "Monje"
-    Cuando Ana no es el Monje
-    Entonces el narrador marca la muerte del Tahúr esa noche
+  @auto
+  Escenario: Acierta
+    Cuando el Tahúr adivina bien
+    Entonces no pasa nada
 
-## Feature: Cotilla (Aldeano)
-  «Cada día: declaración pública. Si es verdadera, esa noche muere un jugador.»
+  @auto
+  Escenario: Falla
+    Cuando el Tahúr adivina mal
+    Entonces muere esa noche
 
-  @narrador
-  Escenario: Declaración verdadera
-    Dado la Cotilla declaró públicamente algo verdadero hoy
+  @auto
+  Escenario: Tahúr envenenado
+    Dado el Tahúr envenenado que acierta
+    Entonces muere igualmente, porque su habilidad no funciona
+
+## Feature: Cotilla (Aldeano) — BMR
+  «Cada día puedes hacer una afirmación pública: si es verdadera, alguien muere esa noche.»
+  Panel: botón "La afirmación era verdadera / falsa" al anochecer.
+
+  @panel
+  Escenario: El narrador juzga la afirmación
+    Dado el Cotilla que hizo una afirmación pública hoy
     Cuando llega la noche
-    Entonces el narrador elige un jugador que muere por la habilidad de la Cotilla
-
-  @narrador
-  Escenario: Declaración falsa
-    Dado la Cotilla declaró algo falso
-    Cuando llega la noche
-    Entonces nadie muere por esta habilidad
-
-## Feature: Cortesano (Aldeano)
-  «Una vez por partida, de noche: elige un ROL: ese jugador está borracho 3 noches y 3 días.»
-
-  @narrador
-  Escenario: Emborracha al Demonio por rol
-    Dado el Cortesano usa su habilidad y nombra "Zombuul"
-    Cuando el Zombuul está en juego
-    Entonces el jugador Zombuul queda borracho 3 noches y 3 días (fichas del narrador)
-
-  @narrador
-  Escenario: Nombra un rol que no está en juego
-    Dado el Cortesano nombra "Bufón" y no hay Bufón
-    Entonces nadie se emborracha y la habilidad queda gastada
-
-## Feature: Profesor (Aldeano)
-  «Una vez por partida, de noche*: elige un muerto. Si es Aldeano, revive.»
+    Entonces el panel pregunta si era verdadera
+    Y si el narrador responde que sí, elige quién muere
 
   @auto
-  Escenario: Revive a un Aldeano
-    Dado el Profesor sobrio usa su habilidad sobre un Monje muerto
-    Entonces el Monje vuelve a la vida y recupera su rol activo
+  Escenario: Cotilla envenenado
+    Dado el Cotilla envenenado
+    Entonces no muere nadie aunque la afirmación sea cierta
+
+## Feature: Cortesano (Aldeano) — BMR
+  «Una vez por partida, de noche, elige un personaje: está borracho 3 días y 3 noches.»
+  Panel: una vez — selector de personaje (no de jugador).
+
+  @panel
+  Escenario: Emborrachar un personaje
+    Cuando el Cortesano nombra un personaje
+    Entonces si está en juego, ese jugador queda borracho 3 días y 3 noches
+    Y la página lleva la cuenta y avisa al narrador cuando caduca
 
   @auto
-  Escenario: Elige a un no-Aldeano
-    Dado el Profesor elige a un Forastero muerto
-    Entonces no revive y la habilidad queda gastada
+  Escenario: El personaje no está en juego
+    Entonces no pasa nada y el uso se gasta
+
+  @auto
+  Escenario: Cortesano envenenado
+    Entonces no emborracha a nadie y el uso se gasta
+
+## Feature: Profesor (Aldeano) — BMR
+  «Una vez por partida, de noche*, elige un jugador muerto: si es Aldeano, revive.»
+  Panel: una vez — selector de muertos.
+
+  @panel
+  Escenario: Revivir a un Aldeano
+    Cuando el Profesor elige a un Aldeano muerto
+    Entonces vuelve a estar vivo con su habilidad
+    Y el uso queda gastado
+
+  @auto
+  Escenario: Elige a alguien que no es Aldeano
+    Entonces no revive y el uso se gasta
 
   @auto
   Escenario: Profesor envenenado
-    Dado el Profesor envenenado
-    Cuando usa su habilidad sobre un Aldeano muerto
-    Entonces no revive
+    Entonces nadie revive y el uso se gasta
 
-## Feature: Juglar (Aldeano)
-  «Si un Esbirro muere ejecutado, todos los demás están borrachos hasta el próximo anochecer.»
+## Feature: Juglar (Aldeano) — BMR
+  «Si un Esbirro muere ejecutado, todos menos los Viajeros están borrachos hasta el próximo anochecer.»
 
   @auto
-  Escenario: Esbirro ejecutado activa la borrachera colectiva
-    Dado el Juglar vivo y sobrio
-    Cuando el Asesino (Esbirro) es ejecutado hoy
-    Entonces al empezar la noche TODOS los demás jugadores (salvo Viajeros) quedan borrachos hasta el próximo anochecer
-    Y el Demonio no puede matar esa noche (está borracho)
+  Escenario: Esbirro ejecutado
+    Cuando un Esbirro muere por ejecución
+    Entonces todos los demás quedan borrachos hasta el próximo anochecer
+    Y la página coloca las fichas y avisa al narrador
 
   @auto
-  Escenario: Esbirro muerto de noche no activa nada
-    Dado el Juglar vivo
-    Cuando un Esbirro muere por ataque nocturno
-    Entonces nadie se emborracha
+  Escenario: Juglar envenenado
+    Entonces no pasa nada
 
-## Feature: Dama del Té (Aldeano)
-  «Si tus 2 vecinos vivos son buenos, no pueden morir.»
-
-  @narrador
-  Escenario: Vecinos buenos protegidos
-    Dado la Dama del Té con dos vecinos vivos buenos
-    Cuando el Demonio ataca a uno de ellos
-    Entonces el narrador ve el aviso de protección y el vecino no muere
-
-  @narrador
-  Escenario: Un vecino malvado rompe la protección
-    Dado que un vecino vivo de la Dama del Té es malvado
-    Cuando el Demonio ataca al otro vecino
-    Entonces el vecino muere con normalidad
-
-## Feature: Pacifista (Aldeano)
-  «Los jugadores buenos ejecutados pueden no morir.»
-
-  @narrador
-  Escenario: El narrador decide salvar
-    Dado el Pacifista vivo y sobrio
-    Cuando un jugador bueno es ejecutado
-    Entonces la página avisa al narrador que puede decidir que no muera (y revivirlo)
+## Feature: Dama del Té (Aldeano) — BMR
+  «Si tus dos vecinos vivos son buenos, no pueden morir.»
 
   @auto
-  Escenario: Pacifista muerto no salva
-    Dado el Pacifista muerto
-    Cuando un bueno es ejecutado
-    Entonces muere con normalidad y no hay aviso
-
-## Feature: Bufón / Fool (Aldeano)
-  «La primera vez que mueras, no mueres.»
+  Escenario: Ambos vecinos buenos
+    Dado los dos vecinos vivos de la Dama del Té son buenos
+    Entonces ninguno de los dos puede morir por ninguna causa
+    Y la página los marca con ficha
 
   @auto
-  Escenario: Sobrevive su primera muerte nocturna
-    Dado el Bufón sobrio que nunca ha muerto
-    Cuando el Demonio lo ataca
-    Entonces no muere y su habilidad queda gastada
-    Y el narrador recibe el aviso correspondiente
+  Escenario: Un vecino malvado
+    Entonces la protección no se aplica
 
   @auto
-  Escenario: La segunda muerte es real
-    Dado el Bufón que ya gastó su habilidad
-    Cuando vuelve a morir por cualquier causa
-    Entonces muere
+  Escenario: Dama del Té envenenada
+    Entonces sus vecinos mueren normalmente
+
+## Feature: Pacifista (Aldeano) — BMR
+  «Los Aldeanos ejecutados pueden no morir.»
+  Panel: al ejecutar a un Aldeano, botón "No muere".
+
+  @panel
+  Escenario: Salvar a un Aldeano ejecutado
+    Dado el Pacifista vivo y sano
+    Cuando se ejecuta a un Aldeano
+    Entonces el panel ofrece «Pacifista: ¿no muere?»
+    Y el narrador decide
 
   @auto
-  Escenario: Bufón envenenado muere a la primera
+  Escenario: Pacifista envenenado
+    Entonces la opción no aparece y el Aldeano muere
+
+## Feature: Bufón / Fool (Aldeano) — BMR
+  «La primera vez que fueras a morir, no mueres.»
+
+  @auto
+  Escenario: Primera muerte anulada
+    Cuando el Bufón fuera a morir por cualquier causa
+    Entonces no muere y el uso se gasta
+    Y la página avisa al narrador
+
+  @auto
+  Escenario: Segunda muerte
+    Entonces muere normalmente
+
+  @auto
+  Escenario: Bufón envenenado
     Dado el Bufón envenenado
-    Cuando el Demonio lo ataca
-    Entonces muere
+    Entonces muere a la primera y el uso **no** se gasta
 
-## Feature: Matón / Goon (Forastero)
-  «El primer jugador que te elija cada noche se emborracha y tú adoptas su alineación.»
+  @panel
+  Escenario: Aviso al matarlo a mano
+    Entonces el mini-panel avisa «Bufón: primera muerte anulada (se consumirá)»
 
-  @narrador
+## Feature: Matón / Goon (Forastero) — BMR
+  «El primero que te elija cada noche queda borracho, y tú cambias a su alineación.»
+
+  @auto
   Escenario: Un bueno lo elige
-    Dado el Monje elige al Matón esta noche
-    Entonces el Monje queda borracho hasta el anochecer y el Matón se vuelve bueno (sin cambio)
+    Cuando un Aldeano elige al Matón
+    Entonces ese Aldeano queda borracho
+    Y el Matón pasa a ser bueno
 
-  @narrador
-  Escenario: El Demonio lo elige
-    Dado el Pukka elige al Matón
-    Entonces el Pukka queda borracho (su veneno no aplica) y el Matón se vuelve MALVADO
+  @auto
+  Escenario: Un malvado lo elige
+    Entonces ese malvado queda borracho y el Matón pasa a ser malvado
 
-## Feature: Lunático (Forastero)
-  «Crees ser el Demonio. El Demonio sabe quién eres y a quién eliges.»
+  @panel
+  Escenario: El narrador ve el cambio de alineación
+    Entonces el mini-panel del Matón muestra su alineación actual y quién la cambió
+
+## Feature: Lunático (Forastero) — BMR
+  «Crees ser el Demonio, pero no lo eres. El Demonio sabe quién eres y a quién elegiste.»
 
   @auto
   Escenario: Cree ser el Demonio
-    Dado el Lunático en la bolsa
-    Cuando se reparten roles
-    Entonces el jugador ve un Demonio como su rol (believedRole)
-    Y no despierta con los malvados reales
+    Dado el Lunático en juego
+    Entonces ve un personaje de Demonio y recibe faroles como si lo fuera
+    Y sus ataques nocturnos **no** matan a nadie
 
-  @auto
-  Escenario: Sus ataques no matan
-    Dado el Lunático "ataca" a un jugador
-    Entonces nadie muere por esa elección
-    Y el Demonio real es informado de la elección del Lunático
+  @panel
+  Escenario: El narrador informa al Demonio real
+    Entonces el panel muestra al Demonio quién es el Lunático y a quién eligió
 
-## Feature: Manitas / Tinker (Forastero)
+  @panel
+  Escenario: El narrador ve la verdad
+    Entonces el mini-panel muestra «Real: Lunático · Cree ser: Diablillo»
+
+## Feature: Manitas / Tinker (Forastero) — BMR
   «Puedes morir en cualquier momento.»
+  Panel: botón "Matar al Manitas" siempre disponible.
 
-  @narrador
-  Escenario: El narrador puede matarlo cuando quiera
+  @panel
+  Escenario: El narrador lo mata cuando quiere
     Dado el Manitas vivo
-    Cuando el narrador decide que muere (botón matar)
-    Entonces muere sin necesidad de causa
+    Entonces el mini-panel ofrece matarlo en cualquier fase, de día o de noche
+    Y la página recuerda esa opción al narrador de vez en cuando
 
-## Feature: Hijo de la Luna (Forastero)
-  «Cuando sepas que moriste, elige públicamente 1 vivo: si es bueno, muere esa noche.»
+## Feature: Hijo de la Luna (Forastero) — BMR
+  «Cuando sepas que has muerto, elige en público un jugador vivo: si es bueno, muere esta noche.»
+  Panel: al morir — selector público.
 
-  @narrador
+  @panel
   Escenario: Elige a un bueno
-    Dado el Hijo de la Luna acaba de morir
-    Cuando elige públicamente a un jugador bueno
-    Entonces esa noche el narrador marca su muerte
+    Dado el Hijo de la Luna que acaba de saber que murió
+    Cuando elige en público a un jugador bueno
+    Entonces ese jugador muere esta noche
+    Y el narrador lo registra en el panel
 
-  @narrador
+  @auto
   Escenario: Elige a un malvado
-    Dado el Hijo de la Luna muerto elige a un malvado
-    Entonces nadie muere
-
-## Feature: Padrino (Esbirro)
-  «Primera noche: sabes qué Forasteros hay. Si un Forastero muere de día, esa noche eliges un jugador: muere. [-1 o +1 Forastero]»
+    Entonces no muere nadie
 
   @auto
-  Escenario: Conoce a los Forasteros
-    Dado el Padrino la primera noche
-    Entonces recibe la lista de roles Forastero en juego
+  Escenario: Envenenado
+    Entonces no muere nadie sea quien sea el elegido
+
+## Feature: Padrino (Esbirro) — BMR
+  «Empiezas sabiendo qué Forasteros hay. Si uno muere de día, elige un jugador esta noche: muere. [+1 o −1 Forastero]»
+  Panel: primera noche info; cada noche tras muerte de Forastero — 1 objetivo.
 
   @auto
-  Escenario: Mata tras ejecución de un Forastero
-    Dado que el Recluso (Forastero) fue ejecutado hoy
-    Cuando llega la noche
-    Entonces la página recuerda al narrador que el Padrino elige una víctima
-    Y el elegido muere (GODFATHER_KILL)
+  Escenario: Información inicial
+    Dado la primera noche
+    Entonces el Padrino recibe la lista de Forasteros en juego
 
-  @narrador
-  Escenario: Modificador de Forasteros en el montaje
-    Dado el Padrino seleccionado en el montaje
-    Entonces el narrador elige −1 o +1 Forastero en la distribución
-
-## Feature: Abogado del Diablo (Esbirro)
-  «Cada noche: elige un vivo (≠ anoche): si es ejecutado mañana, no muere.»
+  @panel
+  Escenario: Muere un Forastero de día
+    Cuando un Forastero muere durante el día
+    Entonces esa noche la página inserta al Padrino en la cola
+    Y elige un jugador que muere
 
   @auto
-  Escenario: Salva de la ejecución
-    Dado el Abogado del Diablo eligió a Ana anoche
-    Cuando Ana es ejecutada hoy
-    Entonces Ana NO muere (sigue ejecutada a efectos de "hubo ejecución")
-    Y la ficha de protección se consume
+  Escenario: Padrino envenenado
+    Entonces su ataque no mata
+
+## Feature: Abogado del Diablo (Esbirro) — BMR
+  «Cada noche elige un jugador vivo distinto del anterior: si es ejecutado mañana, no muere.»
+  Panel: cada noche — 1 objetivo, excluyendo el de anoche.
 
   @auto
-  Escenario: La protección caduca al anochecer
-    Dado Ana protegida por el Abogado hoy
-    Cuando no es ejecutada y llega la noche
-    Entonces la ficha desaparece
-
-## Feature: Asesino (Esbirro)
-  «Una vez por partida, de noche*: elige un jugador: muere aunque no debiera poder.»
+  Escenario: El protegido es ejecutado
+    Cuando el jugador elegido es ejecutado
+    Entonces no muere y el día termina igualmente
 
   @auto
-  Escenario: Ignora protecciones
-    Dado el Monje protege a Ana y el Posadero también
-    Cuando el Asesino elige a Ana
-    Entonces Ana muere
+  Escenario: No repite objetivo
+    Entonces el selector excluye al de la noche anterior
 
   @auto
-  Escenario: Ignora al Soldado y al Bufón... pero no al veneno propio
-    Dado el Asesino envenenado por el Cortesano
-    Cuando usa su tiro
-    Entonces nadie muere y la habilidad queda gastada
+  Escenario: Envenenado
+    Entonces el ejecutado muere normalmente
 
-## Feature: Mente Maestra (Esbirro)
-  «Si el Demonio muere por ejecución (terminando la partida), se juega 1 día más. Si alguien es ejecutado ese día, su equipo pierde.»
-
-  @auto
-  Escenario: El Demonio es ejecutado — la página NO termina la partida
-    Dado la Mente Maestra viva, sobria y sana
-    Y ningún otro Demonio ni Dama Escarlata elegible
-    Cuando el Demonio es nominado y ejecutado
-    Entonces la página NO muestra pantalla de victoria
-    Y NO anuncia que el Demonio murió
-    Y avisa en privado al narrador: "Mente Maestra: se juega 1 día más"
+## Feature: Asesino (Esbirro) — BMR
+  «Una vez por partida, de noche*, elige un jugador: muere, aunque no debiera.»
+  Panel: una vez — 1 objetivo, ignora protecciones.
 
   @auto
-  Escenario: El narrador mata al Demonio manualmente — misma espera
-    Dado la Mente Maestra viva y sobria
-    Cuando el narrador mata al Demonio con el botón de matar
-    Entonces la partida NO termina y se espera el día extra
+  Escenario: Mata pese a protecciones
+    Cuando el Asesino elige a un Soldado o a alguien protegido
+    Entonces muere igualmente
 
   @auto
-  Escenario: Día extra — ejecutan a un bueno
-    Dado el día extra de la Mente Maestra en curso
-    Cuando un jugador bueno es ejecutado (muera o no, p. ej. salvado por el Abogado del Diablo)
-    Entonces la página declara la victoria del MAL inmediatamente
+  Escenario: Asesino envenenado
+    Entonces nadie muere y el uso se gasta
+
+  @panel
+  Escenario: El panel avisa de que ignora protecciones
+    Entonces muestra «Este ataque ignora Monje, Soldado y Posadero»
+
+## Feature: Mente Maestra (Esbirro) — BMR
+  «Si el Demonio muere por ejecución, la partida sigue un día más. Si ese día se ejecuta a alguien, su equipo pierde.»
+  Ver la sección "Sucesión — Mente Maestra".
 
   @auto
-  Escenario: Día extra — ejecutan a un malvado
-    Dado el día extra en curso
-    Cuando un jugador malvado es ejecutado
-    Entonces la página declara la victoria del BIEN
+  Escenario: Aplaza el final
+    Cuando el Demonio muere sin otro sucesor
+    Entonces la página no anuncia nada y abre el día extra
 
   @auto
-  Escenario: Día extra — nadie es ejecutado
-    Dado el día extra en curso
-    Cuando el narrador inicia la noche sin que hubiera ejecución
-    Entonces la página declara la victoria del BIEN
+  Escenario: Mente Maestra envenenada
+    Dado la Mente Maestra envenenada cuando muere el Demonio
+    Entonces la partida termina normalmente
+
+## Feature: Zombuul (Demonio) — BMR
+  «Cada noche*, si nadie murió hoy, elige un jugador: muere. La primera vez que mueras, sigues vivo pero pareces muerto.»
+  Panel: cada noche* condicionada + control de las dos muertes.
 
   @auto
-  Escenario: Con 2 vivos durante el día extra la partida no termina por eso
-    Dado el Demonio muerto y el día extra en curso con 2 vivos
-    Entonces el Mal NO gana por "solo 2 vivos" (la habilidad prevalece)
+  Escenario: Solo ataca si nadie murió hoy
+    Dado que hoy hubo una ejecución
+    Entonces el Zombuul no despierta esta noche
 
   @auto
-  Escenario: Mente Maestra borracha no activa el día extra
-    Dado la Mente Maestra emborrachada por el Cortesano
-    Cuando el Demonio es ejecutado
-    Entonces el Bien gana inmediatamente (ejemplo canónico del Po)
+  Escenario: Primera muerte fingida
+    Cuando el Zombuul muere por primera vez
+    Entonces aparece muerto para todos
+    Y la página sigue contándolo como Demonio vivo
+    Y avisa al narrador de que hay que seguir despertándolo
 
-## Feature: Zombuul (Demonio)
-  «Cada noche*: si nadie murió de día, elige un jugador: muere. La 1ª vez que mueras, sigues vivo pero pareces muerto.»
+  @panel
+  Escenario: Segunda muerte real
+    Cuando el narrador vuelve a matarlo
+    Entonces muere de verdad y se aplica la cadena de sucesión
 
-  @auto
-  Escenario: Primera "muerte" por ejecución
-    Dado el Zombuul sano es ejecutado
-    Entonces aparece como muerto para todos
-    Y la partida NO termina (sigue siendo el Demonio vivo en secreto)
-    Y el narrador recibe el aviso "el Zombuul sigue vivo"
-    Y la Mente Maestra NO se activa (la partida no habría terminado)
-
-  @auto
-  Escenario: Sigue actuando "muerto"
-    Dado el Zombuul aparentemente muerto
-    Cuando llega la noche y nadie murió hoy de día
-    Entonces el narrador sigue resolviendo su ataque (panel del Zombuul)
+## Feature: Pukka (Demonio) — BMR
+  «Cada noche elige un jugador: queda envenenado. El envenenado anterior muere.»
+  Panel: cada noche — 1 objetivo; la página encadena veneno y muerte.
 
   @auto
-  Escenario: Segunda muerte es real
-    Dado el Zombuul aparentemente muerto
-    Cuando el narrador lo mata de verdad (segunda muerte)
-    Entonces el Demonio está muerto de verdad y se evalúa el fin de partida (Mente Maestra incluida)
-
-  @narrador
-  Escenario: Solo mata si nadie murió de día
-    Dado que hoy hubo una ejecución con muerte
-    Cuando llega la noche
-    Entonces el Zombuul no ataca (aviso ℹ en el panel)
-
-## Feature: Pukka (Demonio)
-  «Cada noche: elige un jugador: se envenena. El envenenado de anoche muere y queda sano.»
+  Escenario: Encadenado de veneno y muerte
+    Dado el Pukka que envenenó a Ana anoche
+    Cuando esta noche envenena a Bea
+    Entonces Ana muere y Bea queda envenenada
 
   @auto
-  Escenario: Cadena de veneno
-    Dado el Pukka envenenó a Ana anoche
-    Cuando esta noche elige a Beto
-    Entonces Ana muere y Beto queda envenenado
+  Escenario: Primera noche
+    Entonces solo envenena, sin muertes
 
   @auto
-  Escenario: Actúa desde la primera noche
-    Dado el Pukka la primera noche
-    Entonces está en la cola y envenena (nadie muere aún)
+  Escenario: Pukka envenenado
+    Entonces ni envenena ni mata
+
+## Feature: Shabaloth (Demonio) — BMR
+  «Cada noche* elige 2 jugadores: mueren. Un jugador que mataste ayer puede revivir.»
+  Panel: cada noche* — 2 objetivos + selector de resurrección.
 
   @auto
-  Escenario: Víctima protegida no muere pero sigue la cadena
-    Dado Ana envenenada por el Pukka anoche y protegida por el Posadero esta noche
-    Cuando el Pukka elige a Beto
-    Entonces Ana no muere y Beto queda envenenado
-
-## Feature: Shabaloth (Demonio)
-  «Cada noche*: elige 2 jugadores: mueren. Puede regurgitar (revivir) a uno de los que mató anoche.»
-
-  @auto
-  Escenario: Mata a dos por noche
-    Dado el Shabaloth la noche 2
-    Cuando elige a Ana y Beto sin protección
+  Escenario: Mata a dos
+    Cuando elige a dos jugadores sin protección
     Entonces ambos mueren
 
-  @auto
-  Escenario: Regurgita a una víctima de anoche
-    Dado el Shabaloth mató a Ana anoche
-    Cuando la página recuerda al narrador la regurgitación esta noche
-    Entonces el narrador puede revivir a Ana
+  @panel
+  Escenario: Revivir a una víctima de anoche
+    Entonces el narrador puede elegir revivir a uno de los muertos de la noche anterior
 
-## Feature: Po (Demonio)
-  «Cada noche*: puedes elegir un jugador: muere. Si anoche no elegiste, esta noche eliges 3.»
+## Feature: Po (Demonio) — BMR
+  «Cada noche* elige un jugador: muere. O no elijas a nadie y la próxima noche mata a 3.»
+  Panel: cada noche* — 1 objetivo o botón "No atacar".
 
-  @auto
-  Escenario: Noche sin ataque carga la furia
-    Dado el Po decide no atacar esta noche
-    Entonces la página registra el aviso "próxima noche ataca ×3"
+  @panel
+  Escenario: Carga el ataque
+    Cuando el Po no elige a nadie
+    Entonces la página marca «Po cargado» y avisa al narrador
+    Y la noche siguiente el panel pide 3 objetivos
 
   @auto
   Escenario: Ataque triple
-    Dado el Po no atacó anoche
-    Cuando esta noche elige a 3 jugadores
-    Entonces los 3 mueren (salvo protegidos)
+    Cuando el Po cargado elige a tres jugadores
+    Entonces los tres mueren y la carga se gasta
+
+---
+---
 
 # CAMPAÑA: SECTS & VIOLETS
 
-## Feature: Relojero (Aldeano)
-  «Primera noche: distancia (en asientos) entre el Demonio y su Esbirro más cercano.»
+## Feature: Relojero (Aldeano) — S&V
+  «Empiezas sabiendo cuántos asientos hay entre el Demonio y su Esbirro más cercano.»
 
   @auto
-  Escenario: Distancia correcta
-    Dado el Vortox con un Esbirro a 3 asientos
-    Cuando el Relojero recibe su número la primera noche
-    Entonces recibe "3"
+  Escenario: Distancia calculada
+    Dado la primera noche y el Relojero sobrio
+    Entonces la página calcula la distancia mínima en asientos y la muestra ya resuelta al narrador
 
   @auto
-  Escenario: Con Vortox la información es falsa
-    Dado el Vortox como Demonio
-    Cuando el Relojero recibe su número
-    Entonces el número es FORZOSAMENTE falso
+  Escenario: Envenenado
+    Entonces recibe un número falso pero posible
 
-## Feature: Soñador (Aldeano)
-  «Cada noche: elige un jugador: recibes 1 rol bueno y 1 malvado; uno es el correcto.»
-
-  @narrador
-  Escenario: Sondea a un malvado
-    Dado el Soñador elige a la Bruja
-    Cuando el narrador resuelve el paso
-    Entonces la página propone un par (rol bueno falso + "Bruja")
-
-  @narrador
-  Escenario: Soñador envenenado
-    Dado el Soñador envenenado
-    Entonces el par mostrado puede no contener el rol real
-
-## Feature: Encantador de Serpientes (Aldeano)
-  «Cada noche: elige un vivo. Si es el Demonio: intercambiáis rol y alineación; el nuevo Encantador queda envenenado.»
-
-  @narrador
-  Escenario: Acierta al Demonio
-    Dado el Encantador elige al No Dashii
-    Cuando el narrador confirma el intercambio
-    Entonces el Encantador se vuelve No Dashii malvado
-    Y el viejo Demonio se vuelve Encantador bueno envenenado permanentemente
+## Feature: Soñador (Aldeano) — S&V
+  «Cada noche elige un jugador: recibes un personaje bueno y uno malvado, uno de ellos es el suyo.»
+  Panel: cada noche — 1 objetivo + los dos personajes propuestos, editables.
 
   @auto
-  Escenario: Elige a un no-Demonio
-    Dado el Encantador elige a un Aldeano
+  Escenario: Par correcto
+    Dado el Soñador sobrio eligiendo a un jugador bueno
+    Entonces recibe su personaje real más un personaje malvado señuelo
+
+  @auto
+  Escenario: Envenenado
+    Entonces ninguno de los dos personajes tiene por qué ser el suyo
+
+## Feature: Encantador de Serpientes (Aldeano) — S&V
+  «Cada noche elige un jugador: si es el Demonio, intercambiáis personaje y alineación, y él queda envenenado.»
+  Panel: cada noche — 1 objetivo; la página avisa si acierta.
+
+  @auto
+  Escenario: Acierta con el Demonio
+    Cuando elige al Demonio
+    Entonces intercambian personaje y alineación
+    Y el nuevo Aldeano queda envenenado
+    Y la página avisa al narrador de quién es ahora el Demonio
+
+  @auto
+  Escenario: Falla
     Entonces no pasa nada
 
-## Feature: Matemático (Aldeano)
-  «Cada noche: cuántas habilidades funcionaron anormalmente desde el amanecer.»
+  @auto
+  Escenario: Envenenado
+    Entonces no hay intercambio aunque acierte
 
-  @narrador
-  Escenario: Cuenta anomalías
-    Dado que el Soldado envenenado murió por el Demonio hoy
-    Cuando el Matemático despierta
-    Entonces recibe al menos "1"
-
-  @narrador
-  Escenario: Sin anomalías
-    Dado un día sin interferencias entre habilidades
-    Entonces el Matemático recibe "0"
-
-## Feature: Niña de las Flores (Aldeano)
-  «Cada noche*: sabes si un Demonio votó hoy.»
-
-  @narrador
-  Escenario: El Demonio votó
-    Dado que el Vigormortis votó en una nominación hoy
-    Cuando la Niña de las Flores despierta
-    Entonces recibe "SÍ"
-
-  @narrador
-  Escenario: El Demonio no votó
-    Dado que ningún Demonio votó hoy
-    Entonces recibe "NO"
-
-## Feature: Pregonero (Aldeano)
-  «Cada noche*: sabes si algún Esbirro nominó hoy.»
-
-  @narrador
-  Escenario: Un Esbirro nominó
-    Dado que la Bruja nominó hoy
-    Entonces el Pregonero recibe "SÍ"
-
-  @narrador
-  Escenario: Nadie del mal nominó
-    Dado que solo nominaron buenos hoy
-    Entonces recibe "NO"
-
-## Feature: Oráculo (Aldeano)
-  «Cada noche*: sabes cuántos muertos son malvados.»
-
-  @narrador
-  Escenario: Cuenta muertos malvados
-    Dado 2 malvados y 1 bueno muertos
-    Cuando el Oráculo despierta
-    Entonces recibe "2"
-
-  @narrador
-  Escenario: Oráculo con Vortox
-    Dado el Vortox en juego
-    Entonces el número recibido es falso
-
-## Feature: Erudito (Aldeano)
-  «Cada día: visita al narrador: 2 afirmaciones, 1 verdadera y 1 falsa.»
-
-  @narrador
-  Escenario: Visita diaria
-    Dado el Erudito visita al narrador de día
-    Entonces el narrador le da 1 verdad y 1 mentira (fuera de la página, con apoyo del panel)
-
-  @narrador
-  Escenario: Con Vortox ambas son falsas
-    Dado el Vortox en juego
-    Entonces las 2 afirmaciones del Erudito son falsas
-
-## Feature: Costurera (Aldeano)
-  «Una vez por partida, de noche: elige 2 jugadores (no tú): sabes si son de la misma alineación.»
-
-  @narrador
-  Escenario: Compara dos jugadores
-    Dado la Costurera elige a un Aldeano y a la Bruja
-    Entonces recibe "NO son de la misma alineación"
-
-  @narrador
-  Escenario: El Recluso puede registrar como malvado
-    Dado la Costurera elige al Recluso y a la Bruja
-    Entonces puede recibir "SÍ"
-
-## Feature: Filósofo (Aldeano)
-  «Una vez por partida, de noche: elige un rol bueno: ganas su habilidad; si está en juego, ese jugador queda borracho.»
-
-  @narrador
-  Escenario: Gana una habilidad no en juego
-    Dado el Filósofo elige "Empática" y no hay Empática
-    Entonces desde ahora actúa como Empática cada noche
-
-  @narrador
-  Escenario: Elige una habilidad en juego
-    Dado el Filósofo elige "Soñador" y hay Soñador en juego
-    Entonces el Soñador real queda borracho permanentemente
-    Y el Filósofo usa la habilidad del Soñador
-
-## Feature: Artista (Aldeano)
-  «Una vez por partida, de día: 1 pregunta de sí/no al narrador.»
-
-  @narrador
-  Escenario: Pregunta honesta
-    Dado el Artista hace su pregunta en privado
-    Entonces el narrador responde "sí", "no" o "no lo sé" con honestidad
-    Y la habilidad queda gastada (ficha SIN HABILIDAD)
-
-  @narrador
-  Escenario: Pregunta no contestable
-    Dado el Artista pregunta algo que no es de sí/no
-    Entonces el narrador le pide reformular sin gastar la habilidad
-
-## Feature: Malabarista (Aldeano)
-  «Día 1: adivina en público hasta 5 roles. Esa noche sabes cuántos acertaste.»
-
-  @narrador
-  Escenario: Cuenta aciertos
-    Dado el Malabarista adivinó 5 roles públicamente el día 1
-    Cuando despierta esa noche
-    Entonces recibe el número de aciertos exactos
-
-  @narrador
-  Escenario: Con Vortox el número es falso
-    Dado el Vortox en juego
-    Entonces el número de aciertos recibido es falso
-
-## Feature: Sabio (Aldeano)
-  «Si el Demonio te mata, sabes que es 1 de 2 jugadores.»
-
-  @narrador
-  Escenario: Muere a manos del Demonio
-    Dado el Fang Gu mata al Sabio esta noche
-    Entonces el Sabio recibe 2 nombres, uno de los cuales es el Demonio
+## Feature: Matemático (Aldeano) — S&V
+  «Cada noche descubres cuántos jugadores tuvieron su habilidad alterada hoy.»
 
   @auto
-  Escenario: Muere ejecutado
-    Dado el Sabio es ejecutado de día
+  Escenario: Cuenta habilidades alteradas
+    Entonces la página cuenta cuántos jugadores no funcionaron por veneno, borrachera o anulación
+    Y muestra el número calculado al narrador
+
+  @auto
+  Escenario: Envenenado
+    Entonces recibe un número falso
+
+## Feature: Niña de las Flores (Aldeano) — S&V
+  «Cada noche* descubres si el Demonio votó hoy.»
+
+  @auto
+  Escenario: El Demonio votó
+    Cuando el Demonio votó en alguna nominación de hoy
+    Entonces la Niña recibe "sí"
+
+  @auto
+  Escenario: Envenenada
+    Entonces recibe una respuesta que puede ser falsa
+
+## Feature: Pregonero (Aldeano) — S&V
+  «Cada noche* descubres si un Esbirro nominó hoy.»
+
+  @auto
+  Escenario: Un Esbirro nominó
+    Entonces el Pregonero recibe "sí"
+
+  @auto
+  Escenario: Envenenado
+    Entonces la respuesta puede ser falsa
+
+## Feature: Oráculo (Aldeano) — S&V
+  «Cada noche* descubres cuántos jugadores muertos son malvados.»
+
+  @auto
+  Escenario: Cuenta muertos malvados
+    Entonces la página calcula el número y lo muestra al narrador
+
+  @auto
+  Escenario: Envenenado
+    Entonces recibe un número falso
+
+## Feature: Erudito (Aldeano) — S&V
+  «Cada día puedes visitar al Narrador: te da dos afirmaciones, una verdadera y otra falsa.»
+  Panel: `@privado` — dos campos de texto libres.
+
+  @panel @privado
+  Escenario: El narrador redacta las dos afirmaciones
+    Dado el Erudito que se acerca al narrador de día
+    Cuando el narrador abre su pestaña "Habilidad"
+    Entonces escribe dos frases y marca cuál es la verdadera
+    Y la página se las envía en privado, sin decirle cuál es cuál
+
+  @panel
+  Escenario: Erudito envenenado
+    Entonces el panel avisa al narrador de que puede escribir dos frases falsas
+
+## Feature: Costurera (Aldeano) — S&V
+  «Una vez por partida, de noche, elige 2 jugadores: descubres si son de la misma alineación.»
+  Panel: una vez — 2 objetivos + respuesta sí/no forzable.
+
+  @auto
+  Escenario: Misma alineación
+    Cuando elige a dos buenos o a dos malvados
+    Entonces recibe "sí"
+
+  @auto
+  Escenario: Envenenada
+    Entonces la respuesta puede ser falsa y el uso se gasta
+
+## Feature: Filósofo (Aldeano) — S&V
+  «Una vez por partida, de noche, nombra un personaje bueno: ganas su habilidad. Si está en juego, ese jugador queda borracho.»
+  Panel: una vez — selector de personaje bueno.
+
+  @panel
+  Escenario: Roba una habilidad
+    Cuando el Filósofo nombra un personaje bueno
+    Entonces adquiere esa habilidad desde ahora
+    Y si ese personaje está en juego, su portador queda borracho el resto de la partida
+    Y el narrador ve en el panel ambas fichas colocadas
+
+  @panel
+  Escenario: El Filósofo entra en la cola con su nueva habilidad
+    Dado el Filósofo que robó al Monje
+    Entonces desde esa noche aparece en la cola en la posición del Monje
+
+  @auto
+  Escenario: Filósofo envenenado
+    Entonces no gana ninguna habilidad y el uso se gasta
+
+## Feature: Artista (Aldeano) — S&V
+  «Una vez por partida, de día, pregunta en privado al Narrador cualquier cosa de sí o no.»
+  Panel: `@privado` — campo de pregunta + botones SÍ / NO / NO LO SÉ.
+
+  @panel @privado
+  Escenario: El narrador responde en privado
+    Dado el Artista que hace su pregunta
+    Entonces el narrador la registra en el panel y responde sí, no, o "no lo sé"
+    Y solo el Artista recibe la respuesta
+    Y el uso queda gastado
+
+  @panel
+  Escenario: Artista envenenado
+    Entonces el panel avisa de que la respuesta debería ser falsa
+
+## Feature: Malabarista (Aldeano) — S&V
+  «Tu primer día puedes decir en público hasta 5 conjeturas de jugador y personaje. Esa noche sabes cuántas acertaste.»
+  Panel: registro de las conjeturas + número calculado.
+
+  @panel
+  Escenario: Registrar las conjeturas
+    Dado el Malabarista haciendo sus conjeturas en público
+    Entonces el narrador las anota en el panel como pares jugador–personaje
+
+  @auto
+  Escenario: Recuento nocturno
+    Cuando llega la noche
+    Entonces la página cuenta los aciertos y muestra el número al narrador
+
+  @auto
+  Escenario: Envenenado
+    Entonces recibe un número falso
+
+## Feature: Sabio (Aldeano) — S&V
+  «Si el Demonio te mata, descubres 2 jugadores y uno de ellos es el Demonio.»
+  Panel: al morir por el Demonio — 2 nombres, editables.
+
+  @auto
+  Escenario: Muere por el Demonio
+    Cuando el Demonio mata al Sabio
+    Entonces recibe dos nombres y uno es el Demonio real
+
+  @auto
+  Escenario: Muere por otra causa
     Entonces no recibe nada
 
-## Feature: Mutante (Forastero)
-  «Si finges ser Forastero (estás "loco"), puedes ser ejecutado.»
+  @auto
+  Escenario: Envenenado
+    Entonces los dos nombres pueden ser falsos
 
-  @narrador
-  Escenario: Revela ser Forastero
-    Dado el Mutante dice en público que es un Forastero
-    Entonces el narrador puede ejecutarlo directamente (botón matar + anuncio)
+## Feature: Mutante (Forastero) — S&V
+  «Si hablas de que eres un Forastero, puedes ser ejecutado.»
+  Panel: botón "Ejecutar al Mutante" siempre disponible.
 
-  @narrador
-  Escenario: Se mantiene oculto
-    Dado el Mutante finge ser Aldeano toda la partida
-    Entonces nunca es ejecutado por su habilidad
+  @panel
+  Escenario: El Mutante habla de más
+    Dado el Mutante que ha dicho en público que es Forastero
+    Entonces el narrador puede ejecutarlo desde el mini-panel en cualquier momento
+    Y la página lo registra como ejecución del día
 
-## Feature: Encanto / Sweetheart (Forastero)
-  «Cuando mueres, 1 jugador queda borracho a partir de ese momento.»
+## Feature: Encanto / Sweetheart (Forastero) — S&V
+  «Cuando mueres, un jugador queda borracho el resto de la partida.»
+  Panel: al morir — selector de quién queda borracho.
 
-  @narrador
-  Escenario: Borrachera permanente al morir
-    Dado el Encanto muere (de día o de noche)
-    Entonces el narrador elige un jugador que queda borracho el resto de la partida
-    Y la página se lo recuerda con un pendiente
+  @panel
+  Escenario: Elegir al borracho permanente
+    Cuando el Encanto muere por cualquier causa
+    Entonces el panel pide al narrador elegir un jugador
+    Y ese jugador queda borracho de forma permanente
 
-## Feature: Barbero (Forastero)
-  «Si mueres hoy o esta noche, el Demonio puede intercambiar los roles de 2 jugadores (no otro Demonio).»
+## Feature: Barbero (Forastero) — S&V
+  «Si mueres hoy o esta noche, el Demonio puede intercambiar los personajes de 2 jugadores.»
+  Panel: se activa en cuanto el Barbero muere; el paso se inserta en la cola nocturna.
 
-  @narrador
-  Escenario: El Demonio intercambia
-    Dado el Barbero murió hoy
-    Cuando llega la noche
-    Entonces el Demonio puede elegir 2 jugadores que intercambian roles (la alineación NO cambia)
-    Y cada uno es informado de su nuevo rol
+  @auto
+  Escenario: La muerte del Barbero abre el paso nocturno
+    Cuando el Barbero muere de día o de noche
+    Entonces la página coloca la ficha «Corte de pelo esta noche»
+    Y inserta un paso del Demonio en la cola de esa noche
+    Y avisa al narrador de que no cierre la noche sin resolverlo
 
-  @narrador
+  @panel
+  Escenario: El Demonio intercambia dos personajes
+    Dado el paso del Barbero abierto
+    Cuando el narrador abre el panel y elige a dos jugadores
+    Entonces esos dos intercambian personaje
+    Y **cada uno conserva su alineación original**
+    Y cada uno recibe el aviso «Tu personaje ha cambiado: ahora eres X»
+    Y la ficha «Corte de pelo» desaparece
+
+  @panel
   Escenario: El Demonio declina
-    Dado el Barbero murió hoy
-    Cuando el Demonio niega con la cabeza
-    Entonces no hay intercambio
+    Cuando el narrador pulsa "El Demonio declina"
+    Entonces no hay intercambio y la ficha desaparece
 
-## Feature: Torpe / Klutz (Forastero)
-  «Cuando sepas que moriste, elige en público 1 vivo: si es malvado, tu equipo pierde.»
+  @panel
+  Escenario: El Demonio se intercambia a sí mismo
+    Cuando el intercambio incluye al propio Demonio
+    Entonces el otro jugador pasa a ser el Demonio y el antiguo Demonio pasa a su personaje
+    Y la página aplica la cadena de sucesión sin terminar la partida
+    Y avisa al narrador de quién es ahora el Demonio
 
-  @narrador
-  Escenario: Elige a un malvado
-    Dado el Torpe acaba de morir y elige públicamente a la Bruja
-    Entonces el narrador declara la victoria del Mal (DECLARE_WINNER)
+  @panel
+  Escenario: Intercambio con un jugador muerto
+    Dado el Barbero muerto y un Encantador de Serpientes vivo
+    Cuando el Demonio los intercambia
+    Entonces queda un Barbero vivo y un Encantador de Serpientes muerto
 
-  @narrador
-  Escenario: Elige a un bueno
-    Dado el Torpe muerto elige a un Aldeano
-    Entonces la partida continúa
+  @panel
+  Escenario: El Demonio está muerto cuando muere el Barbero
+    Dado que ya no hay Demonio vivo que pueda elegir
+    Entonces el panel sigue disponible **para el narrador**
+    Y el narrador elige el intercambio en nombre del Demonio, o declina
 
-## Feature: Gemela Malvada (Forastero)
-  «Tú y un jugador de alineación opuesta os conocéis. Si el gemelo bueno es ejecutado, gana el Mal. El Bien no puede ganar mientras ambos vivan.»
+  @auto
+  Escenario: Se transformó en Barbero después de morir
+    Dado un jugador que murió y **luego** pasó a ser el Barbero
+    Entonces no hay intercambio esa noche
+
+  @auto
+  Escenario: Barbero envenenado al morir
+    Entonces no se abre ningún paso de intercambio
+
+## Feature: Torpe / Klutz (Forastero) — S&V
+  «Cuando sepas que has muerto, elige en público un jugador vivo: si es malvado, tu equipo pierde.»
+  Panel: al morir — selector público.
+
+  @panel
+  Escenario: El Torpe elige a un malvado
+    Dado el Torpe que acaba de saber que murió
+    Cuando elige en público a un jugador malvado
+    Entonces **el equipo del Torpe pierde** la partida de inmediato
+
+  @panel
+  Escenario: El Torpe elige a un bueno
+    Entonces no pasa nada y la partida continúa
+
+  @auto
+  Escenario: Torpe envenenado
+    Dado el Torpe envenenado eligiendo a un malvado
+    Entonces su equipo **no** pierde
+
+  @panel
+  Escenario: El narrador espera la elección
+    Dado el Torpe muerto sin haber elegido
+    Entonces el aviso sigue pendiente en el panel hasta que el narrador lo resuelva
+
+## Feature: Gemela Malvada (Esbirro) — S&V
+  «Tú y un jugador contrario sabéis quién es el otro. Si el bueno es ejecutado, ganan los malvados.»
+  Panel: primera noche — emparejamiento.
 
   @auto
   Escenario: Se conocen la primera noche
-    Dado la Gemela Malvada en juego con su gemelo elegido en el montaje
-    Cuando se resuelve la primera noche
-    Entonces ambos jugadores se ven mutuamente (nombre y rol contrario)
+    Entonces ambos gemelos reciben el nombre del otro y su personaje
 
   @auto
-  Escenario: Ejecutan al gemelo bueno
-    Dado la pareja de gemelos definida y la gemela malvada VIVA y sana
-    Cuando el gemelo bueno es ejecutado
-    Entonces la página declara la victoria del Mal
+  Escenario: El gemelo bueno es ejecutado
+    Cuando el gemelo bueno muere por ejecución
+    Entonces ganan los malvados
 
-  @narrador
-  Escenario: El Bien no gana con ambos vivos
-    Dado ambos gemelos vivos
-    Cuando el Demonio muere
-    Entonces el narrador debe recordar que el Bien no puede ganar (aviso en pendientes)
+  @panel
+  Escenario: Aviso al nominar al gemelo bueno
+    Entonces el panel avisa «⚠ Gemelo bueno: si lo ejecutan, ganan los malos»
 
-## Feature: Bruja (Esbirro)
-  «Cada noche: maldice a un jugador. Si nomina mañana, muere. Con 3 vivos pierde la habilidad.»
+## Feature: Bruja (Esbirro) — S&V
+  «Cada noche elige un jugador: si nomina mañana, muere. Con 3 o menos vivos pierdes tu habilidad.»
+  Panel: cada noche — 1 objetivo; ficha de maldición.
 
   @auto
-  Escenario: El maldito nomina y muere
-    Dado la Bruja sana maldijo a Ana anoche
-    Cuando Ana nomina hoy
-    Entonces Ana muere en el acto (la nominación sigue su curso)
+  Escenario: El maldito nomina
+    Cuando el jugador maldito nomina a alguien
+    Entonces muere al instante y la maldición se gasta
 
   @auto
-  Escenario: El maldito no nomina
-    Dado Ana maldita hoy
-    Cuando Ana no nomina en todo el día
-    Entonces no muere y la maldición se recoloca la noche siguiente
-
-  @auto
-  Escenario: Con 3 vivos la maldición no mata
-    Dado exactamente 3 jugadores vivos
-    Cuando el maldito nomina
-    Entonces NO muere (la Bruja perdió su habilidad)
+  Escenario: Con 3 o menos vivos
+    Dado 3 jugadores vivos
+    Entonces la maldición no mata a nadie
 
   @auto
   Escenario: Bruja envenenada
-    Dado la Bruja envenenada esta noche pasada
-    Cuando su maldito nomina
-    Entonces no muere
+    Entonces el maldito nomina sin morir
 
-## Feature: Descerebrado / Cerenovus (Esbirro)
-  «Cada noche: elige jugador + rol bueno: mañana está "loco" como ese rol o puede ser ejecutado.»
+## Feature: Descerebrado / Cerenovus (Esbirro) — S&V
+  «Cada noche elige un jugador y un personaje: está loco de ser ese personaje mañana o puede ser ejecutado.»
+  Panel: cada noche — 1 objetivo + selector de personaje.
 
-  @narrador
-  Escenario: Impone la locura
-    Dado el Descerebrado elige a Ana como "Sabio"
-    Cuando amanece
-    Entonces Ana debe fingir ser el Sabio todo el día
-    Y si no lo hace, el narrador puede ejecutarla
+  @panel
+  Escenario: Volver loco a un jugador
+    Cuando el Descerebrado elige jugador y personaje
+    Entonces ese jugador recibe «Mañana debes afirmar que eres X»
+    Y la página usa el modo "solo rol creído" para mostrárselo
 
-  @narrador
-  Escenario: La locura cambia de objetivo
-    Dado el Descerebrado eligió a Beto esta noche
-    Entonces la locura de Ana termina y empieza la de Beto
+  @panel
+  Escenario: El loco no cumple
+    Dado un jugador que no actuó como el personaje impuesto
+    Entonces el narrador puede ejecutarlo desde el mini-panel
 
-## Feature: Brujo del Caldero / Pit-Hag (Esbirro)
-  «Cada noche*: elige jugador + rol (no en juego): se transforma. Si crea un Demonio, las muertes de esa noche son arbitrarias.»
+  @auto
+  Escenario: Envenenado
+    Entonces el jugador no recibe ninguna locura
 
-  @narrador
-  Escenario: Transforma a un jugador
-    Dado el Brujo del Caldero elige a Ana → "Bufón" (no en juego)
-    Entonces Ana se convierte en el Bufón (misma alineación) y es informada
+## Feature: Brujo del Caldero / Pit-Hag (Esbirro) — S&V
+  «Cada noche elige un jugador y un personaje: se convierte en ese personaje. Si creas un Demonio, esa noche muere alguien.»
+  Panel: cada noche — 1 objetivo + selector de cualquier personaje.
 
-  @narrador
-  Escenario: Crea un Demonio
-    Dado el Brujo del Caldero convierte a un malvado en Vortox
-    Entonces el narrador decide arbitrariamente las muertes de esta noche
-    Y la página muestra el aviso correspondiente
+  @panel
+  Escenario: Cambiar el personaje de un jugador
+    Cuando el Brujo elige jugador y personaje
+    Entonces ese jugador pasa a ser ese personaje
+    Y la página usa el cambio de rol en vivo, avisando al afectado
 
-  @narrador
-  Escenario: Rol ya en juego
-    Dado el Brujo del Caldero elige un rol que YA está en juego
+  @panel
+  Escenario: Crear un Demonio
+    Cuando el personaje elegido es un Demonio
+    Entonces se crea ese Demonio
+    Y la página elige al azar un jugador que muere esa noche
+    Y avisa al narrador de que ahora hay más de un Demonio
+
+  @auto
+  Escenario: El personaje ya está en juego
     Entonces no pasa nada
 
-## Feature: Fang Gu (Demonio)
-  «Cada noche*: elige un jugador: muere. El 1er Forastero que mates se convierte en Fang Gu y tú mueres. [+1 Forastero]»
+  @auto
+  Escenario: Envenenado
+    Entonces nadie cambia de personaje
+
+## Feature: Fang Gu (Demonio) — S&V
+  «Cada noche* elige un jugador: muere. El primer Forastero elegido se convierte en Fang Gu y tú mueres. [+1 Forastero]»
+  Panel: cada noche* — 1 objetivo + control de la conversión.
+
+  @panel
+  Escenario: Ataca al primer Forastero
+    Cuando el Fang Gu ataca a un Forastero por primera vez
+    Entonces ese Forastero se convierte en Fang Gu malvado
+    Y el Fang Gu original muere
+    Y **la partida continúa** con el nuevo Demonio
 
   @auto
-  Escenario: Salta al primer Forastero
-    Dado el Fang Gu ataca al Mutante (Forastero) por primera vez
-    Entonces el Mutante se convierte en el nuevo Fang Gu malvado
-    Y el viejo Fang Gu muere
-    Y la partida continúa (hay Demonio vivo)
+  Escenario: Segundo Forastero atacado
+    Entonces muere normalmente, sin conversión
 
   @auto
-  Escenario: Ataque normal a no-Forastero
-    Dado el Fang Gu ataca a un Aldeano
-    Entonces el Aldeano muere con normalidad
+  Escenario: Fang Gu envenenado
+    Entonces no hay conversión ni muerte
+
+## Feature: No Dashii (Demonio) — S&V
+  «Cada noche* elige un jugador: muere. Tus dos Aldeanos vecinos vivos están envenenados.»
+  Panel: cada noche* — 1 objetivo; el veneno de vecinos se recalcula solo.
 
   @auto
-  Escenario: Solo salta una vez
-    Dado que el salto ya ocurrió antes
-    Cuando el nuevo Fang Gu ataca a otro Forastero
-    Entonces el Forastero simplemente muere
+  Escenario: Vecinos envenenados de forma continua
+    Entonces los dos Aldeanos vivos más cercanos al No Dashii están siempre envenenados
+    Y la página recoloca las fichas cuando alguien muere
 
   @auto
-  Escenario: Montaje +1 Forastero
-    Dado el Fang Gu seleccionado en el montaje
-    Entonces la distribución tiene 1 Forastero extra
+  Escenario: El veneno de vecinos se mueve
+    Cuando muere un vecino envenenado
+    Entonces el siguiente Aldeano vivo pasa a estar envenenado
 
-## Feature: No Dashii (Demonio)
-  «Cada noche*: elige un jugador: muere. Tus 2 Aldeanos vecinos están envenenados.»
-
-  @auto
-  Escenario: Mata de noche
-    Dado el No Dashii la noche 2
-    Cuando ataca a un jugador sin protección
-    Entonces muere
-
-  @narrador
-  Escenario: Vecinos Aldeanos envenenados permanentemente
-    Dado el No Dashii sentado entre dos Aldeanos
-    Entonces el narrador mantiene fichas de veneno en ambos vecinos Aldeanos
-    Y si el vecino muere, el veneno pasa al siguiente Aldeano vivo en esa dirección
-
-## Feature: Vortox (Demonio)
-  «Cada noche*: elige un jugador: muere. La info de los Aldeanos es falsa. Cada día sin ejecución, gana el Mal.»
+## Feature: Vortox (Demonio) — S&V
+  «Cada noche* elige un jugador: muere. Toda la información de los Aldeanos es falsa. Si nadie muere ejecutado, ganan los malvados.»
 
   @auto
-  Escenario: Día sin ejecución = victoria del Mal
+  Escenario: Toda la información es falsa
     Dado el Vortox vivo y sano
-    Cuando el narrador inicia la noche sin que hubiera ejecución hoy
-    Entonces la página declara la victoria del Mal automáticamente
+    Entonces todos los Aldeanos reciben información falsa, aunque estén sanos
+    Y el panel del narrador lo indica en cada paso
 
   @auto
-  Escenario: Información forzosamente falsa
-    Dado el Vortox en juego
-    Cuando cualquier Aldeano recibe información
-    Entonces la información es falsa (no aleatoria: nunca verdadera)
+  Escenario: Día sin ejecución
+    Cuando termina un día sin que nadie muera ejecutado
+    Entonces ganan los malvados
+
+## Feature: Vigormortis (Demonio) — S&V
+  «Cada noche* elige un jugador: muere. Los Esbirros que mates conservan su habilidad y envenenan a un Aldeano vecino. [−1 Forastero]»
+  Panel: cada noche* — 1 objetivo + control de Esbirros conservados.
 
   @auto
-  Escenario: Vortox ejecutado
-    Dado el Vortox es ejecutado
-    Entonces se aplican las reglas normales de muerte del Demonio (Dama Escarlata / Mente Maestra / fin de partida)
+  Escenario: Mata a un Esbirro
+    Cuando el Vigormortis mata a un Esbirro
+    Entonces ese Esbirro muerto conserva su habilidad
+    Y la página lo mantiene en la cola nocturna
+    Y envenena a un Aldeano vecino suyo
 
-## Feature: Vigormortis (Demonio)
-  «Cada noche*: elige un jugador: muere. Los Esbirros que mates conservan su habilidad y envenenan a 1 Aldeano vecino. [-1 Forastero]»
-
-  @auto
-  Escenario: Mata a un Esbirro que sigue activo
-    Dado el Vigormortis mata a la Bruja
-    Entonces la Bruja muere pero CONSERVA su habilidad (marca vigormortisAlive)
-    Y un Aldeano vecino de la Bruja queda envenenado (narrador coloca la ficha)
+  @panel
+  Escenario: El narrador ve qué muertos siguen activos
+    Entonces el mini-panel de esos Esbirros muestra la ficha «Habilidad conservada por Vigormortis»
 
   @auto
-  Escenario: Montaje -1 Forastero
-    Dado el Vigormortis seleccionado en el montaje
-    Entonces la distribución tiene 1 Forastero menos
+  Escenario: Muere el Vigormortis
+    Entonces se aplica la cadena de sucesión
+    Y el narrador decide si los Esbirros conservados pierden su habilidad
 
-  @auto
-  Escenario: Mata a un Aldeano normal
-    Dado el Vigormortis ataca a un Aldeano
-    Entonces muere sin efectos extra
+---
+---
 
 # CAMPAÑA: THE CAROUSEL
 
-## Feature: Acróbata (Aldeano)
-  «Cada noche*: elige un jugador. Si está o se vuelve borracho/envenenado esta noche, mueres.»
+## Feature: Acróbata (Aldeano) — Carousel
+  «Cada noche* elige un jugador: si está o se vuelve borracho o envenenado esta noche, mueres.»
+  Panel: cada noche* — 1 objetivo; la página comprueba el estado al cerrar la noche.
 
   @auto
-  Escenario: Elige a un jugador borracho
-    Dado el Acróbata elige a un jugador con ficha de borracho o veneno
+  Escenario: El elegido está afectado
+    Cuando el Acróbata elige a alguien borracho o envenenado
     Entonces el Acróbata muere esa noche
 
   @auto
-  Escenario: Elige a un jugador sobrio y sano
-    Dado el Acróbata elige a un jugador limpio
-    Entonces no pasa nada
+  Escenario: El elegido se vuelve afectado después
+    Cuando el elegido queda envenenado más tarde esa misma noche
+    Entonces el Acróbata muere igualmente
 
   @auto
-  Escenario: Acróbata envenenado no muere por su habilidad
-    Dado el Acróbata envenenado
-    Cuando elige a un borracho
-    Entonces no muere
+  Escenario: Acróbata envenenado
+    Entonces no muere aunque acierte
 
-## Feature: Alquimista (Aldeano)
-  «Tienes una habilidad de Esbirro.»
+## Feature: Alquimista (Aldeano) — Carousel
+  «Tienes una habilidad de Esbirro. Cuando la uses, el Narrador puede pedirte que elijas diferente.»
+  Panel: primera noche — el narrador asigna qué habilidad de Esbirro tiene; después, panel de esa habilidad.
 
-  @narrador
-  Escenario: Recibe su habilidad la primera noche
-    Dado el Alquimista en juego con habilidad elegida en el montaje (p. ej. Envenenador)
-    Cuando se resuelve la primera noche
-    Entonces el Alquimista sabe qué habilidad de Esbirro tiene
-    Y despierta cada noche cuando ese Esbirro lo haría
+  @panel
+  Escenario: Asignar la habilidad de Esbirro
+    Dado el Alquimista en el montaje
+    Entonces el narrador elige qué habilidad de Esbirro recibe
+    Y el jugador la ve como suya
 
-  @narrador
+  @panel
+  Escenario: El narrador le obliga a elegir distinto
+    Cuando el Alquimista usa su habilidad sobre un objetivo
+    Entonces el narrador puede pulsar "Elige diferente"
+    Y el jugador recibe el aviso y vuelve a elegir
+
+  @auto
   Escenario: Sigue siendo bueno
-    Dado el Alquimista con habilidad de Esbirro
-    Entonces gana con el Bien y no despierta con los malvados
+    Entonces el Alquimista cuenta como bueno para toda la información
 
-## Feature: Amnésico (Aldeano)
-  «No sabes tu habilidad. Cada día adivinas en privado: frío/templado/caliente/bingo.»
+## Feature: Amnésico (Aldeano) — Carousel
+  «No sabes cuál es tu habilidad. Cada día adivinas en privado cuál es y aprendes cuánto te acercas.»
+  Panel: `@privado` — el narrador define la habilidad secreta y responde con "frío/tibio/caliente".
 
-  @narrador
-  Escenario: El narrador inventa la habilidad
-    Dado el Amnésico en juego
-    Entonces el narrador decide su habilidad secreta y lo despierta cuando corresponda
+  @panel
+  Escenario: El narrador define la habilidad secreta
+    Dado el Amnésico en el montaje
+    Entonces el narrador escribe en el panel qué habilidad tiene realmente
 
-  @narrador
-  Escenario: Adivinanza diaria
-    Dado el Amnésico pregunta en privado "¿mi habilidad da información de muertos?"
-    Entonces el narrador responde frío, templado, caliente o bingo
+  @panel @privado
+  Escenario: Adivinar cada día
+    Cuando el Amnésico se acerca al narrador con su conjetura
+    Entonces el narrador responde con un grado de acierto desde el panel
+    Y solo el Amnésico lo recibe
 
-## Feature: Ateo (Aldeano)
-  «El narrador puede romper las reglas. Si el narrador es ejecutado, ganan los buenos. [No hay malvados]»
+  @panel
+  Escenario: El narrador ejecuta la habilidad por él
+    Dado que el Amnésico ha acertado su habilidad
+    Entonces el narrador la aplica desde el panel cada noche
 
-  @auto
-  Escenario: Montaje sin malvados
-    Dado el Ateo seleccionado en la bolsa
-    Cuando se montan los asientos
-    Entonces la página impide colocar roles malvados (SETUP_LOCK lo valida)
+## Feature: Ateo (Aldeano) — Carousel
+  «Todos los jugadores son buenos. Los buenos ganan si el Narrador es ejecutado.»
 
   @auto
   Escenario: La página nunca termina la partida sola
     Dado el Ateo en juego
-    Cuando muere cualquier jugador
-    Entonces no se evalúa ninguna condición de victoria automática
+    Entonces ninguna condición automática de victoria se dispara
 
-  @narrador
-  Escenario: Ejecutan al narrador
-    Dado el grupo nomina y "ejecuta" al narrador
-    Entonces el narrador declara la victoria del Bien manualmente
+  @panel
+  Escenario: El narrador es ejecutado
+    Cuando una nominación contra el narrador alcanza el umbral
+    Entonces ganan los buenos y la página lo anuncia
 
-## Feature: Aeronauta (Aldeano)
-  «Cada noche: aprendes 1 jugador de tipo distinto al de anoche.»
+  @panel
+  Escenario: El narrador ejecutado sin Ateo
+    Dado que no hay Ateo en juego
+    Cuando el narrador es ejecutado
+    Entonces no gana nadie y el día se da por gastado
 
-  @narrador
-  Escenario: Tipos siempre distintos
-    Dado el Aeronauta recibió un Aldeano anoche
-    Cuando despierta esta noche
-    Entonces el jugador mostrado es de otro tipo (Forastero/Esbirro/Demonio/Viajero)
-
-  @narrador
-  Escenario: Envenenado puede repetir tipo
-    Dado el Aeronauta envenenado
-    Entonces puede recibir un jugador del mismo tipo que anoche
-
-## Feature: Banshee (Aldeano)
-  «Si el Demonio te mata, todos lo saben. Puedes nominar 2 veces por día y votar 2 veces.»
-
-  @narrador
-  Escenario: Muerta por el Demonio
-    Dado el Demonio mata a la Banshee sana
-    Entonces se anuncia a todos "La Banshee ha despertado"
-    Y desde entonces puede nominar 2 veces al día y votar doble
-
-  @narrador
-  Escenario: Muerta por otra causa
-    Dado la Banshee ejecutada de día
-    Entonces no gana poderes y no se anuncia nada
-
-## Feature: Cazarrecompensas (Aldeano)
-  «Comienzas sabiendo 1 jugador malvado. Si muere, aprendes otro esta noche.»
+## Feature: Aeronauta (Aldeano) — Carousel
+  «Cada noche aprendes un jugador de un tipo distinto al de anoche.»
+  Panel: cada noche — nombre propuesto + tipo, editables.
 
   @auto
-  Escenario: Conoce a un malvado
-    Dado el Cazarrecompensas la primera noche
-    Entonces recibe el nombre de 1 jugador malvado real
+  Escenario: Rotación de tipos
+    Dado que anoche recibió un Aldeano
+    Entonces esta noche recibe un Forastero, Esbirro o Demonio
+    Y la página propone al narrador un nombre válido
 
-  @narrador
-  Escenario: Relevo al morir su objetivo
-    Dado el malvado conocido muere
+  @auto
+  Escenario: Envenenado
+    Entonces el nombre y el tipo pueden ser falsos
+
+## Feature: Banshee (Aldeano) — Carousel
+  «Si el Demonio te mata, todos lo saben y a partir de entonces puedes nominar dos veces al día.»
+
+  @auto
+  Escenario: Muere por el Demonio
+    Cuando el Demonio mata a la Banshee
+    Entonces la página lo anuncia públicamente a todos
+    Y la Banshee pasa a poder nominar dos veces por día
+
+  @auto
+  Escenario: Muere por otra causa
+    Entonces no se anuncia nada
+
+## Feature: Cazarrecompensas (Aldeano) — Carousel
+  «Empiezas sabiendo 1 jugador malvado. Si muere, aprendes otro esa noche.»
+  Panel: primera noche + cada muerte del marcado.
+
+  @auto
+  Escenario: Primer malvado conocido
+    Entonces recibe el nombre de un jugador malvado
+
+  @auto
+  Escenario: Ese jugador muere
+    Cuando el marcado muere
+    Entonces esa noche recibe otro nombre malvado
+
+  @panel
+  Escenario: El narrador puede señalar a un bueno que registra como malvado
+    Entonces el panel permite elegir al Recluso u otro señuelo
+
+## Feature: Caníbal (Aldeano) — Carousel
+  «Tienes la habilidad del último ejecutado. Si era malvado, quedas envenenado.»
+  Panel: tras cada ejecución — la página asigna la habilidad heredada.
+
+  @auto
+  Escenario: Hereda de un bueno
+    Cuando se ejecuta a un Aldeano
+    Entonces el Caníbal adquiere su habilidad desde esa noche
+    Y entra en la cola en la posición de ese personaje
+
+  @auto
+  Escenario: Hereda de un malvado
+    Cuando se ejecuta a un malvado
+    Entonces el Caníbal queda envenenado y su habilidad heredada no funciona
+
+  @panel
+  Escenario: El narrador ve la habilidad actual del Caníbal
+    Entonces el mini-panel muestra «Habilidad actual: X (heredada de Y)»
+
+## Feature: Niño Coro (Aldeano) — Carousel
+  «Si el Demonio mata al Rey, aprendes quién es el Demonio.»
+
+  @auto
+  Escenario: Muere el Rey por el Demonio
+    Entonces el Niño Coro recibe el nombre exacto del Demonio esa noche
+
+  @auto
+  Escenario: El Rey muere por otra causa
+    Entonces no recibe nada
+
+  @auto
+  Escenario: Envenenado
+    Entonces recibe un nombre falso
+
+## Feature: Líder Cultista (Aldeano) — Carousel
+  «Cada noche tomas la alineación de un vecino vivo. Si todos los buenos se unen a tu culto, tu equipo gana.»
+
+  @auto
+  Escenario: Cambio de alineación por vecindad
     Cuando llega la noche
-    Entonces el Cazarrecompensas recibe otro malvado (panel BOUNTY_HUNTER_REVEAL)
+    Entonces la página cambia la alineación del Líder a la de un vecino vivo
+    Y avisa al narrador del cambio
 
-## Feature: Caníbal (Aldeano)
-  «Tienes la habilidad del último ejecutado. Si es malvado, estás envenenado.»
-
-  @narrador
-  Escenario: Gana la habilidad del ejecutado bueno
-    Dado el Monje fue ejecutado hoy
-    Entonces el Caníbal tiene la habilidad del Monje desde esta noche (sin saber cuál es)
-
-  @narrador
-  Escenario: Ejecutado malvado lo envenena
-    Dado un Esbirro fue ejecutado hoy
-    Entonces el Caníbal queda envenenado y cree tener una habilidad
-
-## Feature: Niño Coro (Aldeano)
-  «Si el Demonio mata al Rey, aprendes cuál es el Demonio.»
-
-  @narrador
-  Escenario: El Rey cae
-    Dado el Rey en juego y el Niño Coro vivo y sano
-    Cuando el Demonio mata al Rey de noche
-    Entonces el Niño Coro recibe quién es el Demonio
-
-  @narrador
-  Escenario: El Rey muere ejecutado
-    Dado el Rey es ejecutado de día
-    Entonces el Niño Coro no recibe nada
-
-## Feature: Líder Cultista (Aldeano)
-  «Cada noche adoptas la alineación de un vecino vivo. Si todos los buenos se unen a tu culto, ganas.»
-
-  @narrador
-  Escenario: Cambio de alineación nocturno
-    Dado el Líder Cultista con un vecino malvado
-    Cuando el narrador lo decide en su paso nocturno
-    Entonces el Líder puede volverse malvado (y viceversa)
-
-  @narrador
+  @panel
   Escenario: Victoria del culto
-    Dado todos los buenos vivos declararon unirse al culto hoy
-    Entonces el narrador declara la victoria del equipo del Líder Cultista
+    Dado que todos los buenos vivos son del culto
+    Entonces el panel ofrece declarar la victoria de su equipo
 
-## Feature: Ingeniero (Aldeano)
-  «Una vez por partida, de noche: elige qué Esbirros o qué Demonio está en juego.»
+## Feature: Ingeniero (Aldeano) — Carousel
+  «Una vez por partida, de noche, elige qué Esbirros o qué Demonio están en juego.»
+  Panel: una vez — selector múltiple de Esbirros o selector de Demonio.
 
-  @narrador
-  Escenario: Cambia al Demonio
-    Dado el Ingeniero usa su habilidad y pide "Ojo"
-    Entonces el Demonio actual se transforma en el Ojo antes de que actúe esta noche
+  @panel
+  Escenario: Elegir los Esbirros
+    Cuando el Ingeniero elige los Esbirros que quiere en juego
+    Entonces el narrador aplica los cambios de rol correspondientes
+    Y cada jugador afectado recibe su nuevo personaje
 
-  @narrador
+  @panel
+  Escenario: Elegir el Demonio
+    Cuando el Ingeniero elige qué Demonio quiere
+    Entonces el narrador cambia el personaje del Demonio actual
+
+  @auto
   Escenario: Ingeniero envenenado
-    Dado el Ingeniero envenenado
-    Cuando usa su habilidad
-    Entonces no pasa nada y la habilidad queda gastada
+    Entonces no cambia nada y el uso se gasta
 
-## Feature: Granjero (Aldeano)
-  «Si mueres de noche, un bueno vivo se convierte en Granjero.»
+## Feature: Granjero (Aldeano) — Carousel
+  «Cuando mueres de noche, un jugador bueno vivo se convierte en Granjero.»
+  Panel: al morir de noche — selector de sucesor.
 
-  @narrador
-  Escenario: Herencia del arado
-    Dado el Granjero muere de noche
-    Entonces el narrador elige un bueno vivo que se convierte en el nuevo Granjero
-    Y es informado de su nuevo rol
-
-## Feature: Pescador (Aldeano)
-  «Una vez por partida, de día: pide consejo al narrador.»
-
-  @narrador
-  Escenario: Consejo honesto
-    Dado el Pescador visita al narrador
-    Entonces recibe un consejo honesto para ayudar a su equipo
-    Y la habilidad queda gastada
-
-## Feature: General (Aldeano)
-  «Cada noche: qué alineación cree el narrador que va ganando.»
-
-  @narrador
-  Escenario: Lectura del narrador
-    Dado el General despierta
-    Entonces recibe "buenos", "malvados" o "empate" según el juicio del narrador
-
-## Feature: Sacerdotisa Mayor (Aldeano)
-  «Cada noche: qué jugador cree el narrador que deberías conocer.»
-
-  @narrador
-  Escenario: Señal de la Sacerdotisa
-    Dado la Sacerdotisa Mayor despierta
-    Entonces el narrador señala al jugador que más le convenga conocer al Bien
-
-## Feature: Cazador / Huntsman (Aldeano)
-  «Una vez por partida: elige un jugador; si es la Damisela, se convierte en un Aldeano no en juego.»
+  @panel
+  Escenario: Sucesión del Granjero
+    Cuando el Granjero muere de noche
+    Entonces el narrador elige un jugador bueno vivo
+    Y ese jugador pasa a ser Granjero y recibe el aviso
 
   @auto
-  Escenario: Salva a la Damisela
-    Dado el Cazador elige a la Damisela
-    Entonces la Damisela se convierte en un Aldeano que no está en juego
-    Y el equipo malvado ya no puede ganar adivinándola
+  Escenario: Muere de día
+    Entonces no hay sucesión
+
+## Feature: Pescador (Aldeano) — Carousel
+  «Una vez por partida, de día, visita al Narrador para recibir un consejo.»
+  Panel: `@privado` — campo de texto libre para el consejo.
+
+  @panel @privado
+  Escenario: Dar el consejo
+    Cuando el Pescador se acerca al narrador
+    Entonces el narrador escribe el consejo en el panel y se lo envía en privado
+    Y el uso queda gastado
+
+  @panel
+  Escenario: Pescador envenenado
+    Entonces el panel avisa al narrador de que el consejo debería ser inútil o engañoso
+
+## Feature: General (Aldeano) — Carousel
+  «Cada noche aprendes qué alineación cree el Narrador que va ganando.»
+  Panel: cada noche — tres botones: Bien / Mal / Empate.
+
+  @panel
+  Escenario: El narrador emite su juicio
+    Cuando llega el turno del General
+    Entonces el narrador pulsa Bien, Mal o Empate
+    Y el General recibe esa respuesta
+
+  @panel
+  Escenario: General envenenado
+    Entonces el panel sugiere al narrador responder lo contrario de lo que cree
+
+## Feature: Sacerdotisa Mayor (Aldeano) — Carousel
+  «Cada noche aprende qué jugador cree el Narrador que deberías conocer.»
+  Panel: cada noche — selector libre de jugador.
+
+  @panel
+  Escenario: El narrador señala a un jugador
+    Cuando llega su turno
+    Entonces el narrador elige libremente a quién señalar
+    Y la Sacerdotisa recibe ese nombre
+
+## Feature: Cazador / Huntsman (Aldeano) — Carousel
+  «Una vez por partida, de noche, elige un jugador: la Damisela se convierte en un Aldeano que no está en juego.»
+  Panel: una vez — selector de jugador.
+
+  @panel
+  Escenario: Acierta con la Damisela
+    Cuando el Cazador elige a la Damisela
+    Entonces la Damisela pasa a ser un Aldeano que no estaba en juego
+    Y recibe el aviso de su nuevo personaje
 
   @auto
-  Escenario: Falla el tiro
-    Dado el Cazador elige a alguien que no es la Damisela
-    Entonces no pasa nada y la habilidad queda gastada
+  Escenario: Falla
+    Entonces no pasa nada y el uso se gasta
+
+## Feature: Rey (Aldeano) — Carousel
+  «Cada noche, si los muertos igualan o superan a los vivos, aprendes un personaje vivo.»
 
   @auto
-  Escenario: Actúa antes que el Demonio
-    Dado el Cazador y el Demonio actúan la misma noche
-    Entonces el Cazador va antes en la cola
-
-## Feature: Rey (Aldeano)
-  «Cada noche, si los muertos ≥ vivos, aprendes un rol vivo.»
-
-  @narrador
-  Escenario: Mayoría muerta
-    Dado 5 muertos y 4 vivos
-    Cuando el Rey despierta
-    Entonces recibe el rol de un jugador vivo (elección del narrador)
-
-  @narrador
-  Escenario: Mayoría viva
-    Dado más vivos que muertos
-    Entonces el Rey no recibe información
-
-## Feature: Caballero (Aldeano)
-  «Comienzas sabiendo 2 jugadores que NO son el Demonio.»
+  Escenario: Se cumple la condición
+    Dado que hay tantos muertos como vivos
+    Entonces el Rey recibe el personaje de un jugador vivo
 
   @auto
-  Escenario: Dos descartes seguros
-    Dado el Caballero sobrio la primera noche
-    Entonces recibe 2 nombres que no son el Demonio
+  Escenario: No se cumple
+    Entonces el Rey no despierta
 
   @auto
-  Escenario: Caballero envenenado
-    Dado el Caballero envenenado la primera noche
-    Entonces uno de los mostrados PUEDE ser el Demonio
+  Escenario: Relación con el Niño Coro
+    Cuando el Demonio mata al Rey
+    Entonces el Niño Coro aprende quién es el Demonio
 
-## Feature: Licántropo (Aldeano)
-  «Cada noche*: elige un jugador. Si es bueno, muere y el Demonio no mata esta noche.»
-
-  @auto
-  Escenario: Mata a un bueno y bloquea al Demonio
-    Dado el Licántropo elige a un Aldeano
-    Entonces el Aldeano muere
-    Y el ataque del Demonio de esta noche no mata (la página lo bloquea)
+## Feature: Caballero (Aldeano) — Carousel
+  «Empiezas sabiendo 2 jugadores que no son el Demonio.»
 
   @auto
-  Escenario: Elige a un malvado
-    Dado el Licántropo elige a un Esbirro
-    Entonces nadie muere por el Licántropo y el Demonio mata normal
-
-## Feature: Mago (Aldeano)
-  «El Demonio cree que eres un Esbirro. Los Esbirros creen que eres el Demonio.»
+  Escenario: Dos nombres seguros
+    Entonces recibe 2 nombres, ninguno de ellos el Demonio
 
   @auto
-  Escenario: Confusión en la info del mal
+  Escenario: Envenenado
+    Entonces uno de los dos puede ser el Demonio
+
+## Feature: Licántropo (Aldeano) — Carousel
+  «Cada noche* elige un jugador: si es bueno, muere y el Demonio no mata esta noche.»
+  Panel: cada noche* — 1 objetivo.
+
+  @auto
+  Escenario: Ataca a un bueno
+    Cuando el Licántropo elige a un jugador bueno
+    Entonces ese jugador muere
+    Y el Demonio no puede matar esta noche
+
+  @auto
+  Escenario: Ataca a un malvado
+    Entonces no muere nadie y el Demonio mata normalmente
+
+  @auto
+  Escenario: Licántropo envenenado
+    Entonces no muere nadie y el Demonio mata normalmente
+
+## Feature: Mago (Aldeano) — Carousel
+  «El Demonio cree que eres un Esbirro. Los Esbirros creen que eres un Demonio.»
+
+  @auto
+  Escenario: Confusión en la información del Mal
     Dado el Mago en juego la primera noche
-    Cuando se genera la información del equipo malvado
     Entonces el Demonio ve al Mago listado entre sus Esbirros
-    Y los Esbirros ven al Mago señalado como Demonio
+    Y los Esbirros ven señalados como Demonio tanto al Demonio real como al Mago
 
-## Feature: Guardián Nocturno (Aldeano)
-  «Una vez por partida, de noche*: elige un jugador: aprende que eres el Guardián Nocturno.»
+  @panel
+  Escenario: El narrador señala en orden aleatorio
+    Entonces el panel recuerda no revelar cuál de los dos es el Mago
+
+  @auto
+  Escenario: Se repite si muere el Cultivador de Adormidera
+    Dado que el Cultivador muere y el Mal se conoce a mitad de partida
+    Entonces la confusión del Mago se aplica también esa noche
+
+## Feature: Guardián Nocturno (Aldeano) — Carousel
+  «Una vez por partida, de noche, elige un jugador: aprende que eres el Guardián Nocturno.»
+  Panel: una vez — 1 objetivo.
 
   @auto
   Escenario: Se revela a un jugador
-    Dado el Guardián Nocturno elige a Ana
-    Entonces Ana recibe "X es el Guardián Nocturno"
-    Y la habilidad queda gastada
+    Cuando el Guardián elige a Ana
+    Entonces Ana recibe «X es el Guardián Nocturno»
+    Y el uso queda gastado
 
   @auto
-  Escenario: Envenenado no revela
-    Dado el Guardián envenenado
-    Cuando elige a Ana
-    Entonces Ana no recibe nada
+  Escenario: Envenenado
+    Entonces Ana no recibe nada y el uso se gasta
 
-## Feature: Noble (Aldeano)
-  «Comienzas conociendo 3 jugadores, exactamente 1 malvado.»
+## Feature: Noble (Aldeano) — Carousel
+  «Empiezas conociendo 3 jugadores, exactamente 1 malvado.»
 
   @auto
   Escenario: Trío con un malvado
-    Dado el Noble sobrio la primera noche
-    Entonces recibe 3 nombres: exactamente 1 es malvado y 2 son buenos
-
-## Feature: Cultivador de Adormidera (Aldeano)
-  «Esbirros y Demonio no se conocen. Si mueres, se conocen esa noche.»
+    Entonces recibe 3 nombres: exactamente 1 malvado y 2 buenos
 
   @auto
-  Escenario: El mal empieza a ciegas
+  Escenario: Envenenado
+    Entonces el trío puede tener 0, 2 o 3 malvados
+
+## Feature: Cultivador de Adormidera (Aldeano) — Carousel
+  «Los Esbirros y el Demonio no se conocen. Si mueres, se conocen esa noche.»
+
+  @auto
+  Escenario: El Mal no se conoce
     Dado el Cultivador vivo la primera noche
-    Entonces ni Esbirros ni Demonio reciben info de quiénes son sus compañeros
-
-  @narrador
-  Escenario: Su muerte reúne al mal
-    Dado el Cultivador muere
-    Cuando llega esa noche
-    Entonces el narrador informa a Esbirros y Demonio de quiénes son
-
-## Feature: Predicador (Aldeano)
-  «Cada noche: elige un jugador. Si es Esbirro, lo sabes y pierde su habilidad.»
+    Entonces la página omite el paso de presentación del equipo malvado
 
   @auto
-  Escenario: Neutraliza a un Esbirro
-    Dado el Predicador elige a la Arpía
-    Entonces el Predicador sabe que eligió un Esbirro
-    Y la Arpía pierde su habilidad mientras el Predicador viva y esté sano
+  Escenario: Muere el Cultivador
+    Cuando el Cultivador muere
+    Entonces esa noche los Esbirros y el Demonio se conocen
+    Y la página inserta ese paso en la cola y avisa al narrador
 
   @auto
-  Escenario: Elige a un no-Esbirro
-    Dado el Predicador elige a un Aldeano
-    Entonces no recibe confirmación y nada cambia
+  Escenario: Con Mago en juego
+    Entonces la presentación tardía aplica también la confusión del Mago
 
-## Feature: Rata de Laboratorio / Boffin (Aldeano)
-  «El Demonio tiene la habilidad de un bueno no en juego. Ambos lo saben.»
-
-  @narrador
-  Escenario: Demonio con habilidad buena
-    Dado la Rata de Laboratorio en juego y la habilidad elegida en el montaje
-    Cuando se resuelve la primera noche
-    Entonces el Demonio y la Rata saben qué habilidad buena tiene el Demonio
-
-## Feature: Shugenja (Aldeano)
-  «Empiezas sabiendo si el malvado más cercano está a tu izquierda o derecha.»
+## Feature: Predicador (Aldeano) — Carousel
+  «Cada noche elige un jugador: si es Esbirro, lo aprendes y pierde su habilidad.»
+  Panel: cada noche — 1 objetivo.
 
   @auto
-  Escenario: Dirección correcta
-    Dado el Shugenja sobrio con el malvado más cercano a 2 asientos a la izquierda
-    Entonces recibe "izquierda"
+  Escenario: Acierta con un Esbirro
+    Entonces el Predicador lo aprende
+    Y ese Esbirro pierde su habilidad de forma permanente
 
   @auto
-  Escenario: Equidistante
-    Dado malvados a la misma distancia por ambos lados
-    Entonces el narrador/motor elige una dirección arbitraria (la info es válida)
-
-## Feature: Administrador / Steward (Aldeano)
-  «Empiezas conociendo a 1 jugador bueno.»
+  Escenario: Falla
+    Entonces no aprende nada
 
   @auto
-  Escenario: Un bueno confirmado
-    Dado el Administrador sobrio la primera noche
+  Escenario: Predicador envenenado
+    Entonces el Esbirro conserva su habilidad y la información puede ser falsa
+
+## Feature: Rata de Laboratorio / Boffin (Aldeano) — Carousel
+  «El Demonio tiene la habilidad de un personaje bueno que no está en juego. Ambos lo saben desde la noche 1.»
+  Panel: montaje — selector de qué habilidad buena recibe el Demonio.
+
+  @panel
+  Escenario: Asignar la habilidad al Demonio
+    Dado el Boffin en el montaje
+    Entonces el narrador elige un personaje bueno que no esté en juego
+    Y el Demonio recibe esa habilidad además de la suya
+    Y tanto el Boffin como el Demonio lo saben desde la noche 1
+
+  @panel
+  Escenario: Un nuevo Demonio hereda una habilidad de Boffin
+    Cuando la Dama Escarlata o el Barbero crean un Demonio nuevo
+    Entonces ese Demonio también tiene una habilidad de Boffin
+    Y el narrador puede elegir una habilidad distinta a la anterior
+
+## Feature: Shugenja (Aldeano) — Carousel
+  «Empiezas sabiendo si el jugador malvado más cercano está a tu izquierda o a tu derecha.»
+
+  @auto
+  Escenario: Dirección calculada
+    Entonces la página calcula la dirección y se la muestra ya resuelta al narrador
+
+  @auto
+  Escenario: Empate de distancias
+    Entonces el narrador elige la dirección a mano
+
+  @auto
+  Escenario: Envenenado
+    Entonces recibe la dirección contraria
+
+## Feature: Administrador / Steward (Aldeano) — Carousel
+  «Empiezas conociendo 1 jugador bueno.»
+
+  @auto
+  Escenario: Un nombre bueno
     Entonces recibe el nombre de un jugador realmente bueno
 
   @auto
-  Escenario: Administrador borracho
-    Dado el Administrador es el objetivo del veneno inicial
-    Entonces el mostrado puede ser malvado
+  Escenario: Envenenado
+    Entonces el nombre puede ser de un malvado
 
-## Feature: Damisela (Forastero)
-  «Los Esbirros saben que hay Damisela. Si un Esbirro adivina quién es, el Bien pierde.»
+## Feature: Hechicero / Wizard (Aldeano) — Carousel
+  «Una vez por partida pide en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.»
+  Panel: ver la sección completa "SISTEMA DE DESEOS".
+
+  @privado
+  Escenario: Pedir el deseo
+    Dado el Hechicero vivo que aún no ha deseado
+    Cuando pulsa "Pedir un deseo" y escribe el texto
+    Entonces solo el narrador lo recibe
+
+  @panel @privado
+  Escenario: El narrador lo atiende en su habitación
+    Cuando el narrador pulsa "Ir a su habitación"
+    Entonces la página lo mueve al canal privado del Hechicero
+    Y allí decide conceder o denegar
+
+  @panel
+  Escenario: Conceder con catálogo
+    Cuando el narrador concede desde el catálogo
+    Entonces la página aplica el efecto y propone precio y pista, ambos editables
+
+  @panel
+  Escenario: Conceder libre
+    Cuando el narrador usa la pestaña "Libre"
+    Entonces puede encadenar cualquier efecto del mini-panel sobre cualquier jugador
+
+  @panel
+  Escenario: El deseo nunca se hace público solo
+    Entonces la página no anuncia nada salvo que el narrador lo ordene
 
   @auto
-  Escenario: Los Esbirros son avisados
-    Dado la Damisela en juego la primera noche
-    Entonces cada Esbirro recibe "hay una Damisela en juego"
+  Escenario: Un solo deseo
+    Dado un deseo ya concedido o denegado en firme
+    Entonces el botón de pedir deseo desaparece
 
-  @narrador
-  Escenario: Un Esbirro la adivina
-    Dado un Esbirro declara públicamente su adivinanza de Damisela (una por partida)
-    Cuando acierta
-    Entonces el narrador declara la victoria del Mal
+## Feature: Damisela (Forastero) — Carousel
+  «Todos los Esbirros saben que hay una Damisela en juego. Si un Esbirro adivina quién eres, tu equipo pierde.»
+  Panel: botón "Un Esbirro adivina" con selector de Esbirro y de objetivo.
 
   @auto
-  Escenario: El Cazador la salva
-    Dado el Cazador la convirtió en Aldeano
-    Cuando un Esbirro la adivina después
-    Entonces no pasa nada (ya no es la Damisela)
+  Escenario: Los Esbirros lo saben
+    Entonces cada Esbirro recibe «Hay una Damisela en juego»
 
-## Feature: Gólem (Forastero)
+  @panel
+  Escenario: Un Esbirro acierta
+    Cuando el narrador registra que un Esbirro señaló a la Damisela correcta
+    Entonces ganan los malvados
+
+  @panel
+  Escenario: Un Esbirro falla
+    Entonces ese Esbirro no puede volver a intentarlo
+    Y la página lo marca con ficha
+
+  @auto
+  Escenario: Damisela envenenada
+    Entonces el acierto no hace perder a los buenos
+
+## Feature: Gólem (Forastero) — Carousel
   «Solo puedes nominar una vez. Si el nominado no es el Demonio, muere.»
 
   @auto
-  Escenario: Nomina a un no-Demonio
-    Dado el Gólem sano que nunca nominó
-    Cuando nomina a un Aldeano
-    Entonces el Aldeano muere inmediatamente y no hay votación
+  Escenario: Nomina a alguien que no es el Demonio
+    Cuando el Gólem nomina
+    Entonces ese jugador muere al instante
+    Y el Gólem no puede volver a nominar
 
   @auto
   Escenario: Nomina al Demonio
-    Dado el Gólem nomina al Demonio
-    Entonces el Demonio NO muere por el Gólem y la nominación sigue su curso normal
-
-  @auto
-  Escenario: Solo una nominación por partida
-    Dado el Gólem ya nominó una vez
-    Cuando intenta nominar de nuevo
-    Entonces la página rechaza la nominación
+    Entonces la nominación sigue su curso normal
 
   @auto
   Escenario: Gólem envenenado
-    Dado el Gólem envenenado
-    Cuando nomina a un Aldeano
-    Entonces el Aldeano no muere y la nominación sigue normal (gasta su única nominación)
+    Entonces nadie muere y el uso se gasta
 
-## Feature: Sombrerero (Forastero)
-  «Si mueres hoy o esta noche, Esbirros y Demonio pueden elegir nuevos roles.»
+## Feature: Sombrerero (Forastero) — Carousel
+  «Si mueres hoy o esta noche, los Esbirros y el Demonio pueden elegir personajes nuevos.»
+  Panel: al morir — un selector de personaje por cada malvado vivo.
 
-  @narrador
-  Escenario: Renovación del mal
-    Dado el Sombrerero muere hoy
-    Cuando llega la noche
-    Entonces el narrador ofrece a cada malvado cambiar su rol por otro no en juego
-    Y aplica los cambios elegidos
+  @panel
+  Escenario: El Mal se reparte de nuevo
+    Cuando el Sombrerero muere
+    Entonces esa noche el panel muestra un selector por cada malvado vivo
+    Y el narrador aplica los personajes elegidos
+    Y cada afectado recibe su nuevo personaje
 
-## Feature: Hereje (Forastero)
-  «Quien gana, pierde. Quien pierde, gana.»
+  @panel
+  Escenario: No puede haber dos Demonios iguales
+    Entonces el panel avisa si el reparto deja personajes duplicados
 
-  @narrador
+  @auto
+  Escenario: Sombrerero envenenado
+    Entonces no se abre el reparto
+
+## Feature: Hereje (Forastero) — Carousel
+  «Quien gana, pierde. Quien pierde, gana, incluso si estás muerto.»
+
+  @auto
   Escenario: Inversión del resultado
-    Dado el Hereje en juego al terminar la partida
-    Cuando el narrador declara el resultado
-    Entonces debe invertir el ganador (aviso en la página al declarar)
-
-## Feature: Doctor de la Peste (Forastero)
-  «Cuando mueres, el narrador gana una habilidad de Esbirro.»
-
-  @narrador
-  Escenario: El narrador se corrompe
-    Dado el Doctor de la Peste muere
-    Entonces el narrador elige una habilidad de Esbirro y la usa el resto de la partida
-
-## Feature: Político (Forastero)
-  «Si fuiste el mayor responsable de que tu equipo pierda, cambias de bando y ganas.»
-
-  @narrador
-  Escenario: Traición premiada
-    Dado el Político causó activamente la derrota del Bien
-    Cuando termina la partida
-    Entonces el narrador lo declara ganador con el Mal
-
-## Feature: Maestro Acertijos / Puzzlemaster (Forastero)
-  «1 jugador está borracho desde el inicio. Si adivinas quién, aprendes al Demonio.»
+    Dado el Hereje en juego, vivo o muerto
+    Cuando la partida termina
+    Entonces la página invierte el ganador antes de anunciarlo
+    Y el motivo de la victoria lo explica
 
   @auto
-  Escenario: Borracho del puzle desde el montaje
-    Dado el Maestro Acertijos en juego
-    Cuando se monta la partida
-    Entonces el narrador marca al jugador borracho del puzle (puzzlemasterDrunk)
+  Escenario: Hereje envenenado al terminar
+    Entonces el resultado no se invierte
 
-  @narrador
-  Escenario: Adivina al borracho
-    Dado el Maestro Acertijos hace su única adivinanza de día
-    Cuando acierta al borracho
-    Entonces recibe quién es el Demonio
-    Cuando falla
-    Entonces no recibe nada y pierde la habilidad
+## Feature: Doctor de la Peste (Forastero) — Carousel
+  «Cuando mueres, el Narrador gana una habilidad de Esbirro.»
+  Panel: al morir — selector de qué habilidad de Esbirro toma el narrador.
 
-## Feature: Soplón / Snitch (Forastero)
-  «Cada Esbirro recibe 3 bluffs.»
+  @panel
+  Escenario: El narrador toma una habilidad
+    Cuando el Doctor muere
+    Entonces el panel pide elegir una habilidad de Esbirro
+    Y el narrador puede usarla desde su propio panel cada noche
 
-  @auto
-  Escenario: Bluffs para los Esbirros
-    Dado el Soplón en juego la primera noche
-    Entonces cada Esbirro recibe 3 roles buenos no en juego como bluffs
+## Feature: Político (Forastero) — Carousel
+  «Si fuiste el más responsable de que tu equipo pierda, cambias de alineación y ganas.»
+  Panel: al terminar la partida — botón "El Político cambia de bando".
 
-## Feature: Pólvora / Boomdandy (Esbirro)
-  «Si eres ejecutado, todos excepto 3 mueren.»
+  @panel
+  Escenario: El narrador decide que fue el responsable
+    Cuando la partida termina y el equipo del Político pierde
+    Entonces el panel pregunta si el Político fue el más responsable
+    Y si el narrador dice que sí, el Político cambia de alineación y gana
 
-  @auto
-  Escenario: Explosión al ser ejecutado
-    Dado la Pólvora es ejecutada
-    Entonces la página avisa al narrador del estallido
-    Y el narrador resuelve: todos menos 3 jugadores mueren (elección con dedos apuntando)
+## Feature: Maestro Acertijos / Puzzlemaster (Forastero) — Carousel
+  «1 jugador está borracho. Si adivinas quién, aprendes al Demonio.»
+  Panel: montaje (marcar al borracho) + día (registrar la conjetura).
 
-  @narrador
-  Escenario: Pólvora envenenada
-    Dado la Pólvora envenenada
-    Cuando es ejecutada
-    Entonces no explota nada
+  @panel
+  Escenario: Marcar al borracho
+    Dado el Maestro Acertijos en el montaje
+    Entonces el narrador marca qué jugador está borracho por su culpa
 
-## Feature: Sembrador de Miedo / Fearmonger (Esbirro)
-  «Cada noche elige un jugador. Si lo nominas y ejecutas, su equipo pierde. Cada día se anuncia que ha elegido a alguien.»
+  @panel @privado
+  Escenario: Conjetura correcta
+    Cuando el narrador registra que adivinó bien
+    Entonces el Maestro Acertijos recibe el nombre del Demonio
 
-  @auto
-  Escenario: Marca nocturna y anuncio
-    Dado el Sembrador de Miedo elige a Ana esta noche
-    Entonces Ana queda marcada (ficha)
-    Y la página recuerda anunciar al amanecer "el Sembrador de Miedo ha elegido a un jugador"
+  @panel
+  Escenario: Conjetura incorrecta
+    Entonces recibe un nombre falso y el intento se gasta
 
-  @auto
-  Escenario: Ejecuta a su marcado
-    Dado Ana marcada y el Sembrador de Miedo vivo y sano
-    Cuando el propio Sembrador la nomina y Ana es ejecutada
-    Entonces la página termina la partida: el equipo de Ana pierde
+## Feature: Soplón / Snitch (Forastero) — Carousel
+  «Cada Esbirro recibe 3 faroles.»
 
   @auto
-  Escenario: Otro jugador la nomina
-    Dado Ana marcada
-    Cuando otro jugador (no el Sembrador) la nomina y es ejecutada
-    Entonces no se activa nada especial
+  Escenario: Faroles para los Esbirros
+    Dado el Soplón en juego
+    Entonces cada Esbirro recibe 3 personajes que no están en juego, además del Demonio
 
-## Feature: Goblin (Esbirro)
-  «Si reclamas públicamente ser el Goblin al ser nominado y te ejecutan, tu equipo gana.»
+  @panel
+  Escenario: El narrador ajusta los faroles
+    Entonces puede cambiar los tres personajes de cada Esbirro desde el panel
 
-  @auto
-  Escenario: Reclamo exitoso
-    Dado el Goblin sano es nominado y reclama públicamente ser el Goblin
-    Cuando es ejecutado
-    Entonces la página avisa al narrador para declarar la victoria del Mal
+## Feature: Pólvora / Boomdandy (Esbirro) — Carousel
+  «Si eres ejecutado, todos menos 3 mueren.»
+  Panel: al ser ejecutado — selector de los 3 supervivientes.
 
-  @narrador
-  Escenario: Sin reclamo no hay premio
-    Dado el Goblin ejecutado sin haber reclamado
-    Entonces muere como un Esbirro normal
-
-## Feature: Arpía (Esbirro)
-  «Cada noche elige 2 jugadores: mañana el 1º está loco creyendo que el 2º es malvado.»
-
-  @narrador
-  Escenario: Siembra la paranoia
-    Dado la Arpía elige a Ana y Beto
-    Cuando amanece
-    Entonces Ana debe actuar como si Beto fuera malvado o el narrador puede matarla (a ella o a Beto)
-
-## Feature: Marioneta (Esbirro)
-  «Crees ser bueno, pero eres un Esbirro. El Demonio te conoce.»
+  @panel
+  Escenario: Explota al ser ejecutado
+    Cuando la Pólvora es ejecutada
+    Entonces el panel pide elegir a los 3 supervivientes
+    Y todos los demás mueren
 
   @auto
-  Escenario: Cree ser buena
-    Dado la Marioneta en la bolsa
-    Cuando se reparten los roles
-    Entonces el jugador ve un rol bueno no en juego (believedRole)
-    Y NO despierta con el mal
+  Escenario: Solo explota por ejecución
+    Cuando la Pólvora muere por el Gólem, por el Psicópata o por el Demonio
+    Entonces no explota
 
   @auto
-  Escenario: El Demonio la conoce
-    Dado la Marioneta en juego
-    Cuando el Demonio recibe su info de primera noche
-    Entonces ve quién es su Marioneta
+  Escenario: Ejecutada pero no muere
+    Dado la Pólvora ejecutada y salvada por el Abogado del Diablo
+    Entonces explota igualmente
+
+## Feature: Sembrador de Miedo / Fearmonger (Esbirro) — Carousel
+  «Cada noche elige un jugador: si lo nominas y es ejecutado, tu equipo gana.»
+  Panel: cada noche — 1 objetivo + aviso público del cambio.
 
   @auto
-  Escenario: Debe sentarse junto al Demonio
-    Dado el montaje con Marioneta
-    Entonces la página valida que esté a 1 asiento del Demonio
+  Escenario: Todos saben que hay un objetivo nuevo
+    Cuando el Sembrador cambia de objetivo
+    Entonces la página anuncia públicamente que el objetivo ha cambiado, sin decir quién
 
-## Feature: Mezefeles (Esbirro)
-  «Comienzas sabiendo una palabra. El 1er bueno que la diga se vuelve malvado.»
+  @panel
+  Escenario: El Sembrador nomina a su objetivo y lo ejecutan
+    Entonces ganan los malvados
 
-  @narrador
-  Escenario: Recibe su palabra
-    Dado el Mezefeles la primera noche
-    Entonces recibe su palabra secreta
+  @auto
+  Escenario: Envenenado
+    Entonces no pasa nada aunque se cumpla la condición
 
-  @narrador
-  Escenario: La palabra corrompe
-    Dado un jugador bueno dice la palabra en público
-    Entonces esa noche el narrador lo convierte en malvado y se lo notifica
+## Feature: Goblin (Esbirro) — Carousel
+  «Si al ser nominado reclamas en público ser el Goblin y te ejecutan, tu equipo gana.»
+  Panel: al ser nominado — botón "Reclamó ser el Goblin".
 
-## Feature: Organillero (Esbirro)
-  «Todos votan con ojos cerrados. Cada noche eliges si estás borracho.»
+  @panel
+  Escenario: Reclama y lo ejecutan
+    Dado el Goblin nominado que reclama en público
+    Cuando el narrador marca la reclamación y el Goblin es ejecutado
+    Entonces ganan los malvados
 
-  @narrador
+  @auto
+  Escenario: Reclama pero no lo ejecutan
+    Entonces no pasa nada
+
+  @auto
+  Escenario: Lo ejecutan sin haber reclamado
+    Entonces muere normalmente
+
+## Feature: Arpía (Esbirro) — Carousel
+  «Cada noche elige 2 jugadores: mañana el primero cree que el segundo es malvado.»
+  Panel: cada noche — 2 objetivos ordenados.
+
+  @panel
+  Escenario: Imponer la creencia
+    Cuando la Arpía elige a Ana y luego a Bea
+    Entonces Ana recibe «Bea es malvada» y debe actuar en consecuencia
+    Y el narrador puede ejecutar a Ana si no lo hace
+
+  @auto
+  Escenario: Envenenada
+    Entonces nadie recibe la creencia
+
+## Feature: Marioneta (Esbirro) — Carousel
+  «Crees que eres bueno, pero eres un Esbirro. El Demonio sabe quién eres.»
+
+  @auto
+  Escenario: Se cree buena
+    Entonces la Marioneta ve un personaje bueno y nunca sabe que es Esbirro
+    Y el Demonio recibe su nombre
+
+  @auto
+  Escenario: Cuenta como malvada para la información
+    Cuando la Empática cuenta vecinos malvados
+    Entonces la Marioneta cuenta como malvada
+
+  @panel
+  Escenario: El narrador ve la verdad
+    Entonces el mini-panel muestra «Real: Marioneta · Cree ser: X»
+
+## Feature: Mezefeles (Esbirro) — Carousel
+  «Empiezas sabiendo una palabra secreta. El primer jugador bueno que la diga se vuelve malvado.»
+  Panel: primera noche (fijar la palabra) + botón "Alguien la dijo".
+
+  @panel
+  Escenario: Fijar la palabra
+    Dado la primera noche
+    Entonces el narrador escribe la palabra secreta en el panel y se la envía al Mezefeles
+
+  @panel
+  Escenario: Un bueno dice la palabra
+    Cuando el narrador registra quién la dijo
+    Entonces ese jugador se vuelve malvado esa noche
+    Y recibe el aviso de su cambio de alineación
+
+  @auto
+  Escenario: Solo el primero
+    Entonces los siguientes que la digan no se ven afectados
+
+## Feature: Organillero (Esbirro) — Carousel
+  «Todos cierran los ojos al votar. Cada noche eliges si estás borracho.»
+  Panel: cada noche — interruptor "borracho sí/no".
+
+  @auto
   Escenario: Votación a ciegas
-    Dado el Organillero vivo y sobrio
-    Cuando hay una votación
-    Entonces los jugadores cierran los ojos y solo el narrador cuenta los votos
+    Dado el Organillero vivo y sano
+    Entonces durante las votaciones la página oculta a cada jugador quién más ha votado
+    Y solo el narrador ve el recuento
 
-  @narrador
-  Escenario: Borrachera voluntaria
-    Dado el Organillero elige estar borracho esta noche
-    Entonces la votación de mañana es normal (con ojos abiertos)
+  @panel
+  Escenario: Elegir estar borracho
+    Cuando el Organillero elige emborracharse esta noche
+    Entonces su habilidad no funciona y la votación de mañana es normal
 
-## Feature: Psicópata (Esbirro)
-  «Cada día, antes de nominaciones, puedes matar públicamente a un jugador.»
+## Feature: Psicópata (Esbirro) — Carousel
+  «Cada día, antes de las nominaciones, puedes elegir en público un jugador: muere.»
+  «Si eres ejecutado, juegas piedra-papel-tijera contra quien te nominó: solo mueres si pierdes.»
+  Panel: botón de asesinato diurno + panel de Roshambo tras la ejecución.
 
-  @narrador
+  @panel
   Escenario: Asesinato diurno
-    Dado el Psicópata declara su ataque antes de las nominaciones
-    Entonces el narrador mata a la víctima públicamente (el Psicópata queda expuesto)
+    Dado el Psicópata vivo, de día, antes de abrir nominaciones
+    Cuando anuncia en público a su víctima y el narrador la registra
+    Entonces esa víctima muere en público
+    Y el Psicópata queda expuesto ante todos
 
-## Feature: Mente Maestra (Esbirro — Carousel)
-  Igual que en Bad Moon Rising: ver Feature "Mente Maestra" de BMR.
+  @auto
+  Escenario: Solo una vez al día y solo antes de nominaciones
+    Dado que el Psicópata ya mató hoy, o las nominaciones ya están abiertas
+    Entonces el botón de asesinato está deshabilitado
+
+  @auto
+  Escenario: La víctima no muere
+    Dado que la víctima es el Marinero, que no puede morir
+    Entonces no muere
+    Y el Psicópata **no** recupera el uso de hoy
+
+  @panel
+  Escenario: El Psicópata es ejecutado — se abre el Roshambo
+    Dado el Psicópata nominado por Ana y ejecutado
+    Entonces la página **no** lo mata todavía
+    Y abre el panel de piedra-papel-tijera entre el Psicópata y Ana
+    Y marca el día como ya gastado: no se puede nominar ni ejecutar a nadie más hoy
+
+  @panel
+  Escenario: Ambos eligen a ciegas
+    Dado el Roshambo abierto
+    Entonces cada uno elige piedra, papel o tijera desde su propia pantalla
+    Y ninguno ve la elección del otro hasta que ambos han elegido
+    Y el narrador ve las dos elecciones y el resultado
+
+  @auto
+  Escenario: El Psicópata pierde
+    Cuando el nominador gana la tirada
+    Entonces el Psicópata muere
+
+  @auto
+  Escenario: Empate
+    Cuando ambos eligen lo mismo
+    Entonces el Psicópata **vive** y el día termina igualmente
+
+  @auto
+  Escenario: El Psicópata gana
+    Entonces vive y el día termina igualmente
+
+  @panel
+  Escenario: Autonominación
+    Dado el Psicópata que se nominó a sí mismo y fue ejecutado
+    Entonces el rival del Roshambo es el **narrador**
+    Y el narrador tira desde su propio panel
+
+  @panel
+  Escenario: El nominador está desconectado
+    Dado el nominador sin conexión cuando se abre el Roshambo
+    Entonces el narrador puede tirar en su nombre
+
+  @auto
+  Escenario: Muerte por otra causa — sin Roshambo
+    Cuando el Demonio mata al Psicópata, o el narrador lo mata a mano
+    Entonces muere directamente, sin piedra-papel-tijera
+
+  @auto
+  Escenario: Varias ejecuciones a lo largo de la partida
+    Dado el Psicópata que sobrevivió a un Roshambo
+    Cuando lo vuelven a nominar y ejecutar otro día
+    Entonces se juega un Roshambo nuevo contra el nominador de ese día
+
+## Feature: Mente Maestra (Esbirro) — Carousel
+  Igual que en Bad Moon Rising. Ver "Sucesión — Mente Maestra".
 
   @auto
   Escenario: Demonio ejecutado con Mente Maestra en Carousel
     Dado el Kazali ejecutado y la Mente Maestra viva y sobria
     Entonces la partida continúa 1 día más sin anuncio de victoria
 
-## Feature: Invocador / Summoner (Esbirro)
-  «Recibes 3 bluffs. La noche 3 eliges un jugador: se convierte en un Demonio malvado.»
+## Feature: Invocador / Summoner (Esbirro) — Carousel
+  «Recibes 3 faroles. En la noche 3 eliges un jugador: se convierte en un Demonio malvado.»
+  Panel: noche 3 — 1 objetivo + selector de qué Demonio.
 
-  @narrador
+  @auto
+  Escenario: La partida empieza sin Demonio
+    Dado el Invocador en el montaje
+    Entonces la página reparte los personajes sin ningún Demonio
+    Y no comprueba la victoria del Bien por falta de Demonios hasta la noche 3
+
+  @panel
   Escenario: Invocación en la noche 3
-    Dado el Invocador vivo la noche 3
-    Cuando elige a Ana y un Demonio del guion
-    Entonces Ana se convierte en ese Demonio malvado
-    Y hasta esa noche NO había Demonio real en juego
+    Dado el Invocador vivo en la noche 3
+    Cuando elige a un jugador
+    Entonces el narrador elige en el panel en qué Demonio se convierte
+    Y ese jugador recibe su nuevo personaje y su alineación malvada
 
-  @narrador
-  Escenario: Invocador muerto antes de la noche 3
-    Dado el Invocador muere el día 2
-    Entonces el narrador decide cómo continúa el mal (regla de la campaña)
+  @panel
+  Escenario: El Invocador muere antes de la noche 3
+    Entonces la página avisa al narrador de que debe decidir si alguien invoca igualmente
 
-## Feature: Visir (Esbirro)
-  «Todos saben que eres el Visir. No puedes morir durante el día.»
-
-  @auto
-  Escenario: Anuncio público
-    Dado el Visir en juego
-    Cuando empieza la partida
-    Entonces todos los jugadores saben quién es el Visir
+## Feature: Visir (Esbirro) — Carousel
+  «Todos saben que eres el Visir. No puedes morir durante el día. Si nominas, puedes ejecutar sin votación.»
+  Panel: botón "Ejecutar sin votación".
 
   @auto
-  Escenario: Inmune a la ejecución
-    Dado el Visir sano es nominado y la votación alcanza el umbral
-    Cuando se finaliza la nominación
-    Entonces el Visir NO muere y la página lo indica
+  Escenario: Todos lo saben
+    Entonces la página anuncia públicamente quién es el Visir al empezar
 
   @auto
-  Escenario: Visir envenenado sí muere
-    Dado el Visir envenenado
-    Cuando es ejecutado
-    Entonces muere con normalidad
+  Escenario: No muere de día
+    Cuando el Visir es ejecutado o atacado de día
+    Entonces no muere
 
-## Feature: Viuda (Esbirro)
-  «Tu primera noche: miras el Grimorio y envenenas a un jugador.»
+  @panel
+  Escenario: Ejecución directa
+    Dado el Visir que nomina a alguien
+    Cuando el narrador pulsa "Ejecutar sin votación"
+    Entonces el nominado muere sin contar votos
+    Y el día termina
+
+## Feature: Viuda (Esbirro) — Carousel
+  «En tu primera noche mira el Grimorio y elige un jugador: queda envenenado.»
+  Panel: primera noche — acceso al grimorio + 1 objetivo + aviso público.
 
   @auto
-  Escenario: Ve el Grimorio y envenena
-    Dado la Viuda la primera noche (última en la cola)
-    Cuando mira el Grimorio y elige a Ana
-    Entonces Ana queda envenenada permanentemente (WIDOW_POISON)
-    Y un jugador bueno es informado de que hay Viuda en juego
+  Escenario: Ve el grimorio y envenena
+    Dado la primera noche
+    Entonces la Viuda ve todos los personajes reales
+    Y elige a un jugador que queda envenenado el resto de la partida
 
-## Feature: Yaggababble (Esbirro)
-  «Sabes una frase secreta. Por cada vez que la dijiste en público hoy, un jugador puede morir esta noche.»
+  @auto
+  Escenario: Aviso a un jugador bueno
+    Entonces un jugador bueno al azar recibe «Hay una Viuda en juego»
 
-  @narrador
-  Escenario: Frase repetida = muertes
-    Dado el Yaggababble dijo su frase 2 veces hoy en público
+## Feature: Yaggababble (Esbirro) — Carousel
+  «Empiezas sabiendo una frase secreta. Por cada vez que la dijiste hoy, muere un jugador.»
+  Panel: al anochecer — contador de repeticiones + selector de víctimas.
+
+  @panel
+  Escenario: Fijar la frase
+    Dado la primera noche
+    Entonces el narrador escribe la frase secreta y se la envía
+
+  @panel
+  Escenario: Contar las repeticiones
     Cuando llega la noche
-    Entonces el narrador puede matar hasta 2 jugadores por esta habilidad
+    Entonces el narrador indica cuántas veces la dijo hoy
+    Y elige esa cantidad de jugadores que mueren
 
-## Feature: Al-Hadikhia (Demonio)
-  «Cada noche*: elige 3 jugadores: cada uno elige en silencio vivir o morir; si los 3 viven, mueren los 3.»
+## Feature: Al-Hadikhia (Demonio) — Carousel
+  «Cada noche* elige 3 jugadores: cada uno decide en silencio vivir o morir.»
+  Panel: cada noche* — 3 objetivos + una decisión vivir/morir por cada uno.
 
-  @narrador
-  Escenario: El dilema
-    Dado Al-Hadikhia elige a Ana, Beto y Carla
-    Cuando Ana elige morir y los otros vivir
-    Entonces Ana muere y los demás viven
+  @panel
+  Escenario: Los tres deciden
+    Cuando el Al-Hadikhia elige a tres jugadores
+    Entonces el narrador registra la decisión de cada uno
+    Y si los tres eligen vivir, los tres mueren
 
-  @narrador
-  Escenario: Todos eligen vivir
-    Dado los 3 elegidos dicen vivir
-    Entonces los 3 mueren
+  @panel
+  Escenario: Alguno elige morir
+    Entonces mueren solo los que eligieron morir
 
-  @narrador
-  Escenario: Un muerto puede revivir
-    Dado Al-Hadikhia elige a un jugador muerto
-    Cuando ese jugador elige vivir
-    Entonces revive (y cuenta como vivo para la regla de los 3)
+## Feature: Kazali (Demonio) — Carousel
+  «Cada noche* elige un jugador: muere. Tú eliges qué jugadores son Esbirros.»
+  Panel: montaje (elegir Esbirros) + cada noche* (1 objetivo).
 
-## Feature: Kazali (Demonio)
-  «Cada noche*: un jugador muere. Tú eliges qué jugadores son tus Esbirros en el montaje.»
+  @panel
+  Escenario: El Kazali reparte los Esbirros
+    Dado el montaje con Kazali
+    Entonces el narrador registra a qué jugadores convierte en Esbirros y en cuáles
+    Y cada uno recibe su nuevo personaje
 
   @auto
   Escenario: Ataque nocturno
-    Dado el Kazali la noche 2
-    Cuando ataca a un jugador sin protección
-    Entonces muere (KAZALI_KILL)
-
-  @narrador
-  Escenario: Elige a sus Esbirros
-    Dado el Kazali en el montaje
-    Entonces el narrador aplica las elecciones de Esbirro del Kazali sobre jugadores buenos
-
-## Feature: Legión (Demonio)
-  «Cada noche*: un jugador puede morir. Las ejecuciones fallan si solo votaron malvados.»
+    Entonces funciona como un ataque normal de Demonio
 
   @auto
-  Escenario: Muerte nocturna opcional
-    Dado Legión la noche 2
-    Cuando el narrador decide que muera un jugador
-    Entonces muere (LEGION_KILL)
+  Escenario: Muerte del Kazali
+    Entonces se aplica la cadena de sucesión completa
 
-  @narrador
-  Escenario: Ejecución con solo votos malvados
-    Dado una votación donde solo votaron jugadores Legión
-    Entonces el narrador anula la ejecución (regla especial de Legión)
+## Feature: Legión (Demonio) — Carousel
+  «Cada noche* puede morir un jugador. Las ejecuciones fallan si solo votaron malvados.»
+  Panel: cada noche* — 1 objetivo o ninguno.
 
-## Feature: Leviatán (Demonio)
-  «Si se ejecuta a más de 1 bueno, gana el Mal. Después del día 5, gana el Mal.»
+  @auto
+  Escenario: Muchos jugadores son Legión
+    Dado varios jugadores con el personaje Legión
+    Entonces todos ellos son malvados y lo saben
 
-  @narrador
-  Escenario: Cuenta regresiva pública
-    Dado el Leviatán en juego
-    Entonces se anuncia públicamente su presencia y el número de día actual
-    Y nadie muere por las noches
+  @auto
+  Escenario: Muere un Legión
+    Cuando uno de ellos es ejecutado
+    Entonces la partida continúa mientras quede otro Legión vivo
 
-  @narrador
+  @auto
+  Escenario: Ejecución solo con votos malvados
+    Cuando todos los que votaron eran malvados
+    Entonces la ejecución falla y nadie muere
+
+## Feature: Leviatán (Demonio) — Carousel
+  «Si se ejecuta a más de un jugador bueno, ganan los malvados. Después del día 5, ganan los malvados.»
+
+  @auto
   Escenario: Segundo bueno ejecutado
-    Dado ya fue ejecutado 1 bueno
-    Cuando se ejecuta un 2º bueno
-    Entonces el narrador declara la victoria del Mal
-
-  @narrador
-  Escenario: Sobrevive al día 5
-    Dado termina el día 5 sin que el Leviatán haya muerto
-    Entonces el narrador declara la victoria del Mal
-
-## Feature: Pequeña Monsta (Demonio)
-  «Cada noche los Esbirros eligen quién cuida a Pequeña Monsta y "es" el Demonio.»
-
-  @narrador
-  Escenario: La niñera rota
-    Dado los Esbirros eligen esta noche al cuidador de la ficha
-    Entonces ese jugador cuenta como el Demonio (si lo ejecutan, muere como Demonio)
-
-  @narrador
-  Escenario: Muerte del cuidador
-    Dado el cuidador es ejecutado
-    Entonces se evalúa el fin de partida como muerte de Demonio (Dama Escarlata / Mente Maestra aplican)
-
-## Feature: Sangijuela / Lleech (Demonio)
-  «Primera noche: envenenas a un anfitrión. Cada noche*: un jugador muere. Mueres si tu anfitrión muere.»
+    Cuando se ejecuta al segundo jugador bueno
+    Entonces ganan los malvados
 
   @auto
-  Escenario: Ataque nocturno
-    Dado la Sangijuela la noche 2
-    Cuando ataca a un jugador
-    Entonces muere (LLEECH_KILL)
+  Escenario: Se acaba el día 5
+    Cuando termina el día 5 sin que los buenos hayan ganado
+    Entonces ganan los malvados
 
-  @narrador
-  Escenario: Anfitrión inmortal... hasta que cae
-    Dado el anfitrión envenenado por la Sangijuela
+  @auto
+  Escenario: El Leviatán no mata de noche
+    Entonces no aparece en la cola nocturna
+
+## Feature: Pequeña Monsta (Demonio) — Carousel
+  «Cada noche los Esbirros eligen quién la cuida: ese jugador es el "Demonio".»
+  Panel: cada noche — selector de portador + 1 objetivo de ataque.
+
+  @panel
+  Escenario: Elegir portador
+    Cuando llega la noche
+    Entonces el narrador registra qué Esbirro cuida la ficha
+    Y ese Esbirro cuenta como Demonio para toda la información
+
+  @auto
+  Escenario: Muere el portador
+    Cuando el portador muere
+    Entonces la Pequeña Monsta pasa al siguiente Esbirro vivo
+    Y solo si no queda ninguno se aplica la cadena de sucesión
+
+## Feature: Sangijuela / Lleech (Demonio) — Carousel
+  «Cada noche* elige un jugador: muere. Eliges un anfitrión: está envenenado y si muere, tú mueres.»
+  Panel: primera noche (elegir anfitrión) + cada noche* (1 objetivo).
+
+  @panel
+  Escenario: Elegir anfitrión
+    Dado la primera noche
+    Entonces el narrador registra el anfitrión
+    Y ese jugador queda envenenado de forma permanente
+
+  @auto
+  Escenario: Muere el anfitrión
     Cuando el anfitrión muere
-    Entonces la Sangijuela muere también (el narrador la mata y se evalúa fin de partida)
-
-  @narrador
-  Escenario: Ejecutar a la Sangijuela no basta
-    Dado la Sangijuela ejecutada mientras su anfitrión vive
-    Entonces NO muere (el narrador lo indica y la partida sigue)
-
-## Feature: Ojo (Demonio)
-  «Cada noche*: elige un ROL: ese jugador muere. Si no está en juego, el narrador elige quién muere.»
+    Entonces la Sangijuela muere también
+    Y se aplica la cadena de sucesión
 
   @auto
-  Escenario: Elige un rol en juego
-    Dado el Ojo nombra "Monje" y hay Monje
-    Entonces el Monje muere (OJO_KILL)
+  Escenario: La Sangijuela no puede morir mientras viva su anfitrión
+    Cuando alguien intenta matarla
+    Entonces no muere y el panel lo explica al narrador
 
-  @narrador
-  Escenario: Elige un rol ausente
-    Dado el Ojo nombra un rol que no está en juego
-    Entonces el narrador elige la víctima que quiera
+## Feature: Ojo (Demonio) — Carousel
+  «Cada noche* elige un personaje: ese jugador muere. Si no está en juego, elige el Narrador.»
+  Panel: cada noche* — selector de personaje, no de jugador.
 
-## Feature: Motín / Riot (Demonio)
-  «El día 3 los Esbirros se vuelven Motín y los nominados mueren al ser nominados.»
+  @panel
+  Escenario: El personaje está en juego
+    Cuando el Ojo nombra un personaje presente
+    Entonces ese jugador muere
 
-  @narrador
-  Escenario: El tercer día sangriento
-    Dado la partida llega al día 3 con Motín vivo
-    Entonces todos los Esbirros se convierten en Motín
-    Y ese día cada jugador nominado muere inmediatamente (el nominado puede nominar a su vez)
+  @panel
+  Escenario: El personaje no está en juego
+    Entonces el narrador elige libremente quién muere, o nadie
 
-  @narrador
-  Escenario: Fin del día 3
-    Dado el día 3 de Motín terminó sin que el Bien lo matara
-    Entonces el narrador declara la victoria del Mal
+## Feature: Motín / Riot (Demonio) — Carousel
+  «En el día 3 los Esbirros se convierten en Motín y los nominados mueren inmediatamente.»
+
+  @auto
+  Escenario: Llega el día 3
+    Cuando empieza el día 3
+    Entonces todos los Esbirros vivos pasan a ser Motín
+    Y la página avisa a cada uno de su nuevo personaje
+
+  @auto
+  Escenario: Nominar mata
+    Dado el día 3 en curso
+    Cuando alguien es nominado
+    Entonces muere de inmediato, sin votación
+    Y el nominado, antes de morir, puede nominar a su vez
+
+---
+---
 
 # VIAJEROS
 
-## Feature: Aprendiz (Viajero)
-  @narrador
-  Escenario: Gana habilidad según alineación
-    Dado el Aprendiz bueno entra en partida
-    Entonces recibe una habilidad de Aldeano en su primera noche
-    Dado el Aprendiz malvado
-    Entonces recibe una habilidad de Esbirro
+Los Viajeros entran y salen a mitad de partida. La página siempre pide confirmación al narrador
+y **nunca** los cuenta para el reparto de personajes.
+
+## Feature: Entrada y salida de Viajeros (motor)
+
+  @panel
+  Escenario: Añadir un Viajero a mitad de partida
+    Cuando el narrador añade un Viajero
+    Entonces se sienta en la ruleta y elige su alineación desde el panel
+    Y todos los jugadores ven públicamente que es un Viajero y qué personaje tiene
+
+  @panel
+  Escenario: Expulsar a un Viajero
+    Dado una votación de expulsión contra un Viajero
+    Cuando alcanza el umbral
+    Entonces el Viajero sale de la partida
+    Y la página lo retira de la ruleta
 
   @auto
-  Escenario: No cuenta para las condiciones de victoria
-    Dado el Aprendiz vivo con 2 residentes vivos más
-    Entonces la página no lo cuenta para "solo quedan 2 vivos"
+  Escenario: Los Viajeros no cuentan para el reparto
+    Entonces la distribución de Aldeanos, Forasteros, Esbirros y Demonio no cambia al añadirlos
+
+## Feature: Aprendiz (Viajero)
+  «En tu primera noche ganas la habilidad de un Aldeano o de un Esbirro.»
+
+  @panel
+  Escenario: El narrador le asigna una habilidad
+    Dado la primera noche del Aprendiz
+    Entonces el narrador elige qué habilidad recibe según su alineación
+    Y desde entonces entra en la cola en la posición de ese personaje
 
 ## Feature: Barista (Viajero)
-  @narrador
-  Escenario: Sobrio y sano o actúa dos veces
-    Dado el Barista en juego
-    Cuando el narrador elige un jugador cada noche
-    Entonces ese jugador o queda sobrio/sano con info verdadera o actúa dos veces
-    Y el jugador afectado sabe cuál de las dos
+  «Cada noche, un jugador está sobrio y sano, o su habilidad funciona dos veces.»
+  Panel: cada noche — 1 objetivo + selector del efecto.
+
+  @panel
+  Escenario: Elegir el efecto
+    Cuando el narrador elige al jugador
+    Entonces decide si queda sobrio y sano, o si su habilidad se aplica dos veces
+    Y el efecto dura esa noche y el día siguiente
 
 ## Feature: Coleccionista de Huesos (Viajero)
-  @narrador
-  Escenario: Revive una habilidad muerta
-    Dado el Coleccionista elige a un Monje muerto
-    Entonces esa noche el Monje muerto recupera su habilidad hasta el crepúsculo
+  «Una vez por partida, de noche, elige un jugador muerto: recupera su habilidad esta noche.»
+
+  @panel
+  Escenario: Devolver una habilidad
+    Cuando el Coleccionista elige a un muerto
+    Entonces ese muerto actúa esta noche como si estuviera vivo
+    Y el uso queda gastado
 
 ## Feature: Obispo (Viajero)
-  @narrador
+  «Solo el Narrador puede nominar, y debe nominar al menos a un jugador de cada alineación cada día.»
+
+  @auto
   Escenario: Solo el narrador nomina
-    Dado el Obispo en juego hoy
-    Entonces los jugadores no pueden nominar
-    Y el narrador nomina al menos 1 jugador del bando contrario al Obispo
+    Dado el Obispo en juego
+    Entonces la página bloquea todas las nominaciones que no registre el narrador
+
+  @panel
+  Escenario: Aviso de cuota diaria
+    Entonces el panel recuerda al narrador que debe nominar a un bueno y a un malvado cada día
 
 ## Feature: Carnicero (Viajero)
-  @narrador
-  Escenario: Segunda nominación
-    Dado hubo una ejecución hoy
-    Entonces el Carnicero puede nominar a 1 jugador adicional
+  «Cada día, después de la primera ejecución, se puede nominar otra vez.»
+
+  @auto
+  Escenario: Segunda ronda de nominaciones
+    Cuando se resuelve la primera ejecución del día
+    Entonces la página vuelve a abrir las nominaciones
 
 ## Feature: Desviado (Viajero)
-  @narrador
-  Escenario: Exilio sin causa no cuenta
-    Dado intentan exiliar al Desviado sin causa justa
-    Entonces el narrador anula el exilio
+  «Si eres el más divertido, no puedes ser expulsado.»
+  Panel: interruptor "protegido de la expulsión".
+
+  @panel
+  Escenario: El narrador lo protege
+    Cuando el narrador activa el interruptor
+    Entonces las votaciones de expulsión contra el Desviado no prosperan
 
 ## Feature: Meretriz (Viajero)
-  @narrador
-  Escenario: Trato arriesgado
-    Dado la Meretriz elige a Ana de noche
-    Cuando Ana acepta mostrarse
-    Entonces la Meretriz aprende su rol
-    Y el narrador puede decidir matarlas a ambas
+  «Cada noche* elige un jugador vivo: aprendes su personaje, pero ambos podéis morir.»
+  Panel: cada noche* — 1 objetivo + decisión de muerte.
+
+  @panel
+  Escenario: Visitar a un jugador
+    Cuando la Meretriz elige a alguien
+    Entonces recibe su personaje
+    Y el narrador decide en el panel si ambos mueren
 
 ## Feature: Juez (Viajero)
-  @narrador
-  Escenario: Anula o fuerza ejecución
-    Dado el Juez usa su poder único
-    Entonces puede cancelar la ejecución actual o forzar una adicional (el narrador la aplica)
+  «Una vez por partida, puedes forzar que la nominación actual se resuelva a favor o en contra.»
+
+  @panel
+  Escenario: Forzar el resultado
+    Dado una nominación en curso
+    Cuando el narrador aplica la habilidad del Juez
+    Entonces la ejecución se produce o se anula, según lo elegido
+    Y el uso queda gastado
 
 ## Feature: Institutriz (Viajero)
-  @narrador
-  Escenario: Baile de asientos
-    Dado la Institutriz elige hasta 3 parejas hoy
-    Entonces esas parejas intercambian asientos (el narrador reordena la mesa)
+  «Cada día, hasta 3 jugadores pueden hablar en privado.»
+  Panel: selector de hasta 3 jugadores + mover a sala privada.
+
+  @panel @privado
+  Escenario: Habilitar una conversación privada
+    Cuando el narrador elige hasta 3 jugadores
+    Entonces la página los mueve a una sala privada
+    Y los devuelve a la plaza cuando el narrador lo indique
 
 ## Feature: Voudon (Viajero)
-  @narrador
-  Escenario: Solo los muertos votan
-    Dado el Voudon vivo
-    Entonces solo los muertos y el Voudon pueden votar
-    Y no se necesita mayoría para ejecutar (gana la nominación con más votos)
+  «Solo tú y los muertos podéis votar. Los muertos no necesitan voto fantasma y sus votos matan.»
 
+  @auto
+  Escenario: Solo votan los muertos y el Voudon
+    Dado el Voudon en juego
+    Entonces la página rechaza los votos de los vivos que no sean el Voudon
+
+  @auto
+  Escenario: Los muertos votan sin límite
+    Entonces los muertos pueden votar en todas las nominaciones sin gastar voto fantasma
+
+---
+---
+
+# PERSONAJES AÚN NO IMPLEMENTADOS
+
+Estos 43 personajes están en `Mecanicas Personajes.txt` pero **no** existen en ninguna campaña de la app.
+Para activarlos hay que añadir su definición a `server/campaigns/<campaña>.js` y a
+`client/src/data/campaigns/<campaña>.js`, y darles el panel indicado.
+
+## Feature: Alsaahir (Aldeano)
+  @pendiente
+  «Cada día, si adivinas públicamente qué jugadores son Esbirros y cuáles Demonios, ganan los buenos.»
+  Panel necesario: botón "Adivinó correctamente" que declara la victoria del Bien.
+
+## Feature: Ángel (Fabricado)
+  @pendiente
+  «Algo malo puede pasarle a quien sea más responsable de matar a un jugador novato.»
+  Panel necesario: marca de "jugador novato" + acciones libres del narrador.
+
+## Feature: Mendigo (Viajero)
+  @pendiente
+  «Debes usar una ficha de votación para votar. Si un muerto te da la suya, descubres su alineación. Estás sobrio y sano.»
+  Panel necesario: transferencia de voto fantasma entre jugadores.
+
+## Feature: Mandamás / Big Wig (Viajero)
+  @pendiente
+  «Cada nominado elige 1 jugador: hasta la votación solo puede hablar el elegido, y está loco de que el nominado es bueno o puede morir.»
+  Panel necesario: silenciar a todos salvo uno durante una nominación.
+
+## Feature: Contrabandista / Bootlegger (Fabricado)
+  @pendiente
+  «Este guion tiene personajes o reglas caseras.»
+  Panel necesario: campo de texto libre de reglas caseras visible para el narrador.
+
+## Feature: Budista (Fabricado)
+  @pendiente
+  «En los primeros 2 minutos del día, los jugadores veteranos no pueden hablar.»
+  Panel necesario: marca de "veterano" por jugador + temporizador de silencio.
+
+## Feature: Burócrata (Viajero)
+  @pendiente
+  «Cada noche elige 1 jugador (no a ti): su voto cuenta como 3 mañana.»
+  Panel necesario: multiplicador de voto por jugador.
+
+## Feature: Risistencia / Cacklejack (Fabricado)
+  @pendiente
+  «Cada día elige 1 jugador: un jugador diferente cambia de personaje esta noche.»
+  Panel necesario: cambio de rol en vivo (ya existe).
+
+## Feature: Deus Ex Fiasco (Fabricado)
+  @pendiente
+  «Al menos una vez por partida, el Narrador cometerá un error, lo corregirá y lo admitirá públicamente.»
+  Panel necesario: recordatorio persistente al narrador + anuncio público.
+
+## Feature: Djinn (Fabricado)
+  @pendiente
+  «Utiliza una regla especial.»
+  Panel necesario: campo de texto libre con la regla, visible para todos.
+
+## Feature: Agorero / Doomsayer (Viajero)
+  @pendiente
+  «Con 4 o más vivos, cada jugador vivo puede una vez por partida declarar en público que muera 1 jugador de su alineación.»
+  Panel necesario: un uso por jugador + selector restringido a su alineación.
+
+## Feature: Duquesa (Viajero)
+  @pendiente
+  «Cada día 3 jugadores pueden visitar al Narrador. De noche* cada visitante sabe cuántos son malvados, pero 1 recibe información falsa.»
+  Panel necesario: registro de visitantes + un número por visitante, uno marcado como falso.
+
+## Feature: Barquero / Ferryman (Fabricado)
+  @pendiente
+  «En el último día, todos los jugadores muertos recuperan su voto.»
+  Panel necesario: botón "Devolver voto fantasma a todos".
+
+## Feature: Fibbin (Fabricado)
+  @pendiente
+  «Una vez por partida, 1 jugador bueno puede recibir información incorrecta.»
+  Panel necesario: interruptor "falsificar esta información" en cualquier paso nocturno.
+
+## Feature: Violinista / Fiddler (Demonio)
+  @pendiente
+  «Una vez por partida, el Demonio elige en secreto 1 jugador del bando contrario: todos deciden cuál de los 2 gana.»
+  Panel necesario: votación especial de dos candidatos que decide la partida.
+
+## Feature: Gánster (Viajero)
+  @pendiente
+  «Una vez por día puedes matar a uno de tus vecinos vivos si el otro vecino vivo lo acepta.»
+  Panel necesario: selector limitado a vecinos + confirmación del otro vecino.
+
+## Feature: Jardinero (Fabricado)
+  @pendiente
+  «El Narrador puede asignar 1 o más personajes a jugadores concretos.»
+  Panel necesario: asignación manual en el montaje (ya existe en el asistente).
+
+## Feature: Gnomo (Esbirro)
+  @pendiente
+  «Todos empiezan conociendo a un jugador de tu alineación. Puedes elegir matar a quien le nomine.»
+  Panel necesario: anuncio público inicial + botón de muerte al nominar.
+
+## Feature: Dios de Ug (Fabricado)
+  @pendiente
+  «Un gorro Ug: quien lo lleva habla de un solo sonido pero vota doble; si falla, lo pierde.»
+  Panel necesario: ficha "gorro Ug" transferible + multiplicador de voto.
+
+## Feature: Pistolero / Gunslinger (Viajero)
+  @pendiente
+  «Cada día, tras contar la primera votación, puedes elegir 1 jugador que votó: muere.»
+  Panel necesario: selector limitado a quienes votaron en esa nominación.
+
+## Feature: Bibliotecario del Infierno (Fabricado)
+  @pendiente
+  «Algo malo puede pasarle a quien hable cuando el Narrador pida silencio.»
+  Panel necesario: botón "pedir silencio" + acciones libres del narrador.
+
+## Feature: Ermitaño / Hermit (Forastero)
+  @pendiente
+  «Tienes todas las habilidades de Forastero. [−0 o −1 Forasteros]»
+  Panel necesario: lista de habilidades de Forastero acumuladas en un solo jugador.
+
+## Feature: Hindú (Fabricado)
+  @pendiente
+  «Los primeros 4 jugadores que mueran se reencarnan en Viajeros de su misma alineación.»
+  Panel necesario: conversión automática a Viajero al morir, con selector de personaje.
+
+## Feature: Truhanes / Knaves (Fabricado)
+  @pendiente
+  «Hay 2 Narradores: uno miente y otro dice la verdad. Una vez por partida, en el crepúsculo, pueden intercambiarse.»
+  Panel necesario: la app ya admite varios narradores; falta marcar cuál miente y el intercambio.
+
+## Feature: Señor de Typhon (Demonio)
+  @pendiente
+  «Cada noche* elige 1 jugador: muere. [Los malvados están en línea, tú en el centro. +1 Esbirro]»
+  Panel necesario: validación del orden de asientos en el montaje.
+
+## Feature: Ogro (Forastero)
+  @pendiente
+  «En tu primera noche elige 1 jugador (no a ti): tomas su alineación sin saber cuál, incluso borracho o envenenado.»
+  Panel necesario: cambio de alineación silencioso (sin avisar al jugador).
+
+## Feature: Duendecillo / Pixie (Aldeano)
+  @pendiente
+  «Empiezas conociendo 1 Aldeano en juego. Si estás loco de ser ese personaje, ganas su habilidad cuando muera.»
+  Panel necesario: locura impuesta + traspaso de habilidad al morir el original.
+
+## Feature: Papa / Pope (Fabricado)
+  @pendiente
+  «Hay personajes buenos duplicados en juego. Pueden ser faroles.»
+  Panel necesario: permitir personajes repetidos en el reparto.
+
+## Feature: Princesa (Aldeano)
+  @pendiente
+  «En tu primer día, si nominas y ejecutan a ese jugador, el Demonio no mata esta noche.»
+  Panel necesario: bloqueo del ataque del Demonio esa noche.
+
+## Feature: Revolucionario (Fabricado)
+  @pendiente
+  «2 jugadores vecinos son de la misma alineación. Una vez por partida uno aparecerá de la contraria.»
+  Panel necesario: marca de pareja + interruptor de falsificación puntual.
+
+## Feature: Chivo Expiatorio / Scapegoat (Viajero)
+  @pendiente
+  «Si se ejecuta a un jugador de tu alineación, puedes morir tú en su lugar.»
+  Panel necesario: botón de sustitución en el momento de la ejecución.
+
+## Feature: Centinela / Sentinel (Fabricado)
+  @pendiente
+  «Puede haber 1 Forastero más o menos.»
+  Panel necesario: modificador de reparto en el montaje.
+
+## Feature: Espíritu de Marfil (Fabricado)
+  @pendiente
+  «No puede haber más de 1 jugador malvado extra.»
+  Panel necesario: aviso de validación en el montaje.
+
+## Feature: Atrapa Tormentas / Storm Catcher (Aldeano)
+  @pendiente
+  «Nombra un personaje bueno: si está en juego solo puede morir por ejecución, pero los malvados saben quién es.»
+  Panel necesario: ficha de inmunidad + anuncio al equipo malvado.
+
+## Feature: Ladrón / Thief (Viajero)
+  @pendiente
+  «Cada noche elige 1 jugador (no a ti): su voto cuenta en negativo mañana.»
+  Panel necesario: multiplicador de voto negativo.
+
+## Feature: Tor (Fabricado)
+  @pendiente
+  «Los jugadores no saben su personaje ni su alineación. Lo descubren al morir.»
+  Panel necesario: ocultar el propio personaje hasta la muerte (invierte la revelación actual).
+
+## Feature: Juguetero / Toymaker (Fabricado)
+  @pendiente
+  «El Demonio puede no atacar una noche y debe hacerlo al menos 1 vez por partida. Los malvados reciben su información normal.»
+  Panel necesario: botón "el Demonio no ataca" + contador de usos obligatorio.
+
+## Feature: Ventrílocuo / Ventriloquist (Fabricado)
+  @pendiente
+  «Si un jugador está loco de ser un personaje nuevo durante su nominación, puede no morir si lo ejecutan hoy.»
+  Panel necesario: locura impuesta + anulación de la ejecución.
+
+## Feature: Tonto del Pueblo / Village Idiot (Aldeano)
+  @pendiente
+  «Cada noche elige 1 jugador: descubres su alineación. [+0 a +2 Tontos, uno de ellos borracho]»
+  Panel necesario: permitir varios ejemplares del mismo personaje, uno marcado como borracho.
+
+## Feature: Espectro / Wraith (Esbirro)
+  @pendiente
+  «Puedes abrir los ojos de noche. Despiertas cuando lo hagan los demás malvados.»
+  Panel necesario: marca de "despierta con el Mal" en la cola nocturna.
+
+## Feature: Xaan (Demonio)
+  @pendiente
+  «En la noche X todos los Aldeanos están envenenados hasta el crepúsculo. [X Forasteros]»
+  Panel necesario: envenenamiento masivo programado para una noche concreta.
+
+## Feature: Fanático / Zealot (Fabricado)
+  @pendiente
+  «Con 5 o más vivos, debes votar en todas las nominaciones.»
+  Panel necesario: voto obligatorio forzado en la votación por turnos.
+
+## Feature: Zenomante / Zenomancer (Fabricado)
+  @pendiente
+  «Uno o más jugadores tienen una misión: al completarla reciben información verdadera.»
+  Panel necesario: campo de misión por jugador + botón "misión completada".
+
+---
 ---
 
 # INTERACCIONES CRÍTICAS (regresión)
 
+Escenarios que deben pasar siempre, porque cruzan varios sistemas a la vez.
+
   @auto
-  Escenario: Mente Maestra + Dama Escarlata
-    Dado ambas vivas con 5+ jugadores
+  Escenario: Dama Escarlata y Mente Maestra simultáneas
+    Dado 6 vivos, Dama Escarlata sana y Mente Maestra sobria
     Cuando el Demonio es ejecutado
-    Entonces la Dama Escarlata se transforma PRIMERO (hay Demonio) y la Mente Maestra no se activa
+    Entonces hereda la Dama Escarlata, la partida sigue y la Mente Maestra **no** se activa
 
   @auto
-  Escenario: Mente Maestra + Zombuul primera muerte
-    Dado el Zombuul ejecutado por primera vez y Mente Maestra viva
-    Entonces NO empieza el día extra (el Demonio sigue vivo en secreto)
+  Escenario: Dama Escarlata con 4 vivos y Mente Maestra
+    Dado 4 vivos, Dama Escarlata sana y Mente Maestra sobria
+    Cuando el Demonio muere
+    Entonces la Dama no hereda
+    Y se abre el día extra de la Mente Maestra sin anunciar nada
 
   @auto
-  Escenario: Virgen durante el día extra de la Mente Maestra
-    Dado el día extra en curso
-    Cuando un Aldeano nomina a la Virgen sana y es ejecutado por su poder
-    Entonces cuenta como ejecución de un bueno: el Mal gana
+  Escenario: La Dama Escarlata hereda un Demonio que no es el Diablillo
+    Dado el Vigormortis en juego y la Dama Escarlata sana con 7 vivos
+    Cuando el Vigormortis muere
+    Entonces la Dama se convierte en **Vigormortis**, no en Diablillo
+
+  @panel
+  Escenario: Barbero y Vigormortis
+    Dado el Barbero muerto y el Vigormortis vivo
+    Cuando el Demonio se intercambia con una Adorable muerta
+    Entonces el antiguo Vigormortis pasa a ser una Adorable malvada
+    Y la nueva Vigormortis está viva y la partida continúa
+
+  @panel
+  Escenario: Rata de Laboratorio con sucesión de Demonio
+    Dado el Boffin en juego y la Dama Escarlata heredando
+    Entonces el nuevo Demonio también tiene una habilidad de Boffin
+    Y el narrador puede darle una habilidad distinta de la anterior
+
+  @panel
+  Escenario: El Hechicero desea ser el Demonio
+    Dado el Hechicero pidiendo convertirse en Demonio
+    Cuando el narrador concede el deseo desde el catálogo
+    Entonces el Demonio anterior muere y el Hechicero ocupa su lugar
+    Y la página **no** declara victoria del Bien, porque hay Demonio vivo
+    Y sugiere la pista pública correspondiente
 
   @auto
-  Escenario: Santo ejecutado en día extra
-    Dado el día extra en curso
-    Cuando el Santo sano es ejecutado
-    Entonces el Mal gana (por partida doble: Santo y día extra)
+  Escenario: Psicópata y Pólvora
+    Dado la Pólvora muerta a manos del Psicópata en su asesinato diurno
+    Entonces la Pólvora **no** explota, porque no fue una ejecución
+
+  @panel
+  Escenario: Psicópata ejecutado dos veces en la partida
+    Dado el Psicópata que empató su primer Roshambo y vivió
+    Cuando otro jugador lo nomina y ejecuta días después
+    Entonces se abre un Roshambo nuevo contra ese nuevo nominador
 
   @auto
-  Escenario: Juglar bloquea al Asesino
-    Dado un Esbirro ejecutado hoy con Juglar vivo
-    Cuando el Asesino intenta matar esta noche
-    Entonces está borracho y su tiro no mata (habilidad sin efecto)
+  Escenario: Ateo bloquea todos los finales automáticos
+    Dado el Ateo en juego
+    Cuando el Santo es ejecutado, o muere el "Demonio", o quedan 2 vivos
+    Entonces la página no declara ningún ganador
+
+  @panel
+  Escenario: Cambio de rol en vivo sobre una Marioneta
+    Dado una Marioneta que se cree Lavandera
+    Cuando el narrador cambia solo su rol creído a "Monje"
+    Entonces sigue siendo Marioneta y malvada
+    Y el jugador pasa a creer que es el Monje
+
+  @panel
+  Escenario: Cambio de rol en vivo que crea un segundo Demonio
+    Dado un Demonio vivo
+    Cuando el narrador convierte a otro jugador en Demonio
+    Entonces la página avisa de que habrá dos Demonios
+    Y no declara victoria del Bien hasta que mueran los dos
 
   @auto
-  Escenario: Vortox + día extra imposible
-    Dado el Vortox ejecutado con Mente Maestra viva
-    Cuando el día extra transcurre sin ejecución
-    Entonces ganan los buenos (la habilidad del Vortox murió con él)
+  Escenario: Ruleta congelada con muerte y voto fantasma
+    Dado un jugador que muere de noche y otro que gastó su voto fantasma ayer
+    Cuando es de noche
+    Entonces la ruleta de los jugadores muestra al primero vivo y al segundo con su voto tal como estaba al anochecer
+    Cuando amanece
+    Entonces ambos estados se actualizan de golpe
+
+  @auto
+  Escenario: Desconexión durante la cola nocturna
+    Dado un jugador desconectado cuando le toca actuar de noche
+    Entonces el narrador lo ve marcado ○ desconectado en la cola
+    Y puede resolver su acción desde el panel o saltarlo
+
+  @auto
+  Escenario: El Espía ve el grimorio pero no la conexión
+    Dado el Espía mirando el grimorio de noche
+    Entonces ve todos los personajes
+    Y **no** ve el estado de conexión de nadie
+
+  @panel
+  Escenario: Filósofo que roba una habilidad y luego cambia de rol
+    Dado el Filósofo con la habilidad del Monje robada
+    Cuando el narrador le cambia el personaje a "Soldado"
+    Entonces pierde la habilidad robada
+    Y la página avisa al narrador de que el borracho del Filósofo sigue borracho
+
+  @auto
+  Escenario: Vortox hace falsa toda la información aunque el rol esté sano
+    Dado el Vortox vivo y una Empática sana
+    Entonces la Empática recibe un número falso
+    Y el panel del narrador lo indica en su paso

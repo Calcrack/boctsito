@@ -139,6 +139,11 @@ const roles = {
     ability: 'Empiezas conociendo a 1 jugador bueno.',
     firstNight: true, otherNights: false,
   },
+  WIZARD: {
+    id: 'WIZARD', name: 'Hechicero', alignment: 'good', type: 'townfolk',
+    ability: 'Una vez por partida pide en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.',
+    firstNight: false, otherNights: false,
+  },
 
   // ── FORASTEROS ──────────────────────────────────────────────────────────
   DAMSEL: {

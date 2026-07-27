@@ -1026,10 +1026,9 @@ function applyNightAction(game, actionType, actorId, targetIds) {
           clearBearerDeathTokens(target);
           game.nightDeaths.push(target.id);
           placeToken(target, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole || 'IMP', sourcePlayerId: actorId }, game);
-          const minion = game.players.find(p => p.type === 'minion' && p.alive);
-          if (minion) {
-            minion.role = 'IMP'; minion.type = 'demon';
-          }
+          // Salto de estrella: lo resuelve la cadena de sucesión.
+          target.starPass = true;
+          resolveDemonDeath(game, target);
         }
       } else if (target.role === 'SOLDIER' && !target.poisoned) {
         // blocked
@@ -1365,7 +1364,65 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
   }
   syncStatusFlags(game);
+  syncBarberState(game);
   return game;
+}
+
+// ── Barbero ──────────────────────────────────────────────────────────
+// Si el Barbero muere (de día o de noche), esa noche el Demonio puede
+// intercambiar los personajes de 2 jugadores cualesquiera.
+function syncBarberState(game) {
+  const barber = game.players.find(p => p.role === 'BARBER');
+  if (!barber) return;
+  const alreadyOpen = (barber.tokens || []).some(t => t.type === 'BARBER_TONIGHT');
+  if (barber.alive || barber.barberResolved || alreadyOpen) return;
+  // Si ya estaba muerto ANTES de convertirse en Barbero, no hay intercambio.
+  if (barber.becameBarberAfterDeath) { barber.barberResolved = true; return; }
+  if (barber.poisoned) { barber.barberResolved = true; return; }
+
+  placeToken(barber, {
+    type: 'BARBER_TONIGHT', roleId: 'BARBER', label: 'Corte de pelo esta noche',
+    expiry: ['PERMANENT'], sourceRole: 'BARBER', sourcePlayerId: barber.id,
+  }, game);
+  addDeferred(game, {
+    label: '💈 El Barbero ha muerto: esta noche el Demonio puede intercambiar los personajes de 2 jugadores (o declinar). No cierres la noche sin resolverlo.',
+    dueNight: game.nightNumber, sourcePlayerId: barber.id, severity: 'warn', role: 'BARBER',
+  });
+}
+
+// Intercambia los personajes de dos jugadores conservando su alineación.
+// Si el intercambio mueve al Demonio, la partida NO termina: hay Demonio nuevo.
+function barberSwap(game, aId, bId) {
+  const a = game.players.find(p => p.id === aId);
+  const b = game.players.find(p => p.id === bId);
+  if (!a || !b || a.id === b.id) throw new Error('Elige dos jugadores distintos');
+
+  const aRole = a.role, aType = a.type;
+  a.role = b.role; a.type = b.type;
+  b.role = aRole;  b.type = aType;
+  // La alineación NO cambia: un bueno que recibe un personaje malvado sigue siendo bueno.
+  a.drunkAs = null; b.drunkAs = null;
+  a.believedRole = null; b.believedRole = null;
+
+  closeBarberStep(game);
+  syncStatusFlags(game);
+  // El Demonio puede haber cambiado de asiento (o de bando): recalcula sin terminar la partida a lo tonto.
+  checkWinCondition(game);
+  addDeferred(game, {
+    label: `💈 Barbero: ${a.name} y ${b.name} intercambian personaje (${ROLES[b.role]?.name || b.role} ↔ ${ROLES[a.role]?.name || a.role}). Las alineaciones NO cambian.`,
+    dueNight: game.nightNumber, severity: 'warn', role: 'BARBER',
+  });
+  return { a, b };
+}
+
+function closeBarberStep(game) {
+  const barber = game.players.find(p => (p.tokens || []).some(t => t.type === 'BARBER_TONIGHT'));
+  if (barber) {
+    barber.tokens = (barber.tokens || []).filter(t => t.type !== 'BARBER_TONIGHT');
+    barber.barberResolved = true;
+  }
+  // Si el Barbero cambió de personaje en el propio intercambio, cierra por bandera global.
+  game.players.forEach(p => { if (p.role === 'BARBER' && !p.alive) p.barberResolved = true; });
 }
 
 function checkGrandmotherDeath(game, killed, actorId, artRole) {
@@ -1377,13 +1434,105 @@ function checkGrandmotherDeath(game, killed, actorId, artRole) {
   addDeferred(game, { label: `👵 La Abuela murió junto a su nieto ${killed.name}`, dueNight: game.nightNumber, severity: 'info', role: 'GRANDMOTHER' });
 }
 
-function checkScarletWoman(game, killer) {
-  if (!killer || killer.type !== 'demon' || killer.alive) return;
-  const scarlet = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
+// ── Sucesión del Demonio ─────────────────────────────────────────────
+// Un Demonio acaba de morir. Resuelve, EN ESTE ORDEN, quién ocupa su lugar.
+// Devuelve true si la partida debe continuar (hay sucesor o se aplaza el final).
+//   1. ¿Ya queda otro Demonio vivo? (Legión, Fang Gu ya transferido, dos Demonios…)
+//   2. Sucesor propio del Demonio muerto (Pequeña Monsta, Diablillo autoatacado…)
+//   3. Dama Escarlata → hereda EL MISMO personaje del Demonio muerto
+//   4. Rata de Laboratorio → el nuevo Demonio hereda una habilidad buena
+//   5. Mente Maestra → día extra sin anuncio
+function resolveDemonDeath(game, deadDemon) {
+  if (!deadDemon || deadDemon.type !== 'demon' || deadDemon.alive) return false;
+
+  // 1. Otro Demonio sigue vivo: nada que suceder.
+  const otherDemon = game.players.find(p => p.id !== deadDemon.id && countsAsLivingDemon(p));
+  if (otherDemon) return true;
+
+  // 2. Sucesor propio del personaje.
+  if (promoteOwnSuccessor(game, deadDemon)) return true;
+
+  // 3. Dama Escarlata: hereda el personaje exacto, no un Diablillo fijo.
+  const scarlet = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive && isActorEffective(p));
   const liveCount = game.players.filter(p => p.alive).length;
   if (scarlet && liveCount >= 5) {
-    scarlet.role = 'IMP'; scarlet.type = 'demon';
+    scarlet.role = deadDemon.role;
+    scarlet.type = 'demon';
+    scarlet.alignment = 'evil';
+    const demonName = ROLES[deadDemon.role]?.name || deadDemon.role;
+    addDeferred(game, {
+      label: `🔴 Dama Escarlata: ${scarlet.name} se convierte en ${demonName}. NO anuncies la muerte del Demonio — despiértala esta noche.`,
+      dueNight: game.nightNumber, sourcePlayerId: scarlet.id, severity: 'warn', role: 'SCARLET_WOMAN',
+    });
+    // 4. Rata de Laboratorio: el Demonio nuevo también hereda una habilidad buena.
+    grantBoffinAbility(game, scarlet);
+    return true;
   }
+
+  // 5. Mente Maestra: la partida no termina, se juega 1 día más en secreto.
+  if (tryMastermindDefer(game)) return true;
+
+  return false;
+}
+
+// Sucesores propios de cada personaje de Demonio.
+function promoteOwnSuccessor(game, deadDemon) {
+  switch (deadDemon.role) {
+    // Diablillo: si se atacó a sí mismo, un Esbirro vivo pasa a ser Diablillo.
+    case 'IMP': {
+      if (!deadDemon.starPass) return false;
+      const minion = game.players.find(p => p.type === 'minion' && p.alive);
+      if (!minion) return false;
+      deadDemon.starPass = false;
+      minion.role = 'IMP'; minion.type = 'demon'; minion.alignment = 'evil';
+      addDeferred(game, {
+        label: `😈 Salto de estrella: ${minion.name} es el nuevo Diablillo. La partida continúa.`,
+        dueNight: game.nightNumber, sourcePlayerId: minion.id, severity: 'warn', role: 'IMP',
+      });
+      grantBoffinAbility(game, minion);
+      return true;
+    }
+    // Pequeña Monsta: la ficha pasa al siguiente Esbirro vivo que la cuide.
+    case 'LIL_MONSTA': {
+      const keeper = game.players.find(p => p.type === 'minion' && p.alive);
+      if (!keeper) return false;
+      placeToken(keeper, {
+        type: 'LIL_MONSTA_KEEPER', roleId: 'LIL_MONSTA', label: 'Cuida a la Pequeña Monsta',
+        expiry: ['PERMANENT', 'ON_REPLACE'], sourceRole: 'LIL_MONSTA',
+      }, game);
+      addDeferred(game, {
+        label: `👶 Pequeña Monsta: ${keeper.name} pasa a cuidarla y cuenta como Demonio. NO anuncies victoria.`,
+        dueNight: game.nightNumber, sourcePlayerId: keeper.id, severity: 'warn', role: 'LIL_MONSTA',
+      });
+      return true;
+    }
+    // Legión: mientras quede otro Legión vivo la partida sigue (ya cubierto en el paso 1).
+    case 'LEGION':
+      return game.players.some(p => p.role === 'LEGION' && p.alive);
+    // Sangijuela, Kazali, Ojo, Motín, Al-Hadikhia, Vigormortis, Fang Gu:
+    // no tienen sucesor automático — pasan a Dama Escarlata / Mente Maestra.
+    default:
+      return false;
+  }
+}
+
+// Rata de Laboratorio: todo Demonio nuevo hereda también una habilidad buena.
+function grantBoffinAbility(game, newDemon) {
+  const boffin = game.players.find(p => p.role === 'BOFFIN');
+  if (!boffin || !newDemon) return;
+  placeToken(newDemon, {
+    type: 'BOFFIN_ABILITY', roleId: 'BOFFIN', label: 'Habilidad de Rata de Laboratorio',
+    expiry: ['PERMANENT'], sourceRole: 'BOFFIN', sourcePlayerId: boffin.id,
+  }, game);
+  addDeferred(game, {
+    label: `🐀 Rata de Laboratorio: ${newDemon.name} (Demonio nuevo) también tiene una habilidad buena. Puedes darle una distinta a la anterior.`,
+    dueNight: game.nightNumber, sourcePlayerId: newDemon.id, severity: 'warn', role: 'BOFFIN',
+  });
+}
+
+// Compatibilidad: los ataques nocturnos llaman aquí cuando el atacante murió.
+function checkScarletWoman(game, killer) {
+  resolveDemonDeath(game, killer);
 }
 
 // ── Mente Maestra ────────────────────────────────────────────────────
@@ -1437,8 +1586,11 @@ function zombuulFakeDeath(game, target) {
 
 // ¿Cuenta este jugador como Demonio vivo para el fin de partida?
 function countsAsLivingDemon(p) {
+  // Pequeña Monsta: el Esbirro que la cuida cuenta como Demonio aunque sea Esbirro.
+  if (p.alive && (p.tokens || []).some(t => t.type === 'LIL_MONSTA_KEEPER')) return true;
   if (p.type !== 'demon') return false;
   if (p.alive) return true;
+  // Zombuul: su primera muerte es fingida.
   return p.role === 'ZOMBUUL' && p.zombuulFirstDied && !p.zombuulReallyDead;
 }
 
@@ -1686,12 +1838,34 @@ function executeNominationWinner(game) {
     return { executed: nominee, gameOver: false, winner: null, tie: false };
   }
 
+  // Psicópata: la ejecución NO lo mata directamente. Juega piedra-papel-tijera
+  // contra quien lo nominó (o contra el Narrador si se autonominó). Solo muere si pierde.
+  // El día se gasta igualmente: no se puede nominar ni ejecutar a nadie más hoy.
+  if (!atheistActive && nominee.role === 'PSYCHOPATH' && !nominee.poisoned && nominee.alive) {
+    game.pendingRoshambo = {
+      psychopathId: nominee.id,
+      opponentId: winner.nominatorId === nominee.id ? 'NARRATOR' : winner.nominatorId,
+      throws: {},
+      result: null,
+    };
+    const opponentName = winner.nominatorId === nominee.id
+      ? 'el Narrador'
+      : (game.players.find(p => p.id === winner.nominatorId)?.name || '?');
+    addDeferred(game, {
+      label: `🎲 Psicópata ejecutado: juega piedra-papel-tijera contra ${opponentName}. Solo muere si PIERDE. El día está gastado.`,
+      dueNight: game.nightNumber, sourcePlayerId: nominee.id, severity: 'warn', role: 'PSYCHOPATH',
+    });
+    return { executed: nominee, gameOver: false, winner: null, tie: false, roshambo: true };
+  }
+
   nominee.alive = false;
   clearBearerDeathTokens(nominee);
   game.executedToday = nominee.id;
   if (nominee.role === 'ZOMBUUL') nominee.zombuulReallyDead = true;
   // Ficha "Murió hoy" para el Enterrador: dura el día y se lee esa noche.
   placeToken(nominee, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
+  // Barbero ejecutado: esta noche el Demonio puede intercambiar dos personajes.
+  syncBarberState(game);
 
   // Juglar: si el ejecutado es un Esbirro, todos los demás se emborrachan al anochecer.
   const minstrel = game.players.find(p => p.role === 'MINSTREL' && p.alive && !p.poisoned && !p.drunkAs);
@@ -1745,22 +1919,234 @@ function executeNominationWinner(game) {
   }
 
   if (!atheistActive && nominee.type === 'demon') {
-    const scarlet   = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
-    const liveCount = game.players.filter(p => p.alive).length;
-    if (scarlet && liveCount >= 5) {
-      scarlet.role = 'IMP'; scarlet.type = 'demon';
-    } else if (tryMastermindDefer(game)) {
-      // Mente Maestra: la partida NO termina — se juega 1 día más en silencio.
-      return { executed: nominee, gameOver: false, winner: null, tie: false, mastermindDefer: true };
-    } else {
-      game.winner = 'good'; game.phase = 'game_over';
-      game.winReason = 'Demonio ejecutado';
-      return { executed: nominee, gameOver: true, winner: 'good', tie: false };
+    // Cadena completa de sucesión: la muerte del Demonio NO termina la partida por sí sola.
+    if (resolveDemonDeath(game, nominee)) {
+      return {
+        executed: nominee, gameOver: false, winner: null, tie: false,
+        demonSucceeded: true, mastermindDefer: game.mastermindPending || false,
+      };
     }
+    game.winner = 'good'; game.phase = 'game_over';
+    game.winReason = 'Demonio ejecutado';
+    return { executed: nominee, gameOver: true, winner: 'good', tie: false };
   }
 
   checkWinCondition(game);
   return { executed: nominee, gameOver: game.phase === 'game_over', winner: game.winner, tie: false };
+}
+
+// ── Hechicero: aplicación de un deseo ────────────────────────────────
+// `apply` viene del catálogo (server/wishes.js) o de la pestaña libre.
+// Devuelve el texto que se registra en el historial del deseo.
+function applyWish(game, apply, opts = {}) {
+  const wizard = game.players.find(p => p.role === 'WIZARD');
+  const target = opts.targetId ? game.players.find(p => p.id === opts.targetId) : null;
+  const target2 = opts.targetId2 ? game.players.find(p => p.id === opts.targetId2) : null;
+  const role = opts.roleId ? ROLES[opts.roleId] : null;
+
+  switch (apply) {
+    case 'GRANT_GRIMOIRE':
+      if (wizard) wizard.seesGrimoire = true;
+      return 'El Hechicero ve el Grimorio.';
+
+    case 'REVEAL_DEMON': {
+      const demon = game.players.find(p => countsAsLivingDemon(p));
+      if (wizard) wizard.nightInfo = `🧙 Deseo\nEl Demonio es: ${demon ? demon.name : 'nadie (no queda Demonio vivo)'}.`;
+      return `Se le revela el Demonio: ${demon ? demon.name : '—'}.`;
+    }
+
+    case 'REVEAL_ALIGNMENT':
+      if (wizard && target) wizard.nightInfo = `🧙 Deseo\n${target.name} es ${target.alignment === 'evil' ? 'MALVADO' : 'BUENO'}.`;
+      return `Se le revela la alineación de ${target?.name || '?'}.`;
+
+    case 'REVEAL_NOT_IN_PLAY': {
+      const list = (game.rolesNotInPlay || []).slice(0, 3).map(r => ROLES[r]?.name || r);
+      if (wizard) wizard.nightInfo = `🧙 Deseo\nNo están en juego: ${list.join(', ')}.`;
+      return `Se le revelan 3 personajes ausentes: ${list.join(', ')}.`;
+    }
+
+    case 'REVEAL_NIGHT_INFO': {
+      const all = game.players.filter(p => p.nightInfo).map(p => `${p.name}: ${p.nightInfo}`).join('\n');
+      if (wizard) wizard.nightInfo = `🧙 Deseo\n${all || 'Nadie recibió información esta noche.'}`;
+      return 'Se le entrega toda la información de la noche.';
+    }
+
+    case 'BECOME_DEMON': {
+      const demon = game.players.find(p => countsAsLivingDemon(p));
+      if (!wizard) return 'No hay Hechicero en juego.';
+      const demonRole = demon ? demon.role : 'IMP';
+      if (demon) { demon.alive = false; clearBearerDeathTokens(demon); }
+      wizard.role = demonRole; wizard.type = 'demon'; wizard.alignment = 'evil';
+      wizard.believedRole = null; wizard.drunkAs = null;
+      // Hay Demonio vivo: la partida NO termina.
+      checkWinCondition(game);
+      return `El Hechicero se convierte en ${ROLES[demonRole]?.name || demonRole}; el Demonio anterior muere.`;
+    }
+
+    case 'SET_ROLE':
+      if (target && role) {
+        target.role = role.id; target.type = role.type; target.alignment = role.alignment;
+        target.believedRole = null; target.drunkAs = null;
+        checkWinCondition(game);
+      }
+      return `${target?.name || '?'} pasa a ser ${role?.name || '?'}.`;
+
+    case 'SWAP_ROLES':
+      if (target && target2) barberSwap(game, target.id, target2.id);
+      return `${target?.name || '?'} y ${target2?.name || '?'} intercambian personaje.`;
+
+    case 'STEAL_ABILITY':
+      if (wizard && target) {
+        wizard.role = target.role; wizard.type = target.type;
+        // El Hechicero conserva SU alineación: roba la habilidad, no el bando.
+        placeToken(target, {
+          type: 'DRUNK_NIGHT', roleId: 'WIZARD', label: 'Habilidad robada',
+          expiry: ['PERMANENT'], sourceRole: 'WIZARD', sourcePlayerId: wizard.id,
+        }, game);
+      }
+      return `El Hechicero roba la habilidad de ${target?.name || '?'}, que queda borracho.`;
+
+    case 'SET_ALIGNMENT_EVIL':
+      if (target) target.alignment = 'evil';
+      return `${target?.name || '?'} pasa a ser malvado.`;
+
+    case 'SET_ALIGNMENT_GOOD':
+      if (target) target.alignment = 'good';
+      return `${target?.name || '?'} pasa a ser bueno.`;
+
+    case 'KILL':
+      if (target) killPlayer(game, target.id, 'deseo del Hechicero');
+      return `${target?.name || '?'} muere.`;
+
+    case 'REVIVE':
+      if (target) revivePlayer(game, target.id);
+      return `${target?.name || '?'} vuelve a estar vivo.`;
+
+    case 'PROTECT_TONIGHT':
+      if (target) placeToken(target, { type: 'SAFE_TONIGHT', roleId: 'WIZARD', label: 'A salvo (deseo)', expiry: ['AT_DAWN'], sourceRole: 'WIZARD' }, game);
+      return `${target?.name || '?'} no puede morir esta noche.`;
+
+    case 'PROTECT_FOREVER':
+      if (target) placeToken(target, { type: 'SAFE_TONIGHT', roleId: 'WIZARD', label: 'Inmune al Demonio (deseo)', expiry: ['PERMANENT'], sourceRole: 'WIZARD' }, game);
+      return `${target?.name || '?'} es inmune al Demonio el resto de la partida.`;
+
+    case 'NO_DEATHS_TONIGHT':
+      game.players.filter(p => p.alive).forEach(p => {
+        placeToken(p, { type: 'SAFE_TONIGHT', roleId: 'WIZARD', label: 'A salvo (deseo)', expiry: ['AT_DAWN'], sourceRole: 'WIZARD' }, game);
+      });
+      return 'Nadie puede morir esta noche.';
+
+    case 'DRUNK_ALL_GOOD':
+      game.players.filter(p => p.alignment === 'good' && p.alive).forEach(p => {
+        placeToken(p, { type: 'DRUNK_NIGHT', roleId: 'WIZARD', label: 'Borracho (deseo)', expiry: ['PERMANENT'], sourceRole: 'WIZARD' }, game);
+      });
+      return 'Todos los buenos quedan borrachos.';
+
+    case 'POISON':
+      if (target) placeToken(target, { type: 'POISONED', roleId: 'WIZARD', label: 'Envenenado (deseo)', expiry: ['UNTIL_NEXT_DUSK'], sourceRole: 'WIZARD' }, game);
+      return `${target?.name || '?'} queda envenenado.`;
+
+    case 'CURE':
+      if (target) target.tokens = (target.tokens || []).filter(t => !['POISONED', 'DRUNK_NIGHT'].includes(t.type));
+      return `${target?.name || '?'} queda sobrio y sano.`;
+
+    case 'HIDE_FROM_DEMON':
+      if (wizard) wizard.hiddenFromEvil = true;
+      return 'El Hechicero no aparece en la información del Mal.';
+
+    case 'DOUBLE_VOTE':
+      if (target) target.voteWeight = 2;
+      return `El voto de ${target?.name || '?'} cuenta doble.`;
+
+    case 'RESTORE_GHOST_VOTE':
+      if (target) target.deadVoteNominationId = null;
+      return `${target?.name || '?'} recupera su voto fantasma.`;
+
+    case 'RESTORE_ALL_GHOST_VOTES':
+      game.players.forEach(p => { p.deadVoteNominationId = null; });
+      return 'Todos los muertos recuperan su voto.';
+
+    case 'DECLARE_WINNER':
+      game.winner = opts.winner === 'evil' ? 'evil' : 'good';
+      game.phase = 'game_over';
+      game.winReason = `🧙 Deseo del Hechicero concedido: ganan los ${game.winner === 'evil' ? 'malvados' : 'buenos'}`;
+      return `Ganan los ${game.winner === 'evil' ? 'malvados' : 'buenos'}.`;
+
+    default:
+      return `Efecto libre aplicado por el narrador: ${apply}`;
+  }
+}
+
+// ── Psicópata ────────────────────────────────────────────────────────
+const ROSHAMBO_BEATS = { piedra: 'tijera', tijera: 'papel', papel: 'piedra' };
+
+// Registra la tirada de uno de los dos contendientes. Nadie ve la del otro
+// hasta que ambos han tirado.
+function roshamboThrow(game, whoId, choice) {
+  const rs = game.pendingRoshambo;
+  if (!rs || rs.result) throw new Error('No hay ningún Roshambo pendiente');
+  if (!ROSHAMBO_BEATS[choice]) throw new Error('Elección no válida');
+  if (whoId !== rs.psychopathId && whoId !== rs.opponentId) throw new Error('No participas en este Roshambo');
+  rs.throws[whoId] = choice;
+
+  const psychoThrow = rs.throws[rs.psychopathId];
+  const oppThrow    = rs.throws[rs.opponentId];
+  if (!psychoThrow || !oppThrow) return rs;
+
+  const psycho = game.players.find(p => p.id === rs.psychopathId);
+  if (psychoThrow === oppThrow) rs.result = 'tie';
+  else if (ROSHAMBO_BEATS[psychoThrow] === oppThrow) rs.result = 'psychopath';
+  else rs.result = 'opponent';
+
+  // El Psicópata solo muere si PIERDE. Empatar o ganar significa que vive.
+  if (rs.result === 'opponent' && psycho) {
+    psycho.alive = false;
+    clearBearerDeathTokens(psycho);
+    game.executedToday = psycho.id;
+    placeToken(psycho, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
+    checkWinCondition(game);
+  }
+  addDeferred(game, {
+    label: rs.result === 'opponent'
+      ? `🎲 El Psicópata perdió el Roshambo (${psychoThrow} vs ${oppThrow}) — muere.`
+      : `🎲 El Psicópata ${rs.result === 'tie' ? 'empató' : 'ganó'} el Roshambo (${psychoThrow} vs ${oppThrow}) — vive. El día está gastado igualmente.`,
+    dueNight: game.nightNumber, sourcePlayerId: rs.psychopathId, severity: 'info', role: 'PSYCHOPATH',
+  });
+  return rs;
+}
+
+// Asesinato diurno público: una vez al día, antes de abrir nominaciones.
+function psychopathDayKill(game, psychoId, targetId) {
+  const psycho = game.players.find(p => p.id === psychoId);
+  const target = game.players.find(p => p.id === targetId);
+  if (!psycho || psycho.role !== 'PSYCHOPATH' || !psycho.alive) throw new Error('No es un Psicópata vivo');
+  if (game.phase !== 'day') throw new Error('Solo durante el día, antes de las nominaciones');
+  if (psycho.psychopathKillDay === game.dayNumber) throw new Error('El Psicópata ya ha matado hoy');
+  if (!target || !target.alive) throw new Error('El objetivo debe estar vivo');
+
+  // El uso se gasta aunque la víctima sobreviva (Marinero, Soldado, protegido…).
+  psycho.psychopathKillDay = game.dayNumber;
+
+  const immune = target.role === 'SAILOR' && !target.poisoned;
+  if (immune || target.protected) {
+    addDeferred(game, {
+      label: `🔪 El Psicópata eligió a ${target.name}, pero no muere. Su uso de hoy se gasta igualmente.`,
+      dueNight: game.nightNumber, sourcePlayerId: psychoId, severity: 'warn', role: 'PSYCHOPATH',
+    });
+    return { killed: null, target, blocked: true };
+  }
+  if (checkFoolProtection(game, target, psychoId, 'PSYCHOPATH')) {
+    return { killed: null, target, blocked: true };
+  }
+
+  target.alive = false;
+  clearBearerDeathTokens(target);
+  addDeferred(game, {
+    label: `🔪 El Psicópata mató a ${target.name} en público — queda expuesto ante todos.`,
+    dueNight: game.nightNumber, sourcePlayerId: psychoId, severity: 'warn', role: 'PSYCHOPATH',
+  });
+  checkWinCondition(game);
+  return { killed: target, target, blocked: false };
 }
 
 function slayerAction(game, slayerId, targetId) {
@@ -1837,6 +2223,10 @@ function startDay(game) {
 }
 
 function startNight(game) {
+  // El Roshambo pendiente se descarta al anochecer: el día ya está gastado.
+  game.pendingRoshambo = null;
+  // Barbero muerto durante el día: abre el paso del Demonio para esta noche.
+  syncBarberState(game);
   const hasAtheist = game.players.some(p => p.role === 'ATHEIST');
   // Mente Maestra: si el día extra terminó sin ejecución, ganan los buenos.
   if (!hasAtheist && game.mastermindDay != null && !game.mastermindDone && game.phase !== 'game_over') {
@@ -1947,7 +2337,10 @@ function checkWinCondition(game) {
   const demons = game.players.filter(countsAsLivingDemon);
 
   if (demons.length === 0) {
-    // Mente Maestra viva y sobria: la partida espera 1 día más (día extra).
+    // Cadena de sucesión completa: Demonio propio → Dama Escarlata → Boffin → Mente Maestra.
+    // Solo si nada de eso aplica gana el Bien.
+    const lastDeadDemon = game.players.filter(p => p.type === 'demon' && !p.alive).pop();
+    if (lastDeadDemon && resolveDemonDeath(game, lastDeadDemon)) return false;
     if (tryMastermindDefer(game)) return false;
     game.winner = 'good'; game.phase = 'game_over';
     game.winReason = 'Sin Demonios vivos';
@@ -1992,6 +2385,7 @@ function killPlayer(game, playerId, reason) {
     if (player.zombuulFirstDied) player.zombuulReallyDead = true;
   }
   player.alive = false;
+  syncBarberState(game);
   checkWinCondition(game);
   return game;
 }
@@ -2011,7 +2405,9 @@ function shuffle(arr) {
   return a;
 }
 
-function getPublicState(game, viewerId, isNarrator) {
+// `presence` = { playerId: 'online' | 'away' }. Ausente del mapa = desconectado.
+// Solo el narrador la recibe: los jugadores nunca saben quién está conectado.
+function getPublicState(game, viewerId, isNarrator, presence = {}) {
   const { players, phase, dayNumber, nightNumber, nominations, activeNomination, winner, smokeScreenPlayerId } = game;
 
   const viewer = players.find(p => p.id === viewerId);
@@ -2075,10 +2471,13 @@ function getPublicState(game, viewerId, isNarrator) {
       vigormortisAlive: isNarrator ? (p.vigormortisAlive || false) : undefined,
       impShotUsed: (isMe && p.type === 'demon') || isNarrator ? p.impShotUsed : false,
       pendingRavenkeeper: isNarrator ? p.pendingRavenkeeper : (isMe ? p.pendingRavenkeeper : false),
-      isNightTarget: nightTargets.has(p.id),
+      // Congelado: de noche un jugador no debe ver a quién están eligiendo los demás.
+      isNightTarget: frozen ? false : nightTargets.has(p.id),
       bluffRole: (isMe || isNarrator) ? p.bluffRole : null,
       statuses: isNarrator ? (p.statuses || []) : undefined,
       tokens: isNarrator ? (p.tokens || []) : undefined,
+      // 'online' | 'away' | 'offline' — información exclusiva del narrador.
+      presence: isNarrator ? (presence[p.id] || 'offline') : undefined,
     };
   });
 
@@ -2164,6 +2563,68 @@ function getPublicState(game, viewerId, isNarrator) {
     narratorDrunkAs: isNarrator ? game.narratorDrunkAs : undefined,
     narratorRolesForImp: isNarrator ? (game.narratorRolesForImp || []) : undefined,
     setup: isNarrator ? (game.setup || { locked: false, seatOrder: [], assignments: {}, decisions: [] }) : undefined,
+    // Hechicero: el texto del deseo SOLO lo ven el narrador y el propio Hechicero.
+    // La pista pública, si el narrador la anuncia, la ve todo el mundo.
+    wish: (() => {
+      const w = game.wish;
+      const wizard = players.find(p => p.role === 'WIZARD');
+      const iAmWizard = !!wizard && wizard.id === viewerId;
+      if (!w) {
+        // Sin deseo aún: el Hechicero necesita saber que puede pedirlo.
+        return (iAmWizard || isNarrator) ? { status: 'none', canAsk: iAmWizard } : null;
+      }
+      const base = { status: w.status, announced: !!w.announced, clue: w.announced ? w.clue : null };
+      if (isNarrator) return { ...w, ...base, canAsk: false };
+      if (iAmWizard) {
+        return {
+          ...base, text: w.text,
+          canAsk: w.status === 'denied_retry',
+          // El precio solo si el narrador decidió revelárselo.
+          price: w.priceRevealed ? w.price : null,
+        };
+      }
+      // Los demás jugadores solo ven la pista, y solo si fue anunciada.
+      return w.announced ? { status: 'announced', clue: w.clue } : null;
+    })(),
+    // Barbero: paso pendiente del Demonio (solo el narrador lo ve).
+    barberPending: isNarrator
+      ? (() => {
+          const barber = players.find(p => (p.tokens || []).some(t => t.type === 'BARBER_TONIGHT'));
+          if (!barber) return null;
+          const demon = players.find(p => countsAsLivingDemon(p));
+          return {
+            barberId: barber.id,
+            barberName: barber.name,
+            demonId: demon ? demon.id : null,
+            demonName: demon ? demon.name : null,
+            // Sin Demonio vivo el narrador elige en su nombre.
+            narratorChooses: !demon,
+          };
+        })()
+      : null,
+    // Roshambo del Psicópata: cada uno solo ve su propia tirada hasta que ambos han tirado.
+    roshambo: (() => {
+      const rs = game.pendingRoshambo;
+      if (!rs) return null;
+      const bothThrown = !!(rs.throws[rs.psychopathId] && rs.throws[rs.opponentId]);
+      const nameOf = id => id === 'NARRATOR' ? 'Narrador' : (players.find(p => p.id === id)?.name || '?');
+      const reveal = bothThrown || isNarrator;
+      return {
+        psychopathId: rs.psychopathId,
+        opponentId: rs.opponentId,
+        psychopathName: nameOf(rs.psychopathId),
+        opponentName: nameOf(rs.opponentId),
+        result: rs.result,
+        bothThrown,
+        myThrow: viewerId ? (rs.throws[viewerId] || null) : null,
+        iParticipate: viewerId === rs.psychopathId || viewerId === rs.opponentId,
+        psychopathThrow: reveal ? (rs.throws[rs.psychopathId] || null) : null,
+        opponentThrow:   reveal ? (rs.throws[rs.opponentId]   || null) : null,
+        waitingFor: isNarrator
+          ? [rs.psychopathId, rs.opponentId].filter(id => !rs.throws[id]).map(nameOf)
+          : undefined,
+      };
+    })(),
   };
 }
 
@@ -2171,10 +2632,12 @@ module.exports = {
   createGame, getGame, addPlayer, removePlayer,
   distributeRoles, generateNightInfo,
   nominate, vote, resolveVote, executeNominationWinner, slayerAction,
+  roshamboThrow, psychopathDayKill, barberSwap, closeBarberStep, syncBarberState,
+  applyWish,
   applyNightAction, advanceNightQueue,
   resolveNightQueue, generatePassiveNightInfo,
   startDay, startNight, openNominations,
-  checkWinCondition, mayorWin,
+  checkWinCondition, mayorWin, resolveDemonDeath,
   killPlayer, revivePlayer,
   addDeferred, assignBelievedRoles,
   applySetup, regenDemonNightInfo,

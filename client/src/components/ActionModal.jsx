@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ALL_ROLES, ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import StatusChips from './StatusChips';
+import NarratorTabs from './NarratorTools';
 
 // Explicación de cada efecto/ficha y su caducidad, para el panel de detalle.
 const TOKEN_EXPLAIN = {
@@ -114,85 +115,10 @@ export default function ActionModal({ target, onClose, isNarrator }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {/* Narrator section */}
+          {/* Narrator section — Info · Acciones · Rol · Habilidad */}
           {isNarrator && (
             <div style={{ borderBottom: 'var(--hairline-bone)', paddingBottom: 12 }}>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>Narrador</p>
-              {role?.img && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.2)', borderRadius: 4, padding: '9px 12px', marginBottom: 8 }}>
-                  <img src={role.img} alt={role.name} style={{ width: 42, height: 42, borderRadius: 4, objectFit: 'cover' }} />
-                  <div>
-                    <p style={{ fontFamily: 'var(--serif)', fontSize: 17, fontWeight: 600, color: 'var(--bone-100)', margin: 0 }}>{role.name}</p>
-                    <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: role.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)', margin: '3px 0 0' }}>{role.type}</p>
-                  </div>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleRevealRole} className="btn-action primary" style={{ flex: 1 }}>Revelar personaje</button>
-                {target.alive
-                  ? <button onClick={() => setConfirmNarratorKill(true)} className="btn-action danger" style={{ flex: 1 }}>Matar jugador</button>
-                  : <button onClick={handleNarratorRevive} className="btn-action"                      style={{ flex: 1 }}>Revivir jugador</button>
-                }
-              </div>
-              {confirmNarratorKill && target.alive && (
-                <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(168,58,45,0.12)', border: '1px solid var(--blood-dim)', borderRadius: 4 }}>
-                  {killWarnings.length > 0 && (
-                    <div style={{ marginBottom: 8 }}>
-                      {killWarnings.map((w, i) => (
-                        <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-200)', margin: '2px 0', fontStyle: 'italic' }}>{w}</p>
-                      ))}
-                    </div>
-                  )}
-                  <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--blood-hi)', fontWeight: 600, margin: '0 0 8px' }}>
-                    ¿Confirmar muerte de {target.name}?
-                  </p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={handleNarratorKill} className="btn-action danger" style={{ flex: 1 }}>Confirmar muerte</button>
-                    <button onClick={() => setConfirmNarratorKill(false)} className="btn-night">Cancelar</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Fichas y estados activos del jugador, con explicación */}
-              <div style={{ marginTop: 12 }}>
-                <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 6 }}>Fichas y estados</p>
-                {(target.tokens && target.tokens.length > 0) ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
-                    {target.tokens.map(t => {
-                      const tRole = ROLE_BY_ID[t.roleId];
-                      return (
-                        <div key={t.instanceId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(0,0,0,0.25)', borderRadius: 4, padding: '6px 8px' }}>
-                          {tRole?.img && <img src={tRole.img} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />}
-                          <div>
-                            <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', margin: 0, fontWeight: 600 }}>{t.label} <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>· {expiryLabel(t)}</span></p>
-                            {TOKEN_EXPLAIN[t.type] && <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', margin: '2px 0 0', fontStyle: 'italic' }}>{TOKEN_EXPLAIN[t.type]}</p>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-500)', fontStyle: 'italic', marginBottom: 8 }}>Sin fichas activas.</p>
-                )}
-                <StatusChips player={target} />
-              </div>
-
-              {/* Sospechas sobre este jugador (privadas) */}
-              {Array.isArray(target.accusations) && target.accusations.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--moon)', marginBottom: 6 }}>👁 Sospechas ({target.accusations.length})</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {target.accusations.map((a, i) => {
-                      const sr = ROLE_BY_ID[a.roleId];
-                      return (
-                        <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-300)', margin: 0 }}>
-                          <strong style={{ color: 'var(--bone-100)' }}>{a.accuserName}</strong> cree que su personaje es <strong style={{ color: 'var(--gold-hot)' }}>{sr?.name || a.roleId}</strong>
-                        </p>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <NarratorTabs target={target} game={game} send={send} onClose={onClose} />
             </div>
           )}
 

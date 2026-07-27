@@ -11,6 +11,8 @@ const {
   applyNightAction, advanceNightQueue,
   startDay, startNight, openNominations,
   mayorWin, killPlayer, revivePlayer, addDeferred, getPublicState,
+  checkWinCondition, resolveDemonDeath, roshamboThrow, psychopathDayKill,
+  barberSwap, closeBarberStep, applyWish,
   assignBelievedRoles, applySetup, regenDemonNightInfo,
   placeToken, syncStatusFlags,
 } = require('./gameLogic');
@@ -19,6 +21,7 @@ const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarra
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
+const { WISH_CATALOG } = require('./wishes');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 const { initDB, saveGame, loadGame, logGameEvent } = require('./persistence');
 
@@ -120,13 +123,30 @@ function sendTo(ws, type, payload) {
   }
 }
 
+// Presencia: 'online' si su sesión responde al latido, 'away' si no responde
+// desde hace más de un ciclo, ausente del mapa = desconectado.
+const AWAY_AFTER_MS = 70000;
+function computePresence() {
+  const presence = {};
+  const now = Date.now();
+  sessions.forEach((s) => {
+    if (!s.gameId || !s.playerId) return;
+    const stale = s.lastSeen && (now - s.lastSeen) > AWAY_AFTER_MS;
+    // Una sesión viva gana sobre otra marcada como ausente (varias pestañas).
+    if (presence[s.playerId] === 'online') return;
+    presence[s.playerId] = stale ? 'away' : 'online';
+  });
+  return presence;
+}
+
 function broadcastGame() {
   const game = getGame(MAIN_GAME_ID);
   if (!game) return;
   const hasNarrator = [...sessions.values()].some(s => s.gameId && s.isNarrator);
+  const presence = computePresence();
   sessions.forEach((session) => {
     if (!session.gameId) return;
-    const state = getPublicState(game, session.playerId, session.isNarrator);
+    const state = getPublicState(game, session.playerId, session.isNarrator, presence);
     state.hasNarrator = hasNarrator;
     sendTo(session.ws, 'GAME_STATE', state);
   });
@@ -137,6 +157,13 @@ function broadcastGame() {
 function broadcastToAll(type, payload) {
   sessions.forEach(session => {
     if (session.gameId) sendTo(session.ws, type, payload);
+  });
+}
+
+// Mensaje privado a un jugador concreto (todas sus pestañas abiertas).
+function sendToPlayer(playerId, type, payload) {
+  sessions.forEach(session => {
+    if (session.gameId && session.playerId === playerId) sendTo(session.ws, type, payload);
   });
 }
 
@@ -163,15 +190,33 @@ function teleportNarratorsTo(channelKey) {
 // ── WebSocket connection ───────────────────────────────────────────
 // ── WS keepalive ───────────────────────────────────────────────────
 setInterval(() => {
+  let presenceChanged = false;
+  const now = Date.now();
   wss.clients.forEach(ws => {
     if (ws.readyState === WebSocket.OPEN) ws.ping();
   });
+  // Marca como ausentes las sesiones que llevan un ciclo sin responder.
+  sessions.forEach(s => {
+    if (s.playerId && s.lastSeen && (now - s.lastSeen) > AWAY_AFTER_MS && !s.markedAway) {
+      s.markedAway = true;
+      presenceChanged = true;
+    }
+  });
+  if (presenceChanged) broadcastGame();
 }, 30000);
 
 wss.on('connection', (ws) => {
   const socketId = uuidv4();
-  sessions.set(socketId, { ws, socketId, gameId: null, playerId: null, isNarrator: false });
+  sessions.set(socketId, { ws, socketId, gameId: null, playerId: null, isNarrator: false, lastSeen: Date.now() });
   sendTo(ws, 'CONNECTED', { socketId });
+
+  // Cada pong renueva la presencia; si estaba ausente, avisa al narrador.
+  ws.on('pong', () => {
+    const s = sessions.get(socketId);
+    if (!s) return;
+    s.lastSeen = Date.now();
+    if (s.markedAway) { s.markedAway = false; broadcastGame(); }
+  });
 
   ws.on('message', (raw) => {
     let msg;
@@ -179,6 +224,8 @@ wss.on('connection', (ws) => {
     const { type, payload = {} } = msg;
     const session = sessions.get(socketId);
     if (!session) return;
+    session.lastSeen = Date.now();
+    session.markedAway = false;
     try {
       handleMessage(type, payload, session);
     } catch (err) {
@@ -186,7 +233,12 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => sessions.delete(socketId));
+  // Al cerrar, refresca para que el narrador vea la desconexión sin recargar.
+  ws.on('close', () => {
+    const wasInGame = sessions.get(socketId)?.gameId;
+    sessions.delete(socketId);
+    if (wasInGame) broadcastGame();
+  });
 });
 
 function handleMessage(type, payload, session) {
@@ -1200,6 +1252,65 @@ function handleMessage(type, payload, session) {
       break;
     }
 
+    // ── Cambio de rol a media partida ──────────────────────────────
+    // A diferencia de ASSIGN_ROLES_MANUAL, no toca vida, fichas ni fase.
+    // mode: 'real' (por defecto) | 'believed' (solo lo que el jugador cree) | 'both'
+    case 'SET_PLAYER_ROLE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const { playerId, roleId, notify = true, mode = 'real' } = payload;
+      const player = game.players.find(p => p.id === playerId);
+      const role = ROLES[roleId];
+      if (!player) throw new Error('Jugador no encontrado');
+      if (!role) throw new Error('Personaje no encontrado');
+
+      const previousName = ROLES[player.role]?.name || player.role;
+
+      if (mode === 'believed') {
+        // Descerebrado / Marioneta / Lunático: solo cambia lo que el jugador cree ser.
+        player.believedRole = role.id;
+      } else {
+        player.role = role.id;
+        player.type = role.type;
+        player.alignment = role.alignment;
+        // El Borracho necesita un Aldeano falso que no esté en juego.
+        if (role.id === 'DRUNK') {
+          const fakeTownfolk = getRolesByType('townfolk', game.campaignId).filter(r => r.id !== 'DRUNK');
+          player.drunkAs = fakeTownfolk.length
+            ? fakeTownfolk[Math.floor(Math.random() * fakeTownfolk.length)].id
+            : null;
+        } else {
+          player.drunkAs = null;
+        }
+        if (mode === 'both') player.believedRole = role.id;
+        else if (player.believedRole === role.id) player.believedRole = null;
+      }
+
+      // Los faroles del Demonio no deben ofrecer un personaje que ya está en juego.
+      const rolesInPlay = new Set(game.players.map(p => p.role));
+      const allGoodRoles = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
+      game.rolesNotInPlay = allGoodRoles.filter(r => !rolesInPlay.has(r.id)).map(r => r.id);
+
+      syncStatusFlags(game);
+      addDeferred(game, {
+        label: `🎭 ${player.name}: ${previousName} → ${role.name}${mode === 'believed' ? ' (solo rol creído)' : ''}${notify ? '' : ' — sin avisar'}`,
+        dueNight: game.nightNumber, sourcePlayerId: player.id, severity: 'info',
+      });
+
+      if (notify) {
+        sendToPlayer(playerId, 'NOTIFICATION', {
+          message: `🎭 Tu personaje ha cambiado: ahora eres ${role.name}`,
+          type: 'info',
+        });
+        sendToPlayer(playerId, 'ROLE_CHANGED', { roleId: role.id, roleName: role.name });
+      }
+
+      // El cambio puede dejar la partida sin Demonios o crear uno nuevo.
+      if (mode !== 'believed') checkWinCondition(game);
+      broadcastGame();
+      break;
+    }
+
     case 'REORDER_PLAYERS': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
@@ -1484,6 +1595,172 @@ function handleMessage(type, payload, session) {
       break;
     }
 
+    // ── Hechicero: el jugador pide su deseo en privado ─────────────
+    case 'WISH_REQUEST': {
+      const game = requireGame(session);
+      const wizard = game.players.find(p => p.role === 'WIZARD');
+      // El narrador puede escribirlo en su nombre si el deseo se dijo en voz alta.
+      if (!session.isNarrator) {
+        if (!wizard || wizard.id !== session.playerId) throw new Error('No eres el Hechicero');
+        if (!wizard.alive) throw new Error('Estás muerto');
+      }
+      if (game.wish && !['denied_retry'].includes(game.wish.status)) {
+        throw new Error('Ya has pedido tu deseo');
+      }
+      const text = String(payload.text || '').slice(0, 2000);
+      if (!text.trim()) throw new Error('El deseo no puede estar vacío');
+      game.wish = {
+        text, status: 'pending', effects: [], price: '', clue: '',
+        announced: false, priceRevealed: false, askedAt: Date.now(),
+      };
+      addDeferred(game, {
+        label: `🧙 El Hechicero pide un deseo: «${text}» — atiéndelo en privado antes de decidir.`,
+        dueNight: game.nightNumber, sourcePlayerId: wizard?.id, severity: 'warn', role: 'WIZARD',
+      });
+      if (wizard) sendToPlayer(wizard.id, 'NOTIFICATION', { message: '🧙 Tu deseo ha llegado al Narrador', type: 'info' });
+      broadcastGame();
+      break;
+    }
+
+    // El narrador concede, deniega para que pida otro, o deniega en firme.
+    case 'WISH_RESOLVE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      if (!game.wish) throw new Error('No hay ningún deseo pendiente');
+      const { decision } = payload; // 'grant' | 'retry' | 'deny'
+      const wizard = game.players.find(p => p.role === 'WIZARD');
+      if (decision === 'retry') {
+        game.wish.status = 'denied_retry';
+        if (wizard) sendToPlayer(wizard.id, 'NOTIFICATION', { message: '🧙 Ese deseo no puede concederse — pide otro', type: 'info' });
+      } else if (decision === 'deny') {
+        game.wish.status = 'denied';
+        if (wizard) sendToPlayer(wizard.id, 'NOTIFICATION', { message: '🧙 Ya no te quedan deseos', type: 'info' });
+      } else {
+        game.wish.status = 'granted';
+        if (wizard) sendToPlayer(wizard.id, 'NOTIFICATION', { message: '🧙 Tus deseos son órdenes', type: 'info' });
+      }
+      broadcastGame();
+      break;
+    }
+
+    // Aplica un efecto del catálogo o uno libre. Se pueden encadenar varios.
+    case 'WISH_APPLY': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      if (!game.wish) throw new Error('No hay ningún deseo');
+      const { apply, targetId, targetId2, roleId, winner, note } = payload;
+      const summary = applyWish(game, apply, { targetId, targetId2, roleId, winner });
+      game.wish.status = 'granted';
+      game.wish.effects = [...(game.wish.effects || []), { apply, summary, note: note || '' }];
+      addDeferred(game, {
+        label: `🧙 Deseo concedido: ${summary}`,
+        dueNight: game.nightNumber, severity: 'info', role: 'WIZARD',
+      });
+      broadcastGame();
+      break;
+    }
+
+    // Precio y pista: el narrador los edita y decide cuánto se hace público.
+    case 'WISH_SET_TERMS': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      if (!game.wish) throw new Error('No hay ningún deseo');
+      if (payload.price !== undefined) game.wish.price = String(payload.price).slice(0, 1000);
+      if (payload.clue !== undefined) game.wish.clue = String(payload.clue).slice(0, 1000);
+      if (payload.priceRevealed !== undefined) game.wish.priceRevealed = !!payload.priceRevealed;
+      broadcastGame();
+      break;
+    }
+
+    // Anuncia públicamente (con pista o sin ella). Nunca ocurre por su cuenta.
+    case 'WISH_ANNOUNCE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      if (!game.wish) throw new Error('No hay ningún deseo');
+      const withClue = !!payload.withClue;
+      game.wish.announced = true;
+      if (!withClue) game.wish.clue = '';
+      broadcastToAll('NOTIFICATION', {
+        message: withClue && game.wish.clue
+          ? `🧙 El Hechicero ha pedido un deseo: «${game.wish.clue}»`
+          : '🧙 El Hechicero ha pedido un deseo',
+        type: 'info',
+      });
+      broadcastGame();
+      break;
+    }
+
+    // ── Barbero: el Demonio intercambia los personajes de 2 jugadores ──
+    case 'BARBER_SWAP': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const { aId, bId } = payload;
+      const { a, b } = barberSwap(game, aId, bId);
+      // Cada afectado se entera de su nuevo personaje; nadie más.
+      [a, b].forEach(p => {
+        const roleName = ROLES[p.role]?.name || p.role;
+        sendToPlayer(p.id, 'NOTIFICATION', { message: `💈 Tu personaje ha cambiado: ahora eres ${roleName}`, type: 'info' });
+        sendToPlayer(p.id, 'ROLE_CHANGED', { roleId: p.role, roleName });
+      });
+      broadcastGame();
+      break;
+    }
+
+    case 'BARBER_DECLINE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      closeBarberStep(game);
+      addDeferred(game, {
+        label: '💈 Barbero: el Demonio declinó el intercambio.',
+        dueNight: game.nightNumber, severity: 'info', role: 'BARBER',
+      });
+      broadcastGame();
+      break;
+    }
+
+    // ── Psicópata: asesinato diurno público ────────────────────────
+    // Solo el narrador lo ejecuta, cuando el Psicópata lo anuncia en voz alta.
+    case 'PSYCHOPATH_DAY_KILL': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const { psychopathId, targetId } = payload;
+      const res = psychopathDayKill(game, psychopathId, targetId);
+      const psychoName = game.players.find(p => p.id === psychopathId)?.name || '?';
+      broadcastToAll('NOTIFICATION', {
+        message: res.blocked
+          ? `🔪 ${psychoName} se declara PSICÓPATA y ataca a ${res.target.name}… pero no muere`
+          : `🔪 ${psychoName} se declara PSICÓPATA y mata a ${res.target.name}`,
+        type: 'error',
+      });
+      broadcastGame();
+      break;
+    }
+
+    // ── Psicópata: piedra-papel-tijera tras ser ejecutado ──────────
+    // Tiran el Psicópata y su nominador. El narrador puede tirar por el rival
+    // si es él mismo (autonominación) o si el jugador está desconectado.
+    case 'ROSHAMBO_THROW': {
+      const game = requireGame(session);
+      const rs = game.pendingRoshambo;
+      if (!rs) throw new Error('No hay ningún Roshambo pendiente');
+      const { choice } = payload;
+      // Por defecto tira quien envía; el narrador puede tirar en nombre de otro.
+      let whoId = session.playerId;
+      if (session.isNarrator) whoId = payload.whoId || rs.opponentId;
+      const result = roshamboThrow(game, whoId, choice);
+      if (result.result) {
+        const psychoName = game.players.find(p => p.id === rs.psychopathId)?.name || '?';
+        broadcastToAll('NOTIFICATION', {
+          message: result.result === 'opponent'
+            ? `🎲 ${psychoName} pierde el piedra-papel-tijera y muere`
+            : `🎲 ${psychoName} ${result.result === 'tie' ? 'empata' : 'gana'} el piedra-papel-tijera y sobrevive`,
+          type: result.result === 'opponent' ? 'error' : 'info',
+        });
+      }
+      broadcastGame();
+      break;
+    }
+
     case 'NIGHT_READY': {
       const game = getGame(MAIN_GAME_ID);
       if (!game || !session.playerId) break;
@@ -1709,6 +1986,8 @@ function requireGame(session) {
 app.get('/api/health', (req, res) => res.json({ ok: true, discord: getBotStatus() }));
 app.get('/api/roles', (req, res) => res.json(ROLES));
 app.get('/api/rankings', (req, res) => res.json(loadRankings()));
+// Catálogo de deseos del Hechicero (lo consume el panel del narrador).
+app.get('/api/wishes', (req, res) => res.json(WISH_CATALOG));
 app.get('/api/players', (req, res) => {
   const game = getGame(MAIN_GAME_ID);
   res.json(game ? game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar })) : []);

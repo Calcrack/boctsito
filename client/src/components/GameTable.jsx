@@ -179,6 +179,19 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
         </div>
       )}
 
+      {/* Conexión — solo el narrador la ve */}
+      {isNarrator && player.presence && player.presence !== 'online' && (
+        <span
+          title={player.presence === 'away' ? 'Ausente (no responde)' : 'Desconectado'}
+          style={{
+            position: 'absolute', top: 2, left: 2, fontSize: 11, lineHeight: 1,
+            color: player.presence === 'away' ? 'var(--gold)' : 'var(--bone-500)',
+            textShadow: '0 0 4px #000', pointerEvents: 'none',
+          }}>
+          {player.presence === 'away' ? '⏱' : '○'}
+        </span>
+      )}
+
       {/* Role token mini-badge */}
       {role && (isNarrator || isMe) && (
         <div className={`role-token-mini ${role.alignment}`}>

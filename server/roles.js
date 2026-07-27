@@ -1,7 +1,10 @@
 // ── Agregador de roles multi-campaña ───────────────────────────────
 // ROLES = mapa plano de todos los roles (ids únicos entre campañas) para
 // que los lookups ROLES[id] sigan funcionando en gameLogic.js.
-const { CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign, ALL_ROLES } = require('./campaigns');
+const {
+  CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign, ALL_ROLES,
+  ALL_OUTSIDER_MODIFIERS, ALL_MINION_MODIFIERS,
+} = require('./campaigns');
 
 const ROLES = ALL_ROLES;
 
@@ -12,7 +15,10 @@ function getDistribution(playerCount, selectedRoles, campaignId) {
   const campaign = getCampaign(campaignId);
   const base = campaign.distribution[playerCount] || { townfolk: 3, outsiders: 0, minions: 1, demons: 1 };
   const dist = { ...base };
-  const mods = campaign.outsiderModifiers || {};
+  // Los globales van debajo: si el Narrador reparte un personaje de otra
+  // campaña (Barón en S&V, Señor de Typhon en TB…), su modificador se aplica
+  // igual. La campaña activa siempre tiene la última palabra.
+  const mods = { ...ALL_OUTSIDER_MODIFIERS, ...(campaign.outsiderModifiers || {}) };
   for (const [roleId, delta] of Object.entries(mods)) {
     if (selectedRoles.includes(roleId)) {
       dist.outsiders = Math.max(0, Math.min(dist.outsiders + delta, playerCount - dist.demons - dist.minions));
@@ -20,7 +26,7 @@ function getDistribution(playerCount, selectedRoles, campaignId) {
     }
   }
   // Esbirros extra (Señor de Typhon +1). Salen de los Aldeanos.
-  const minionMods = campaign.minionModifiers || {};
+  const minionMods = { ...ALL_MINION_MODIFIERS, ...(campaign.minionModifiers || {}) };
   for (const [roleId, delta] of Object.entries(minionMods)) {
     if (selectedRoles.includes(roleId)) {
       dist.minions = Math.max(1, dist.minions + delta);
@@ -38,4 +44,5 @@ function getRolesByType(type, campaignId) {
 module.exports = {
   ROLES, BASE_DISTRIBUTION, getDistribution, getRolesByType,
   CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign,
+  ALL_OUTSIDER_MODIFIERS, ALL_MINION_MODIFIERS,
 };

@@ -26,8 +26,19 @@ function buildCtx(game) {
 function roleOf(ctx, seatId) { return ROLES[ctx.assignments[seatId]] || null; }
 function nameOf(ctx, seatId) { return ctx.seats.find(s => s.id === seatId)?.name || '?'; }
 
+// El guion EFECTIVO: la campaña activa MÁS cualquier personaje que el Narrador
+// haya repartido desde el compendio completo. Sin esto, un Alquimista o un
+// Boffin traído de otra campaña no vería a sus compañeros de mesa.
+function scriptRoles(ctx) {
+  const byId = { ...ctx.campaign.roles };
+  for (const id of ctx.rolesInPlay) {
+    if (id && !byId[id] && ROLES[id]) byId[id] = ROLES[id];
+  }
+  return Object.values(byId);
+}
+
 function goodRolesNotInPlay(ctx) {
-  return Object.values(ctx.campaign.roles)
+  return scriptRoles(ctx)
     .filter(r => r.alignment === 'good' && !ctx.rolesInPlay.has(r.id) && !r.misperception)
     .map(r => r.id);
 }
@@ -196,7 +207,7 @@ function suggestDecision(decision, game) {
         const demon = ctx.seats.find(s => ROLES[ctx.assignments[s.id]]?.type === 'demon' && s.id !== d.seat);
         d.chosenGoodRole = null; // el Lunático cree ser el Demonio
         d.lunatic = {
-          perceivedDemon: ROLES[ctx.assignments[demon?.id]]?.id || pick(Object.values(ctx.campaign.roles).filter(r => r.type === 'demon').map(r => r.id)),
+          perceivedDemon: ROLES[ctx.assignments[demon?.id]]?.id || pick(scriptRoles(ctx).filter(r => r.type === 'demon').map(r => r.id)),
           fakeMinions: sample(seatsExcept(ctx, [d.seat]).map(s => s.id), Math.min(1, ctx.seats.length - 1)),
           bluffs: sample(pool, Math.min(3, pool.length)),
           firstNightFakeKill: pick(seatsExcept(ctx, [d.seat]).map(s => s.id)),
@@ -207,17 +218,52 @@ function suggestDecision(decision, game) {
       break;
     }
     case 'forasteros':
-      d.chosen = rolesByTypeInPlay(ctx, 'outsider').map(s => ctx.assignments[s.id]);
+      // Recorta a los que el modificador espera: la sugerencia debe quedar
+      // SIEMPRE resuelta, aunque el reparto tenga de más.
+      d.chosen = rolesByTypeInPlay(ctx, 'outsider')
+        .map(s => ctx.assignments[s.id])
+        .slice(0, d.expected ?? 0);
       break;
     case 'registroInicial':
       d.registersAs = d.options[0];
       break;
     case 'otroSecreto':
       if (d.secret === 'evilTwin') {
-        const opp = ctx.seats.filter(s => ROLES[ctx.assignments[s.id]]?.alignment === 'evil');
+        // El gemelo es de la alineación CONTRARIA a quien tiene el rol (la
+        // Gemela Malvada es Esbirro, así que su pareja es un jugador bueno).
+        const mine = roleOf(ctx, d.seat)?.alignment === 'evil' ? 'evil' : 'good';
+        const opp = ctx.seats.filter(s => s.id !== d.seat
+          && ROLES[ctx.assignments[s.id]]?.alignment && ROLES[ctx.assignments[s.id]].alignment !== mine);
         d.targetSeat = pick(opp.map(s => s.id));
       }
       break;
+    // El Maestro de Acertijos marca a otro jugador como borracho.
+    case 'puzzlemasterDrunk':
+      d.chosen = pick(seatsExcept(ctx, [d.seat]).map(s => s.id));
+      break;
+    // El Alquimista copia la habilidad de un Esbirro del guion efectivo.
+    case 'alchemistAbility':
+      d.chosen = pick(scriptRoles(ctx).filter(r => r.type === 'minion' && r.id !== 'ALCHEMIST').map(r => r.id));
+      break;
+    // La Rata de Laboratorio regala al Demonio una habilidad buena fuera de juego.
+    case 'boffinAbility':
+      d.chosen = pick(goodRolesNotInPlay(ctx).filter(id => ROLES[id]?.type === 'townfolk')
+        .concat(goodRolesNotInPlay(ctx)));
+      break;
+    // Padrino: elige el modificador y confirma los Forasteros que encajan.
+    case 'outsiderModifierChoice': {
+      const inPlay = rolesByTypeInPlay(ctx, 'outsider').map(s => ctx.assignments[s.id]);
+      const base = d.base ?? 0;
+      // Elige el modificador que case con los Forasteros ya sentados; si
+      // ninguno casa, el primero de la lista.
+      const opts = d.options || [-1, 1];
+      const fit = opts.find(o => Math.max(0, base + o) === inPlay.length);
+      const chosenModifier = fit != null ? fit : opts[0];
+      d.chosenModifier = chosenModifier;
+      d.expected = Math.max(0, base + chosenModifier);
+      d.chosen = inPlay.slice(0, d.expected);
+      break;
+    }
   }
   return d;
 }

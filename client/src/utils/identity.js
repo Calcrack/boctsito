@@ -7,7 +7,10 @@ import { ROLE_BY_ID } from '../data/roles';
 
 export const MASK = '🎭';
 
-const TYPE_LABEL = { townfolk: 'Aldeano', outsider: 'Forastero', minion: 'Esbirro', demon: 'Demonio' };
+const TYPE_LABEL = {
+  townfolk: 'Aldeano', outsider: 'Forastero', minion: 'Esbirro', demon: 'Demonio',
+  traveler: 'Viajero', fabled: 'Fabulado',
+};
 export function typeLabel(type) { return TYPE_LABEL[type] || type || ''; }
 
 // Resuelve la identidad de un jugador para vistas del NARRADOR.

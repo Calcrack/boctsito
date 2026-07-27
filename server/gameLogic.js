@@ -1,5 +1,8 @@
 const { v4: uuidv4 } = require('uuid');
-const { ROLES, getDistribution, getRolesByType, getCampaign, DEFAULT_CAMPAIGN } = require('./roles');
+const {
+  ROLES, getDistribution, getRolesByType, getCampaign, DEFAULT_CAMPAIGN,
+  ALL_OUTSIDER_MODIFIERS, ALL_MINION_MODIFIERS,
+} = require('./roles');
 const SETUP = require('./setup');
 
 // ── In-memory store ────────────────────────────────────────────────
@@ -2497,12 +2500,27 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
       id: r.id, name: r.name, type: r.type, alignment: r.alignment,
       ability: r.ability, image: r.image || null, homebrew: !!r.homebrew,
     })),
+    // Catálogo COMPLETO (todas las campañas + viajeros + extras). El asistente
+    // de montaje lo usa para que el Narrador pueda repartir cualquier personaje
+    // del compendio, no sólo los de la campaña activa (p. ej. el Hechicero de
+    // The Carousel en una partida de Trouble Brewing). Sólo al Narrador.
+    allRoles: isNarrator ? Object.values(ROLES).map(r => ({
+      id: r.id, name: r.name, type: r.type, alignment: r.alignment,
+      ability: r.ability, image: r.image || null, homebrew: !!r.homebrew,
+      // `setup` deja que el asistente aplique los modificadores de reparto
+      // (Barón +2 Forasteros, Señor de Typhon +1 Esbirro…) aunque el personaje
+      // venga de otra campaña. Sólo viaja al Narrador.
+      setup: r.setup || undefined,
+      misperception: r.misperception || undefined,
+    })) : undefined,
     campaignSetupNotes: isNarrator ? (activeCampaign.setupNotes || []) : undefined,
     campaignWarnings: isNarrator ? (activeCampaign.warnings || []) : undefined,
     campaignDistribution: isNarrator ? (activeCampaign.distribution || {}) : undefined,
-    campaignOutsiderModifiers: isNarrator ? (activeCampaign.outsiderModifiers || {}) : undefined,
+    // Merged con los globales: el asistente debe contar bien la composición
+    // aunque el personaje repartido venga de otra campaña.
+    campaignOutsiderModifiers: isNarrator ? { ...ALL_OUTSIDER_MODIFIERS, ...(activeCampaign.outsiderModifiers || {}) } : undefined,
     // Esbirros extra (Señor de Typhon +1): el asistente los suma a la composición.
-    campaignMinionModifiers: isNarrator ? (activeCampaign.minionModifiers || {}) : undefined,
+    campaignMinionModifiers: isNarrator ? { ...ALL_MINION_MODIFIERS, ...(activeCampaign.minionModifiers || {}) } : undefined,
     players: publicPlayers,
     nominations: nominations.map(n => {
       const living = players.filter(p => p.alive);

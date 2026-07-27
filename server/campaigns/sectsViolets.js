@@ -38,9 +38,11 @@ const roles = {
     ability: 'Si mueres hoy o esta noche, el Demonio puede elegir 2 jugadores (no otro Demonio) para intercambiar sus personajes.', firstNight: false, otherNights: true },
   KLUTZ: { id: 'KLUTZ', name: 'Torpe', alignment: 'good', type: 'outsider',
     ability: 'Cuando sepas que has muerto, elige en público 1 jugador vivo: si es malvado, tu equipo pierde.', firstNight: false, otherNights: false },
-  EVIL_TWIN: { id: 'EVIL_TWIN', name: 'Gemela Malvada', alignment: 'good', type: 'outsider',
-    ability: 'Tú y un jugador de alineación opuesta os conocéis. Si el bueno es ejecutado, gana el Mal. El Bien no gana mientras viváis ambos.', firstNight: true, otherNights: false },
   // Minions
+  // La Gemela Malvada es ESBIRRO (malvada): la "gemela" buena es el otro
+  // jugador, no ella. Estuvo mal clasificada como Forastero buena.
+  EVIL_TWIN: { id: 'EVIL_TWIN', name: 'Gemela Malvada', alignment: 'evil', type: 'minion',
+    ability: 'Tú y un jugador de alineación opuesta os conocéis. Si el bueno es ejecutado, gana el Mal. El Bien no gana mientras viváis ambos.', firstNight: true, otherNights: false },
   WITCH: { id: 'WITCH', name: 'Bruja', alignment: 'evil', type: 'minion',
     ability: 'Cada noche: elige un jugador. Si nomina mañana, muere. Si solo quedan 3 jugadores vivos, pierdes esta habilidad.', firstNight: true, otherNights: true },
   CERENOVUS: { id: 'CERENOVUS', name: 'Descerebrado', alignment: 'evil', type: 'minion',

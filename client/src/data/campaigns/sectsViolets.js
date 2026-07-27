@@ -36,9 +36,10 @@ export const roles = [
     ability: 'Si mueres hoy o esta noche, el Demonio puede intercambiar los personajes de 2 jugadores.', controls: ['info'] },
   { id: 'KLUTZ', name: 'Torpe', alignment: 'good', type: 'outsider', img: '/assets/roles/klutz.png',
     ability: 'Cuando sepas que has muerto, elige en público 1 jugador vivo: si es malvado, tu equipo pierde.', controls: ['info'] },
-  { id: 'EVIL_TWIN', name: 'Gemela Malvada', alignment: 'good', type: 'outsider', img: '/assets/roles/eviltwin.png',
-    ability: 'Tú y un jugador de alineación opuesta os conocéis. Si el bueno es ejecutado, gana el Mal.', controls: ['info'] },
   // Esbirros
+  // Espejo del servidor: la Gemela Malvada es Esbirro (malvada).
+  { id: 'EVIL_TWIN', name: 'Gemela Malvada', alignment: 'evil', type: 'minion', img: '/assets/roles/eviltwin.png',
+    ability: 'Tú y un jugador de alineación opuesta os conocéis. Si el bueno es ejecutado, gana el Mal.', controls: ['info'] },
   { id: 'WITCH', name: 'Bruja', alignment: 'evil', type: 'minion', img: '/assets/roles/witch.png',
     ability: 'Cada noche: elige un jugador. Si nomina mañana, muere. Con solo 3 vivos, pierdes esta habilidad.', controls: ['kill', 'info'] },
   { id: 'CERENOVUS', name: 'Descerebrado', alignment: 'evil', type: 'minion', img: '/assets/roles/cerenovus.png',

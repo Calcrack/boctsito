@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ROLE_BY_ID } from '../data/roles';
+import { ROLE_BY_ID, ALL_ROLES } from '../data/roles';
 import { typeLabel, MASK } from '../utils/identity';
 
 // ── Asistente de montaje (Addendum 2 §B) ─────────────────────────────
@@ -12,6 +12,12 @@ const TYPES = [
   { k: 'minion',   label: 'Esbirros' },
   { k: 'demon',    label: 'Demonios' },
 ];
+// Viajeros y Fabulados no cuentan para la composición, pero el Narrador debe
+// poder repartirlos igualmente: sólo aparecen con el catálogo completo abierto.
+const EXTRA_TYPES = [
+  { k: 'traveler', label: 'Viajeros' },
+  { k: 'fabled',   label: 'Fabulados' },
+];
 const STEPS = ['Saco', 'Asientos', 'Decisiones', 'Revisar'];
 
 export default function SetupWizard({ game, send, onClose }) {
@@ -22,19 +28,44 @@ export default function SetupWizard({ game, send, onClose }) {
   const assignments = setup.assignments || {};
   const decisions = setup.decisions || [];
 
+  // Catálogo COMPLETO: los 181 personajes de todas las campañas + viajeros +
+  // extras. Manda el del servidor (conoce los guiones importados); la tabla
+  // estática del cliente es el respaldo si el estado aún no lo trae.
+  const catalog = useMemo(() => {
+    const byId = new Map();
+    for (const r of ALL_ROLES) byId.set(r.id, r);
+    for (const r of (game.allRoles || [])) byId.set(r.id, { ...(byId.get(r.id) || {}), ...r });
+    for (const r of roleList) byId.set(r.id, { ...(byId.get(r.id) || {}), ...r });
+    return [...byId.values()];
+  }, [game.allRoles, roleList]);
+
   // La campaña del SERVIDOR manda: es la única que conoce los roles de un
   // guion importado (Hechicero, Señor de Typhon, homebrew…). La tabla estática
   // del cliente solo rellena lo que falte. Sin esto, un rol que la tabla del
   // cliente desconozca se dibuja en el saco pero NO cuenta para la composición.
   const roleInfo = useMemo(() => {
     const map = { ...ROLE_BY_ID };
-    for (const r of roleList) map[r.id] = { ...(ROLE_BY_ID[r.id] || {}), ...r };
+    for (const r of catalog) map[r.id] = { ...(ROLE_BY_ID[r.id] || {}), ...r };
+    for (const r of roleList) map[r.id] = { ...(map[r.id] || {}), ...r };
     return map;
-  }, [roleList]);
+  }, [catalog, roleList]);
+
+  // Ids de la campaña activa: sirve para marcar lo que viene "de fuera".
+  const campaignIds = useMemo(() => new Set(roleList.map(r => r.id)), [roleList]);
+  // ¿Mostrar el compendio entero o sólo la campaña activa?
+  const [showAll, setShowAll] = useState(false);
 
   const [step, setStep] = useState(0);
   // El "saco" = roles disponibles para asignar. Arranca de lo ya asignado.
   const [bag, setBag] = useState(() => new Set(Object.values(assignments)));
+
+  // Vista cerrada = campaña activa, PERO lo que ya está en el saco nunca se
+  // esconde: si no, un personaje metido desde el compendio quedaría marcado
+  // sin forma de desmarcarlo.
+  const pickList = useMemo(() => {
+    if (showAll) return catalog;
+    return [...roleList, ...catalog.filter(r => bag.has(r.id) && !campaignIds.has(r.id))];
+  }, [showAll, catalog, roleList, bag, campaignIds]);
 
   const baseOrder = (setup.seatOrder && setup.seatOrder.length) ? setup.seatOrder : players.map(p => p.id);
   const seatOrder = [...baseOrder, ...players.filter(p => !baseOrder.includes(p.id)).map(p => p.id)];
@@ -119,17 +150,18 @@ export default function SetupWizard({ game, send, onClose }) {
         {/* Cuerpo con scroll propio */}
         <div className="wizard-body">
           {step === 0 && (
-            <BagStep roleList={roleList} roleInfo={roleInfo} bag={bag} toggleBag={toggleBag} needed={needed} playerCount={players.length} />
+            <BagStep roleList={pickList} campaignIds={campaignIds} roleInfo={roleInfo} bag={bag} toggleBag={toggleBag}
+              needed={needed} playerCount={players.length} showAll={showAll} setShowAll={setShowAll} />
           )}
           {step === 1 && (
-            <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList} roleInfo={roleInfo}
+            <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList} catalog={catalog} roleInfo={roleInfo}
               moveSeat={moveSeat} assignSeat={assignSeat} />
           )}
           {step === 2 && (
-            <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} roleInfo={roleInfo} send={send} />
+            <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} catalog={catalog} roleInfo={roleInfo} send={send} />
           )}
           {step === 3 && (
-            <ReviewStep seats={seats} assignments={assignments} decisions={decisions}
+            <ReviewStep seats={seats} assignments={assignments} decisions={decisions} roleInfo={roleInfo}
               allAssigned={allAssigned} unresolved={unresolved} send={send} />
           )}
         </div>
@@ -148,7 +180,8 @@ export default function SetupWizard({ game, send, onClose }) {
 }
 
 // ── Paso 1: el saco ──────────────────────────────────────────────────
-function BagStep({ roleList, roleInfo, bag, toggleBag, needed, playerCount }) {
+function BagStep({ roleList, campaignIds, roleInfo, bag, toggleBag, needed, playerCount, showAll, setShowAll }) {
+  const [q, setQ] = useState('');
   const atheistInBag = bag.has('ATHEIST');
   const have = {
     townfolk: [...bag].filter(id => roleInfo[id]?.type === 'townfolk').length,
@@ -157,38 +190,67 @@ function BagStep({ roleList, roleInfo, bag, toggleBag, needed, playerCount }) {
     demon:    [...bag].filter(id => roleInfo[id]?.type === 'demon').length,
   };
   const needMap = needed ? { townfolk: needed.townfolk, outsider: needed.outsiders, minion: needed.minions, demon: needed.demons } : null;
-  const visibleTypes = atheistInBag ? TYPES.filter(t => t.k === 'townfolk' || t.k === 'outsider') : TYPES;
+  const baseTypes = atheistInBag ? TYPES.filter(t => t.k === 'townfolk' || t.k === 'outsider') : TYPES;
+  // Viajeros/Fabulados no cuentan para la composición: sólo se listan con el
+  // compendio abierto, o si ya hay alguno metido en el saco.
+  const showExtras = showAll || roleList.some(r => EXTRA_TYPES.some(t => t.k === r.type) && bag.has(r.id));
+  const visibleTypes = showExtras ? [...baseTypes, ...EXTRA_TYPES] : baseTypes;
+  const needle = q.trim().toLowerCase();
+  const matches = r => !needle
+    || r.name.toLowerCase().includes(needle)
+    || r.id.toLowerCase().includes(needle);
   return (
     <div>
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 10px' }}>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 8px' }}>
         Elige qué personajes entran en el saco ({playerCount} jugadores).
       </p>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar personaje…"
+          style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-100)', padding: '5px 7px' }} />
+        <button onClick={() => setShowAll(v => !v)} className="btn-night"
+          title="Repartir personajes de cualquier campaña, viajeros y fabulados"
+          style={{ fontSize: 9, whiteSpace: 'nowrap', borderColor: showAll ? 'var(--gold)' : undefined, color: showAll ? 'var(--gold-hot)' : undefined }}>
+          {showAll ? '📚 Compendio completo' : '🎪 Solo esta campaña'}
+        </button>
+      </div>
+      {showAll && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--moon)', fontStyle: 'italic', margin: '0 0 10px' }}>
+          Compendio completo: personajes de otras campañas marcados con ✦. Se reparten igual, pero el guion deja de ser oficial.
+        </p>
+      )}
       {atheistInBag && (
         <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', background: 'rgba(201,162,74,0.08)', border: '1px solid rgba(201,162,74,0.3)', borderRadius: 4, padding: '6px 10px', margin: '0 0 10px' }}>
           ⚠ Ateo activo — solo aldeanos y forasteros permitidos.
         </p>
       )}
-      {visibleTypes.map(({ k, label }) => (
-        <div key={k} style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--bone-400)' }}>{label}</span>
-            {needMap && (
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: have[k] === needMap[k] ? 'var(--good)' : have[k] > needMap[k] ? 'var(--gold)' : 'var(--blood-hi)' }}>
-                {have[k]}/{needMap[k]}
-              </span>
-            )}
+      {visibleTypes.map(({ k, label }) => {
+        const items = roleList.filter(r => r.type === k && matches(r));
+        if (needle && items.length === 0) return null;
+        return (
+          <div key={k} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--bone-400)' }}>{label}</span>
+              {needMap && needMap[k] != null && (
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: have[k] === needMap[k] ? 'var(--good)' : have[k] > needMap[k] ? 'var(--gold)' : 'var(--blood-hi)' }}>
+                  {have[k]}/{needMap[k]}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {items.map(r => {
+                const foreign = campaignIds && !campaignIds.has(r.id);
+                return (
+                  <button key={r.id} onClick={() => toggleBag(r.id)} className="btn-night"
+                    title={`${foreign ? '✦ Fuera de la campaña activa — ' : ''}${r.ability || ''}`}
+                    style={{ fontSize: 9, borderColor: bag.has(r.id) ? 'var(--gold)' : undefined, color: bag.has(r.id) ? 'var(--gold-hot)' : undefined, opacity: foreign && !bag.has(r.id) ? 0.75 : 1 }}>
+                    {foreign ? '✦ ' : ''}{r.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {roleList.filter(r => r.type === k).map(r => (
-              <button key={r.id} onClick={() => toggleBag(r.id)} className="btn-night"
-                title={r.ability}
-                style={{ fontSize: 9, borderColor: bag.has(r.id) ? 'var(--gold)' : undefined, color: bag.has(r.id) ? 'var(--gold-hot)' : undefined }}>
-                {r.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       {needed === null && (
         <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-500)', fontStyle: 'italic' }}>5–15 jugadores para ver la composición requerida.</p>
       )}
@@ -197,12 +259,18 @@ function BagStep({ roleList, roleInfo, bag, toggleBag, needed, playerCount }) {
 }
 
 // ── Paso 2: asignar a asientos ───────────────────────────────────────
-function SeatStep({ seats, assignments, bag, roleList, roleInfo, moveSeat, assignSeat }) {
+function SeatStep({ seats, assignments, bag, roleList, catalog, roleInfo, moveSeat, assignSeat }) {
   const usedRoles = new Set(Object.values(assignments));
   // El saco va primero, pero el desplegable ofrece TODA la campaña: si olvidas
-  // meter un personaje en el saco no debe quedar inalcanzable aquí.
-  const bagRoles  = roleList.filter(r => bag.has(r.id));
-  const restRoles = roleList.filter(r => !bag.has(r.id));
+  // meter un personaje en el saco no debe quedar inalcanzable aquí. Y detrás,
+  // el compendio entero: ningún personaje del manual queda fuera de alcance.
+  const campaignIds = new Set(roleList.map(r => r.id));
+  const pool = (catalog && catalog.length) ? catalog : roleList;
+  // El saco puede contener personajes de fuera de la campaña: se buscan en el
+  // catálogo completo, no sólo en `roleList`.
+  const bagRoles   = pool.filter(r => bag.has(r.id));
+  const restRoles  = roleList.filter(r => !bag.has(r.id));
+  const otherRoles = pool.filter(r => !campaignIds.has(r.id) && !bag.has(r.id));
   // Asientos válidos para la Marioneta = vecinos del Demonio.
   const demonSeatIdx = seats.findIndex(s => roleInfo[assignments[s.id]]?.type === 'demon');
   const adjToDemon = new Set();
@@ -242,6 +310,11 @@ function SeatStep({ seats, assignments, bag, roleList, roleInfo, moveSeat, assig
                     <option key={r.id} value={r.id}>{r.name} ({typeLabel(r.type)})</option>
                   ))}
                 </optgroup>
+                <optgroup label="Compendio completo (otras campañas)">
+                  {otherRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
+                    <option key={r.id} value={r.id}>✦ {r.name} ({typeLabel(r.type)})</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           );
@@ -257,10 +330,23 @@ function SeatStep({ seats, assignments, bag, roleList, roleInfo, moveSeat, assig
 }
 
 // ── Paso 3: decisiones de montaje ────────────────────────────────────
-function DecisionsStep({ decisions, seats, assignments, roleList, roleInfo, send }) {
-  const goodNotInPlay = roleList.filter(r => r.alignment === 'good' && !Object.values(assignments).includes(r.id) && !roleInfo[r.id]?.misperception);
-  const demonsInCampaign = roleList.filter(r => r.type === 'demon');
-  const minionsInCampaign = roleList.filter(r => r.type === 'minion');
+function DecisionsStep({ decisions, seats, assignments, roleList, catalog, roleInfo, send }) {
+  // El guion EFECTIVO = campaña activa + cualquier personaje repartido desde el
+  // compendio. Sin esto, un Alquimista de Carousel en una partida de Trouble
+  // Brewing no podría copiar al Esbirro que sí está sentado en la mesa.
+  const scriptRoles = useMemo(() => {
+    const byId = new Map(roleList.map(r => [r.id, r]));
+    for (const rid of Object.values(assignments)) {
+      if (!rid || byId.has(rid)) continue;
+      const def = (catalog || []).find(r => r.id === rid) || roleInfo[rid];
+      if (def) byId.set(rid, def);
+    }
+    return [...byId.values()];
+  }, [roleList, catalog, assignments, roleInfo]);
+
+  const goodNotInPlay = scriptRoles.filter(r => r.alignment === 'good' && !Object.values(assignments).includes(r.id) && !roleInfo[r.id]?.misperception);
+  const demonsInCampaign = scriptRoles.filter(r => r.type === 'demon');
+  const minionsInCampaign = scriptRoles.filter(r => r.type === 'minion');
   const outsidersInPlay = seats.filter(s => roleInfo[assignments[s.id]]?.type === 'outsider').map(s => assignments[s.id]);
 
   const setDec = (id, patch) => send('SETUP_SET_DECISION', { id, patch });
@@ -438,12 +524,12 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, minionsInCampaign, o
 
 
 // ── Paso 4: revisar y bloquear ───────────────────────────────────────
-function ReviewStep({ seats, assignments, decisions, allAssigned, unresolved, send }) {
+function ReviewStep({ seats, assignments, decisions, roleInfo, allAssigned, unresolved, send }) {
   const believedFor = (seatId) => {
     const d = decisions.find(x => x.kind === 'identidadFalsa' && x.seat === seatId);
     if (!d) return null;
     const rid = d.role === 'lunatic' ? d.lunatic?.perceivedDemon : d.chosenGoodRole;
-    return rid ? ROLE_BY_ID[rid] : null;
+    return rid ? (roleInfo[rid] || ROLE_BY_ID[rid]) : null;
   };
   const canLock = allAssigned && unresolved === 0;
   return (
@@ -453,7 +539,7 @@ function ReviewStep({ seats, assignments, decisions, allAssigned, unresolved, se
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 280, overflowY: 'auto', marginBottom: 10 }}>
         {seats.map((s, i) => {
-          const role = ROLE_BY_ID[assignments[s.id]];
+          const role = roleInfo[assignments[s.id]] || ROLE_BY_ID[assignments[s.id]];
           const believed = believedFor(s.id);
           return (
             <div key={s.id} style={{ display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.2)', borderRadius: 3, padding: '5px 8px' }}>

@@ -2662,7 +2662,7 @@ El narrador dispone de un **catálogo grande de deseos preestablecidos** y de un
   Escenario: Predicador envenenado
     Entonces el Esbirro conserva su habilidad y la información puede ser falsa
 
-## Feature: Rata de Laboratorio / Boffin (Aldeano) — Carousel
+## Feature: Rata de Laboratorio / Boffin (Esbirro) — Carousel
   «El Demonio tiene la habilidad de un personaje bueno que no está en juego. Ambos lo saben desde la noche 1.»
   Panel: montaje — selector de qué habilidad buena recibe el Demonio.
 
@@ -3572,7 +3572,7 @@ universales, guiado por el recordatorio de reglas de cada personaje.
   «No puede haber más de 1 jugador malvado extra.»
   Panel: aviso de validación en el montaje.
 
-## Feature: Atrapa Tormentas / Storm Catcher (Aldeano)
+## Feature: Atrapa Tormentas / Storm Catcher (Fabricado)
   @extra
   «Nombra un personaje bueno: si está en juego solo puede morir por ejecución, pero los malvados saben quién es.»
   Panel: ficha de inmunidad + anuncio al equipo malvado.

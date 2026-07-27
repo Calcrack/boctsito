@@ -35,6 +35,26 @@ for (const [id, role] of Object.entries(EXTRA_ROLES)) {
   if (!ALL_ROLES[id]) ALL_ROLES[id] = role;
 }
 
+// Modificadores de reparto GLOBALES: unión de los de cada campaña más los de
+// los roles extra. El asistente de montaje los necesita cuando el Narrador
+// reparte un personaje de fuera de la campaña activa (Barón en S&V, Señor de
+// Typhon en Trouble Brewing…): sin esto la composición saldría mal contada.
+const ALL_OUTSIDER_MODIFIERS = {};
+const ALL_MINION_MODIFIERS = {};
+function absorbModifiers(campaign) {
+  for (const [id, delta] of Object.entries(campaign.outsiderModifiers || {})) {
+    if (ALL_OUTSIDER_MODIFIERS[id] == null) ALL_OUTSIDER_MODIFIERS[id] = delta;
+  }
+  for (const [id, delta] of Object.entries(campaign.minionModifiers || {})) {
+    if (ALL_MINION_MODIFIERS[id] == null) ALL_MINION_MODIFIERS[id] = delta;
+  }
+}
+for (const c of Object.values(CAMPAIGNS)) absorbModifiers(c);
+for (const [id, mod] of Object.entries(EXTRA_SETUP_MODIFIERS)) {
+  if (mod.outsiders != null && ALL_OUTSIDER_MODIFIERS[id] == null) ALL_OUTSIDER_MODIFIERS[id] = mod.outsiders;
+  if (mod.minions   != null && ALL_MINION_MODIFIERS[id]   == null) ALL_MINION_MODIFIERS[id]   = mod.minions;
+}
+
 // Registro dinámico de campañas personalizadas (mutando los objetos compartidos
 // para que getCampaign y ROLES[id] sigan resolviendo en caliente).
 function registerCampaign(campaign) {
@@ -43,6 +63,7 @@ function registerCampaign(campaign) {
   for (const [id, role] of Object.entries(campaign.roles || {})) {
     if (!ALL_ROLES[id]) ALL_ROLES[id] = role; // no piso roles oficiales globales
   }
+  absorbModifiers(campaign);
 }
 
 function listCampaigns() {
@@ -52,4 +73,5 @@ function listCampaigns() {
 module.exports = {
   CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign, ALL_ROLES, registerCampaign, listCampaigns,
   EXTRA_ROLES, EXTRA_SETUP_MODIFIERS,
+  ALL_OUTSIDER_MODIFIERS, ALL_MINION_MODIFIERS,
 };

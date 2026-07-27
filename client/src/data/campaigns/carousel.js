@@ -32,7 +32,7 @@ export const roles = [
     ability: 'Cada noche: aprendes qué alineación cree el Narrador que está ganando.', night: { passive: true } },
   { id: 'HIGH_PRIESTESS', name: 'Sacerdotisa Mayor', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/high-priestess.png',
     ability: 'Cada noche: aprende cuál jugador cree el Narrador que deberías conocer.', night: { passive: true } },
-  { id: 'HUNTSMAN', name: 'Cazador', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/huntsman.png',
+  { id: 'HUNTSMAN', name: 'Cazador de Damiselas', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/huntsman.png',
     ability: 'Una vez por partida: elige un jugador; la Damisela se convierte en Aldeano.', night: { action: 'HUNTSMAN', targets: 1 } },
   { id: 'KING', name: 'Rey', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/king.png',
     ability: 'Cada noche, si muertos ≥ vivos, aprendes un personaje vivo.', night: { passive: true } },

@@ -79,7 +79,7 @@ const roles = {
     firstNight: false, otherNights: true,
   },
   HUNTSMAN: {
-    id: 'HUNTSMAN', name: 'Cazador', alignment: 'good', type: 'townfolk',
+    id: 'HUNTSMAN', name: 'Cazador de Damiselas', alignment: 'good', type: 'townfolk',
     ability: 'Una vez por partida, elige un jugador: la Damisela se convierte en un Aldeano que no está en juego.',
     firstNight: false, otherNights: true,
   },

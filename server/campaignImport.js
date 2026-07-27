@@ -397,6 +397,63 @@ async function deleteCustomCampaign(id) {
   _pushCampaigns(_cache).catch(e => console.error('[Campaigns] push error:', e.message));
 }
 
+// ── Reparación de campañas guardadas ────────────────────────────────
+// Una campaña importada ANTES de que existiera un rol guarda ese rol como
+// stub ("(Rol desconocido)", tipo townfolk, id sin guiones bajos). Al añadir
+// el rol de verdad hay que re-resolverla, o el stub se queda para siempre.
+// Devuelve la campaña reparada, o la misma si no hacía falta tocarla.
+function healCampaign(campaign) {
+  if (!campaign || !campaign.roles) return campaign;
+
+  const stubIds = Object.keys(campaign.roles).filter(id => {
+    const r = campaign.roles[id];
+    return r.unknown || /Rol desconocido/i.test(r.ability || '');
+  });
+  // Además de los stubs, un rol puede haber cambiado de tipo o alineación
+  // (Administrador y Shugenja estaban mal como Esbirros).
+  const staleIds = Object.keys(campaign.roles).filter(id => {
+    const real = ALL_ROLES[id];
+    if (!real) return false;
+    const r = campaign.roles[id];
+    return r.type !== real.type || r.alignment !== real.alignment;
+  });
+  if (stubIds.length === 0 && staleIds.length === 0) return campaign;
+
+  // Reconstruye desde la lista de ids original: así se recalculan también el
+  // orden de noche, los modificadores de reparto y las notas de montaje.
+  const roleIds = Object.keys(campaign.roles).map(id => {
+    const r = campaign.roles[id];
+    // Los stubs guardan el id crudo del guion en `name`.
+    return (r.unknown && r.name) ? r.name : id;
+  });
+  const rebuilt = parseScript(roleIds, campaign.name);
+
+  const healed = stubIds.filter(id => {
+    const raw = (campaign.roles[id].name) || id;
+    const resolved = resolveId(raw);
+    return resolved && ALL_ROLES[resolved];
+  });
+  if (healed.length) {
+    console.log(`[Campaigns] "${campaign.name}": ${healed.length} rol(es) resueltos que antes eran stub`);
+  }
+  if (staleIds.length) {
+    console.log(`[Campaigns] "${campaign.name}": ${staleIds.length} rol(es) actualizados (tipo/alineación)`);
+  }
+
+  return {
+    ...campaign,
+    roles: rebuilt.roles,
+    firstNightOrder: rebuilt.firstNightOrder,
+    otherNightOrder: rebuilt.otherNightOrder,
+    outsiderModifiers: rebuilt.outsiderModifiers,
+    minionModifiers: rebuilt.minionModifiers,
+    setupNotes: rebuilt.setupNotes,
+    warnings: rebuilt.warnings,
+    queueFirst: rebuilt.firstNightOrder.filter(x => x !== 'EVIL_INFO' && ALL_ROLES[x]),
+    queueOther: rebuilt.otherNightOrder.filter(x => ALL_ROLES[x]),
+  };
+}
+
 // Construye una campaña lista para el motor a partir de un script.
 function buildCampaign(input, fallbackName) {
   const parsed = parseScript(input, fallbackName);
@@ -418,4 +475,4 @@ function buildCampaign(input, fallbackName) {
   };
 }
 
-module.exports = { parseScript, buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign, resolveId };
+module.exports = { parseScript, buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign, resolveId };

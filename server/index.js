@@ -20,7 +20,7 @@ const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionRe
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
-const { buildCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
+const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
 const { WISH_CATALOG } = require('./wishes');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
 const { initDB, saveGame, loadGame, logGameEvent } = require('./persistence');
@@ -2027,7 +2027,16 @@ async function startup() {
   // Cargar campañas personalizadas (MongoDB si MONGODB_URI está definido, si no, archivo local)
   try {
     const custom = await loadCustomCampaigns();
-    for (const c of Object.values(custom)) registerCampaign(c);
+    // Re-resuelve los roles que se guardaron como stub porque aún no existían
+    // (Hechicero, Señor de Typhon, Princesa…) y los que cambiaron de tipo.
+    for (const [id, c] of Object.entries(custom)) {
+      const healed = healCampaign(c);
+      registerCampaign(healed);
+      if (healed !== c) {
+        custom[id] = healed;
+        saveCustomCampaign(healed).catch(e => console.error('[Campaigns] reguardado:', e.message));
+      }
+    }
     const n = Object.keys(custom).length;
     if (n) console.log(`✓ ${n} campaña(s) personalizada(s) cargada(s)`);
   } catch (e) { console.error('[Campaigns] Error al cargar:', e.message); }

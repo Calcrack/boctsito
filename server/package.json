@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
-    "test": "node test/gherkin.core.test.js && node test/gherkin.roles.test.js",
+    "test": "node test/gherkin.core.test.js && node test/gherkin.roles.test.js && node test/gherkin.hints.test.js",
     "coverage": "node test/coverage.js"
   },
   "dependencies": {

@@ -567,6 +567,9 @@ export default function NarratorPanel() {
         {/* Guía: una acción a la vez, centro de mando del narrador */}
         {isNight && <NightWalkthrough onActiveActor={setActiveNightActorId} />}
 
+        {/* Personajes que decides tú: la página avisa, no automatiza */}
+        <RoleHints game={game} />
+
         {/* Mapa de sospechas (agregado) */}
         <SuspicionMap players={players} />
 
@@ -894,6 +897,51 @@ function AlertsInline({ game, send }) {
           <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9 }}>✓ Hecho</button>
         </span>
       ))}
+    </div>
+  );
+}
+
+// ── Guía del narrador ────────────────────────────────────────────────
+// Personajes cuya regla NO se automatiza a propósito: depende de algo dicho
+// en voz alta o de tu criterio. La página te dice QUÉ toca y CON QUÉ control,
+// pero la decisión sigue siendo tuya. Se abre solo si hay algo urgente.
+function RoleHints({ game }) {
+  const hints = game.roleHints || [];
+  const urgent = hints.filter(h => h.severity === 'warn' || h.severity === 'danger');
+  const [open, setOpen] = useState(urgent.length > 0);
+  if (hints.length === 0) return null;
+
+  const color = s => (s === 'danger' ? 'var(--blood-hi)' : s === 'warn' ? 'var(--gold-hot)' : 'var(--moon)');
+
+  return (
+    <div style={{ border: 'var(--hairline-bone)', borderRadius: 4, overflow: 'hidden' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', cursor: 'pointer', background: 'rgba(0,0,0,0.2)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: urgent.length ? 'var(--gold-hot)' : 'var(--moon)' }}>
+          🎙 Decides tú ({hints.length}{urgent.length ? ` · ${urgent.length} urgente${urgent.length > 1 ? 's' : ''}` : ''})
+        </span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ maxHeight: 300, overflowY: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {hints.map((h, i) => (
+            <div key={i} style={{ borderLeft: `2px solid ${color(h.severity)}`, paddingLeft: 8 }}>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', margin: '0 0 2px', fontWeight: 600 }}>
+                {h.playerName} <span style={{ color: 'var(--bone-500)', fontWeight: 400 }}>· {h.roleName}</span>
+                {!h.alive && <span style={{ color: 'var(--blood-hi)', fontSize: 10 }}> ☠</span>}
+                {h.impaired && <span style={{ color: 'var(--moon)', fontSize: 10 }}> 🧪 no funciona</span>}
+              </p>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', margin: 0 }}>{h.text}</p>
+              {h.needs && (
+                <p style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', margin: '3px 0 0' }}>▸ {h.needs}</p>
+              )}
+            </div>
+          ))}
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', margin: 0 }}>
+            Pulsa la ficha del jugador en la ruleta para abrir su mini-panel.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

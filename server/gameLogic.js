@@ -5,6 +5,7 @@ const {
 } = require('./roles');
 const SETUP = require('./setup');
 const ROLE_INFO = require('./roleInfo');
+const HINTS = require('./narratorHints');
 
 // ── In-memory store ────────────────────────────────────────────────
 const games = new Map();
@@ -2165,6 +2166,10 @@ function executeNominationWinner(game) {
   nominee.alive = false;
   clearBearerDeathTokens(nominee);
   game.executedToday = nominee.id;
+  // El Canibal hereda del ULTIMO ejecutado de toda la partida, no solo de hoy.
+  game.lastExecutedId = nominee.id;
+  game.lastExecutedRole = nominee.role;
+  game.lastExecutedWasEvil = nominee.alignment === 'evil';
   if (nominee.role === 'ZOMBUUL') nominee.zombuulReallyDead = true;
 
   // Leviatán: al segundo jugador bueno ejecutado ganan los malvados.
@@ -2840,6 +2845,9 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
     activeNomination, winner,
     statusLog: isNarrator ? (game.statusLog || []) : undefined,
     advice: isNarrator ? computeAdvice(game) : undefined,
+    // Guia del narrador: personajes que NO se automatizan a proposito.
+    // Le decimos que le toca decidir ahora y con que control hacerlo.
+    roleHints: isNarrator ? HINTS.computeRoleHints(game) : undefined,
     deferredEffects: isNarrator ? (game.deferredEffects || []).filter(d => !d.resolved) : undefined,
     deferredOptions: isNarrator ? deferredOptionsFor(game) : undefined,
     executedToday: game.executedToday,

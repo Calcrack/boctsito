@@ -294,6 +294,18 @@ function AbilityTab({ target, game, send, onClose }) {
         <p style={warn}>⚠ Borracho o envenenado: su habilidad NO funcionará y su información puede ser falsa. Ejecútala igual para que no lo note.</p>
       )}
 
+      {/* Guía: qué te toca decidir con este personaje AHORA mismo */}
+      {(game.roleHints || []).filter(h => h.playerId === target.id).map((h, i) => (
+        <div key={'h' + i} style={{
+          borderLeft: `2px solid ${h.severity === 'danger' ? 'var(--blood-hi)' : 'var(--gold-hot)'}`,
+          paddingLeft: 8, margin: '10px 0',
+        }}>
+          <p style={{ ...label, color: h.severity === 'danger' ? 'var(--blood-hi)' : 'var(--gold-hot)' }}>🎙 Te toca decidir</p>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', margin: '0 0 3px' }}>{h.text}</p>
+          {h.needs && <p style={{ ...hint, margin: 0 }}>▸ {h.needs}</p>}
+        </div>
+      ))}
+
       {cfg?.note && (
         <p style={{ ...hint, borderLeft: '2px solid var(--gold)', paddingLeft: 8, margin: '10px 0' }}>{cfg.note}</p>
       )}

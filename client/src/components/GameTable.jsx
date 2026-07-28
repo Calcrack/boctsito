@@ -244,13 +244,28 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
   const canAct = isNarrator || ['day', 'nominations', 'voting'].includes(phase);
   const isNight = ['first_night', 'night'].includes(phase);
 
-  const containerSize = Math.min(containerDims.w, containerDims.h, 700);
   const cx = containerDims.w / 2;
   const cy = containerDims.h / 2;
   const circlePlayers = players.filter(p => !CORNER_CHANNELS[p.discordChannel]);
   const n = circlePlayers.length || 1;
-  const radius = containerSize * 0.37;
-  const seatSize = Math.max(48, Math.min(80, (containerSize * 0.18)));
+
+  // ── Tamaño del anillo ─────────────────────────────────────────────
+  // El medallón debe caber en DOS sentidos, y con 15 jugadores en un móvil
+  // el que manda es el arco, no la caja. Antes había un suelo fijo de 48px:
+  // en pantallas estrechas los asientos se solapaban y, si el contenedor no
+  // tenía altura, se apilaban todos en el centro.
+  const half = Math.min(containerDims.w, containerDims.h, 760) / 2;
+  const plateH = 28;                     // nombre + rol bajo el medallón
+  const arcK = 1.06 / (2 * Math.PI);     // holgura mínima entre medallones
+  // Mayor `s` que cumple a la vez: s·n·arcK + s/2 + plateH ≤ half
+  // (floor, no round: redondear hacia arriba desbordaba el marco por 1px)
+  const fit = (half - plateH) / (n * arcK + 0.5);
+  const seatSize = Math.floor(Math.max(26, Math.min(80, fit)));
+  const radius = Math.max(
+    seatSize * n * arcK,                                   // no se tocan entre sí
+    Math.min(half - seatSize / 2 - plateH, half * 0.78),   // no se salen del marco
+  );
+  const containerSize = radius * 2;
   const positions = getCirclePositions(n, radius);
 
   const phaseLabel = {
@@ -281,7 +296,9 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
       <Celestials isNight={isNight} />
 
       {/* Table disc in center */}
-      <div className="table-disc" style={{ '--table-radius': `${containerSize / 2}px` }}>
+      {/* El disco vive DENTRO del anillo de asientos: su diámetro es el del
+          anillo menos un medallón, para que nunca quede por debajo de ellos. */}
+      <div className="table-disc" style={{ '--disc-size': `${Math.max(80, radius * 2 - seatSize - 12)}px` }}>
         {phase === 'voting' && game.activeNomination ? (() => {
           const nom = nominations.find(n => n.id === game.activeNomination);
           const nominee = nom

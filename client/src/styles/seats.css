@@ -13,12 +13,25 @@
   justify-content: center;
 }
 
+/* La mesa incrustada fuera del `.stage` (vista nocturna del jugador) no hereda
+   altura de nadie: sin esto, `height:100%` resolvía a 0 y los asientos se
+   apilaban todos en el centro. Cuadrada y acotada a la ventana. */
+.table-embed {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 1 / 1;
+  max-height: 72vh;
+  margin: 0 auto;
+}
+
 /* ── TABLE DISC (mesa grabada con anillos concéntricos) ─────── */
 
 .table-disc {
   position: absolute;
-  width: calc(var(--table-radius, 200px) * 2 - 60px);
-  height: calc(var(--table-radius, 200px) * 2 - 60px);
+  /* Lo calcula GameTable a partir del anillo real de asientos. */
+  width: var(--disc-size, 280px);
+  height: var(--disc-size, 280px);
   border-radius: 50%;
 
   /* Anillos concéntricos grabados */
@@ -281,7 +294,9 @@
 
 .seat-name {
   font-family: var(--serif);
-  font-size: 12px;
+  /* Escala con el medallón: con 15 jugadores en móvil `--sz` baja mucho y una
+     chapa de 12px desbordaría sobre los asientos vecinos. */
+  font-size: clamp(8px, calc(var(--sz, 68px) * 0.18), 12px);
   color: var(--bone-100);
   white-space: nowrap;
   overflow: hidden;
@@ -291,7 +306,7 @@
 
 .seat-role-label {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: clamp(7px, calc(var(--sz, 68px) * 0.135), 9px);
   letter-spacing: 0.1em;
   color: var(--bone-400);
   white-space: nowrap;

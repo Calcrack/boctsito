@@ -386,6 +386,13 @@ function AbilityTab({ target, game, send, onClose }) {
           Generar información de {role.name}
         </button>
       )}
+      {/* Segunda acción del mismo personaje (Sangijuela: marcar anfitrión) */}
+      {cfg?.altAction && targets.length === 1 && (
+        <button className="btn-night" style={{ width: '100%', marginTop: 6, fontSize: 11 }}
+          onClick={() => run(cfg.altAction.action)}>
+          {cfg.altAction.label} → {game.players.find(p => p.id === targets[0])?.name}
+        </button>
+      )}
       {cfg?.allowNone && (
         <button className="btn-night" style={{ width: '100%', marginTop: 6, fontSize: 11 }}
           onClick={() => { send('NIGHT_NARRATOR_ACTION', { actorId: target.id, actionType: cfg.action, targetIds: [] }); setTargets([]); }}>

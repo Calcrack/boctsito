@@ -4,6 +4,7 @@ const {
   ALL_OUTSIDER_MODIFIERS, ALL_MINION_MODIFIERS,
 } = require('./roles');
 const SETUP = require('./setup');
+const ROLE_INFO = require('./roleInfo');
 
 // ── In-memory store ────────────────────────────────────────────────
 const games = new Map();
@@ -218,6 +219,7 @@ function applySetup(game) {
     player.nightInfo = null;
     player.slayerUsed = false; player.virginUsed = false; player.impShotUsed = false;
     player.butlerMaster = null; player.bluffRole = null; player.statuses = [];
+    player.borrowedAbility = null; // Alquimista / Rata de Laboratorio
   }
   const inPlay = new Set(game.players.map(p => p.role));
   const allGood = [...getRolesByType('townfolk', game.campaignId), ...getRolesByType('outsider', game.campaignId)];
@@ -247,7 +249,38 @@ function applySetup(game) {
           game.evilTwinPair = { evilId: seatP.id, goodId: d.targetSeat };
         }
         break;
-      default: break; // forasteros: informativos; bluffs/veneno/info → noche
+      // Alquimista: lleva la habilidad de un Esbirro. Sin ficha, la decisión
+      // quedaba sólo en el panel nocturno y no se veía en el grimorio.
+      case 'alchemistAbility': {
+        if (!seatP || !d.chosen) break;
+        const m = ROLES[d.chosen];
+        seatP.borrowedAbility = d.chosen;
+        placeToken(seatP, {
+          type: 'ALCHEMIST_ABILITY', roleId: 'ALCHEMIST',
+          label: `Habilidad de ${m?.name || d.chosen}`,
+          expiry: ['PERMANENT'], sourceRole: 'ALCHEMIST', sourcePlayerId: seatP.id,
+        }, game);
+        break;
+      }
+      // Rata de Laboratorio: el Demonio INICIAL también recibe la habilidad
+      // buena elegida. Antes sólo la heredaban los Demonios sucesores.
+      case 'boffinAbility': {
+        if (!d.chosen) break;
+        const demon = game.players.find(p => p.type === 'demon');
+        if (!demon) break;
+        const g = ROLES[d.chosen];
+        demon.borrowedAbility = d.chosen;
+        placeToken(demon, {
+          type: 'BOFFIN_ABILITY', roleId: 'BOFFIN',
+          label: `Habilidad de ${g?.name || d.chosen}`,
+          expiry: ['PERMANENT'], sourceRole: 'BOFFIN',
+          sourcePlayerId: game.players.find(p => p.role === 'BOFFIN')?.id || null,
+        }, game);
+        break;
+      }
+      // forasteros / outsiderModifierChoice / summonerSetup: son confirmaciones
+      // de composición, no escriben estado. summonerSetup además es una nota.
+      default: break;
     }
   }
 
@@ -279,8 +312,80 @@ function regenDemonNightInfo(game) {
   });
 }
 
-const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
+// Roles cuya informacion la calcula la pagina sola (sin eleccion del Narrador).
+// A los clasicos de Trouble Brewing se suman los generadores de `roleInfo.js`.
+const PASSIVE_INFO_ROLES = new Set([
+  'WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY',
+  ...ROLE_INFO.AUTO_INFO_ROLES,
+]);
 const FIRST_NIGHT_ONLY_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK']);
+
+// ── Fin de partida: punto único de declaración de ganador ────────────
+// El Hereje invierte el resultado («quien gana, pierde»), esté vivo o muerto,
+// salvo que esté borracho o envenenado cuando la partida termina.
+function endGame(game, winner, reason) {
+  let final = winner;
+  let why = reason;
+  const heretic = game.players.find(p => p.role === 'HERETIC');
+  if (heretic && !heretic.poisoned && !heretic.drunkAs) {
+    final = winner === 'good' ? 'evil' : 'good';
+    why = `${reason} — pero el Hereje invierte el resultado: ganan los ${final === 'evil' ? 'malvados' : 'buenos'}`;
+  }
+  game.winner = final;
+  game.phase = 'game_over';
+  game.winReason = why;
+  return final;
+}
+
+// ¿Este jugador despierta esta noche? Vivo, o Esbirro conservado por Vigormortis.
+function wakesTonight(p) { return !!p && (p.alive || p.vigormortisAlive); }
+
+// ── Reglas de día ligadas al Demonio (Leviatán, Motín) ───────────────
+// Se evalúan al amanecer, antes de comprobar las condiciones normales.
+function applyDemonDayRules(game) {
+  if (game.phase === 'game_over') return;
+  if (game.players.some(p => p.role === 'ATHEIST')) return;
+
+  // Leviatán: después del día 5 ganan los malvados.
+  const leviathan = game.players.find(p => p.role === 'LEVIATHAN' && p.alive && !p.poisoned);
+  if (leviathan && game.dayNumber > 5) {
+    endGame(game, 'evil', '🐉 Leviatán: se acabó el día 5 sin que ganaran los buenos — ganan los malvados');
+    return;
+  }
+
+  // Motín: en el día 3 los Esbirros vivos se convierten en Motín.
+  const riot = game.players.find(p => p.role === 'RIOT' && p.alive && !p.poisoned);
+  if (riot && game.dayNumber >= 3 && !game.riotConverted) {
+    game.riotConverted = true;
+    const converted = [];
+    for (const p of game.players) {
+      if (!p.alive || p.type !== 'minion') continue;
+      p.role = 'RIOT'; p.type = 'demon'; p.alignment = 'evil';
+      converted.push(p.name);
+      p.nightInfo = '🔥 Motín\nAhora eres Motín. Los nominados mueren de inmediato.';
+    }
+    addDeferred(game, {
+      label: `🔥 Motín — día 3: ${converted.length ? `${converted.join(', ')} pasan a ser Motín. ` : ''}A partir de ahora TODO nominado muere de inmediato, sin votación.`,
+      dueNight: game.nightNumber, severity: 'warn', role: 'RIOT',
+    });
+  }
+}
+
+// ¿Está activo el día del Motín? (día 3 en adelante, con Motín sano)
+function riotDayActive(game) {
+  if (game.players.some(p => p.role === 'ATHEIST')) return false;
+  const riot = game.players.find(p => p.role === 'RIOT' && p.alive && !p.poisoned);
+  return !!riot && game.dayNumber >= 3;
+}
+
+// Legión: la ejecución falla si TODOS los que votaron eran malvados.
+function legionVetoesExecution(game, nomination) {
+  const legion = game.players.find(p => p.role === 'LEGION' && p.alive && !p.poisoned);
+  if (!legion) return false;
+  const voters = (nomination.votes || []).map(id => game.players.find(p => p.id === id)).filter(Boolean);
+  if (voters.length === 0) return false;
+  return voters.every(v => v.alignment === 'evil');
+}
 
 function getInteractiveRolesForPhase(game) {
   const campaign = getCampaign(game.campaignId);
@@ -441,7 +546,7 @@ function generatePassiveNightInfo(game) {
 
 function generateSingleRoleInfo(game, playerId) {
   const player = game.players.find(p => p.id === playerId);
-  if (!player || !player.alive) return;
+  if (!wakesTonight(player)) return;
 
   const isFirstNight = game.nightNumber === 1;
   const living = game.players.filter(p => p.alive);
@@ -567,6 +672,12 @@ function generateSingleRoleInfo(game, playerId) {
       player.nightInfo = '🕵️ GRIMORIO:\n' + grimoire.join('\n');
       break;
     }
+    // Resto del compendio: generadores declarativos de `roleInfo.js`.
+    default: {
+      const auto = ROLE_INFO.autoInfo(game, player);
+      if (auto) player.nightInfo = auto;
+      break;
+    }
   }
 }
 
@@ -574,7 +685,7 @@ function generateCurrentPassiveInfo(game) {
   const currentId = game.nightQueue[game.nightQueueIndex];
   if (!currentId) return;
   const player = game.players.find(p => p.id === currentId);
-  if (!player?.alive) return;
+  if (!wakesTonight(player)) return;
   const roleToCheck = player.role === 'DRUNK' ? player.drunkAs : player.role;
   if (PASSIVE_INFO_ROLES.has(roleToCheck)) {
     generateSingleRoleInfo(game, currentId);
@@ -587,7 +698,9 @@ function buildNightQueue(game) {
   for (const roleId of order) {
     if (roleId === 'UNDERTAKER' && !game.executedToday) continue;
     const matched = game.players.filter(p =>
-      p.alive && (p.role === roleId || (p.role === 'DRUNK' && p.drunkAs === roleId))
+      // Vigormortis: los Esbirros que mató conservan su habilidad y siguen despertando.
+      (p.alive || p.vigormortisAlive) &&
+      (p.role === roleId || (p.role === 'DRUNK' && p.drunkAs === roleId))
     );
     for (const player of matched) queue.push(player.id);
   }
@@ -597,7 +710,7 @@ function buildNightQueue(game) {
 function resolveNightQueue(game) {
   for (const playerId of game.nightQueue) {
     const player = game.players.find(p => p.id === playerId);
-    if (!player?.alive) continue;
+    if (!wakesTonight(player)) continue;
     const sub = game.nightSubmissions[playerId];
     if (!sub) continue;
     if (player.role === 'DRUNK') {
@@ -649,7 +762,7 @@ function advanceNightQueue(game, playerId, action, targetIds) {
   let idx = game.nightQueueIndex + 1;
   while (idx < game.nightQueue.length) {
     const next = game.players.find(p => p.id === game.nightQueue[idx]);
-    if (next?.alive) break;
+    if (wakesTonight(next)) break;
     idx++;
   }
   game.nightQueueIndex = idx;
@@ -1035,6 +1148,8 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         }
       } else if (target.role === 'SOLDIER' && !target.poisoned) {
         // blocked
+      } else if (isDeathBlocked(game, target)) {
+        // blocked: Sangijuela con anfitrión vivo, o vecino de la Dama del Té
       } else if (target.protected) {
         // blocked
       } else if (target.role === 'MAYOR' && !target.poisoned) {
@@ -1070,6 +1185,8 @@ function applyNightAction(game, actionType, actorId, targetIds) {
             target.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
             game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== target.id);
           }
+          ROLE_INFO.onDemonKill(game, target, addDeferred);
+          checkLleechHostDeath(game, target);
           checkScarletWoman(game, actor);
         }
       }
@@ -1155,13 +1272,16 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       for (const t of targets) {
         if (!t || !t.alive) continue;
         if (t.protected || t.safeTonight) continue;
+        if (isDeathBlocked(game, t)) continue;
         if (checkFoolProtection(game, t, actorId, artRole)) continue;
         if (zombuulFakeDeath(game, t)) continue;
         t.alive = false;
         clearBearerDeathTokens(t);
         game.nightDeaths.push(t.id);
         placeToken(t, { type: 'DIES', roleId: artRole || 'IMP', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
+        ROLE_INFO.onDemonKill(game, t, addDeferred);
         checkGrandmotherDeath(game, t, actorId, artRole);
+        checkLleechHostDeath(game, t);
         checkScarletWoman(game, actor);
       }
       break;
@@ -1205,8 +1325,10 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       if (!t.protected && !t.safeTonight && !checkFoolProtection(game, t, actorId, artRole)) {
         t.alive = false; clearBearerDeathTokens(t); game.nightDeaths.push(t.id);
         placeToken(t, { type: 'DIES', roleId: artRole, label: 'Muere', expiry: ['AT_DAWN'], sourceRole: artRole, sourcePlayerId: actorId }, game);
-        if (t.type === 'minion') t.vigormortisAlive = true;
+        if (t.type === 'minion') { t.vigormortisAlive = true; vigormortisPoisonNeighbor(game, t, actorId); }
+        ROLE_INFO.onDemonKill(game, t, addDeferred);
         checkGrandmotherDeath(game, t, actorId, artRole);
+        checkLleechHostDeath(game, t);
         checkScarletWoman(game, actor);
       }
       break;
@@ -1338,6 +1460,75 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
     }
 
+    // ── Soñador: 1 personaje bueno + 1 malvado, uno de ellos el real ────
+    case 'DREAMER_INFO': {
+      if (!actor || !targets[0]) break;
+      const t = targets[0];
+      const campaign = getCampaign(game.campaignId);
+      const poolOf = align => Object.values(campaign.roles)
+        .filter(r => r.alignment === align && r.id !== t.role && !r.misperception)
+        .map(r => r.id);
+      const pickOne = arr => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : null);
+      const realIsGood = t.alignment === 'good';
+      // Borracho/envenenado: los DOS personajes son falsos.
+      const impaired = !isActorEffective(actor);
+      const goodId = (!impaired && realIsGood) ? t.role : pickOne(poolOf('good'));
+      const evilId = (!impaired && !realIsGood) ? t.role : pickOne(poolOf('evil'));
+      actor.nightInfo = `💭 Soñador\n${t.name} es ${ROLES[goodId]?.name || '?'} o ${ROLES[evilId]?.name || '?'}.`;
+      break;
+    }
+
+    // ── Costurera: ¿son los 2 elegidos de la misma alineación? ───────────
+    case 'SEAMSTRESS_INFO': {
+      if (!actor || targets.length < 2) break;
+      const same = targets[0].alignment === targets[1].alignment;
+      const shown = isActorEffective(actor) ? same : !same;
+      actor.seamstressUsed = true;
+      actor.nightInfo = `🧵 Costurera\n${targets[0].name} y ${targets[1].name} ${shown ? 'SON' : 'NO son'} de la misma alineación.`;
+      break;
+    }
+
+    // ── Sirvienta: cuántos de los 2 despertaron esta noche ───────────────
+    case 'CHAMBERMAID_INFO': {
+      if (!actor || targets.length < 2) break;
+      const queue = new Set(game.nightQueue || []);
+      const real = targets.filter(t => queue.has(t.id)).length;
+      const shown = isActorEffective(actor) ? real : falsifyCount(real, 0, 2);
+      actor.nightInfo = `🧹 Sirvienta\n${shown} de esos 2 jugadores despertaron esta noche por su habilidad.`;
+      break;
+    }
+
+    // ── Matón: el primero que lo elija se emborracha; él cambia de bando ──
+    case 'GOON_TRIGGER': {
+      if (!actor || !targets[0]) break;
+      if (actor.goonNight === game.nightNumber) break; // solo el PRIMERO
+      actor.goonNight = game.nightNumber;
+      placeToken(targets[0], {
+        type: 'DRUNK_NIGHT', roleId: 'GOON', label: 'Borracho (Matón)',
+        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'GOON', sourcePlayerId: actorId,
+      }, game);
+      actor.alignment = targets[0].alignment;
+      addDeferred(game, {
+        label: `👊 Matón: ${targets[0].name} fue el primero en elegirlo — queda borracho y el Matón pasa a ser ${actor.alignment === 'evil' ? 'MALVADO' : 'BUENO'}.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'GOON',
+      });
+      break;
+    }
+
+    case 'LLEECH_HOST': {
+      if (!targets[0]) break;
+      game.lleechHostId = targets[0].id;
+      placeToken(targets[0], {
+        type: 'POISONED', roleId: 'LLEECH', label: 'Anfitrión de la Sangijuela (envenenado)',
+        expiry: ['PERMANENT'], sourceRole: 'LLEECH', sourcePlayerId: actorId,
+      }, game);
+      addDeferred(game, {
+        label: `🩸 Sangijuela: ${targets[0].name} es el anfitrión — envenenado de forma permanente. Si muere, la Sangijuela muere con él.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'LLEECH',
+      });
+      break;
+    }
+
     case 'MAKE_DRUNK':
       // Borracho de una noche (≈ envenenado): se limpia al próximo anochecer.
       for (const t of targets) if (t) placeToken(t, {
@@ -1435,6 +1626,86 @@ function checkGrandmotherDeath(game, killed, actorId, artRole) {
   gm.alive = false; clearBearerDeathTokens(gm); game.nightDeaths.push(gm.id);
   placeToken(gm, { type: 'DIES', roleId: 'GRANDMOTHER', label: 'Muere con nieto', expiry: ['AT_DAWN'], sourceRole: 'GRANDMOTHER', sourcePlayerId: actorId }, game);
   addDeferred(game, { label: `👵 La Abuela murió junto a su nieto ${killed.name}`, dueNight: game.nightNumber, severity: 'info', role: 'GRANDMOTHER' });
+}
+
+// ── Sangijuela (Lleech) ──────────────────────────────────────────────
+// Mientras su anfitrión viva, la Sangijuela no puede morir. Si el anfitrión
+// muere, la Sangijuela muere con él.
+function lleechHostAlive(game) {
+  const hostId = game.lleechHostId || null;
+  if (!hostId) return false;
+  const host = game.players.find(p => p.id === hostId);
+  return !!host && host.alive;
+}
+function isLleechImmune(game, target) {
+  return target.role === 'LLEECH' && !target.poisoned && lleechHostAlive(game);
+}
+// El anfitrión acaba de morir: arrastra a la Sangijuela.
+function checkLleechHostDeath(game, dead) {
+  if (!game.lleechHostId || dead.id !== game.lleechHostId) return;
+  const lleech = game.players.find(p => p.role === 'LLEECH' && p.alive);
+  if (!lleech) return;
+  lleech.alive = false;
+  clearBearerDeathTokens(lleech);
+  game.nightDeaths.push(lleech.id);
+  placeToken(lleech, { type: 'DIES', roleId: 'LLEECH', label: 'Muere con su anfitrión', expiry: ['AT_DAWN'], sourceRole: 'LLEECH' }, game);
+  addDeferred(game, {
+    label: `🩸 El anfitrión de la Sangijuela (${dead.name}) ha muerto — la Sangijuela muere con él.`,
+    dueNight: game.nightNumber, sourcePlayerId: lleech.id, severity: 'warn', role: 'LLEECH',
+  });
+  resolveDemonDeath(game, lleech);
+}
+
+// ── Dama del Té ──────────────────────────────────────────────────────
+// Si sus dos vecinos VIVOS son buenos, esos vecinos no pueden morir.
+function teaLadyProtects(game, target) {
+  const tl = game.players.find(p => p.role === 'TEA_LADY' && p.alive && !p.poisoned && !p.drunkAs);
+  if (!tl) return false;
+  const alive = game.players.filter(p => p.alive);
+  const i = alive.findIndex(p => p.id === tl.id);
+  if (i === -1 || alive.length < 3) return false;
+  const left  = alive[(i - 1 + alive.length) % alive.length];
+  const right = alive[(i + 1) % alive.length];
+  if (left.alignment !== 'good' || right.alignment !== 'good') return false;
+  return target.id === left.id || target.id === right.id;
+}
+
+// ¿Alguna regla pasiva impide esta muerte? (Sangijuela, Dama del Té)
+function isDeathBlocked(game, target) {
+  if (isLleechImmune(game, target)) {
+    addDeferred(game, {
+      label: '🩸 La Sangijuela no puede morir mientras viva su anfitrión.',
+      dueNight: game.nightNumber, sourcePlayerId: target.id, severity: 'info', role: 'LLEECH',
+    });
+    return true;
+  }
+  if (teaLadyProtects(game, target)) {
+    addDeferred(game, {
+      label: `🫖 Dama del Té: ${target.name} es su vecino bueno — no puede morir.`,
+      dueNight: game.nightNumber, sourcePlayerId: target.id, severity: 'info', role: 'TEA_LADY',
+    });
+    return true;
+  }
+  return false;
+}
+
+// ── Vigormortis: el Esbirro muerto envenena a un Aldeano vecino ──────
+function vigormortisPoisonNeighbor(game, deadMinion, actorId) {
+  const seats = game.players;
+  const i = seats.findIndex(p => p.id === deadMinion.id);
+  if (i === -1) return;
+  const n = seats.length;
+  const victim = [seats[(i - 1 + n) % n], seats[(i + 1) % n]]
+    .find(p => p && p.alive && p.type === 'townfolk');
+  if (!victim) return;
+  placeToken(victim, {
+    type: 'POISONED', roleId: 'VIGORMORTIS', label: 'Envenenado (Vigormortis)',
+    expiry: ['PERMANENT'], sourceRole: 'VIGORMORTIS', sourcePlayerId: actorId,
+  }, game);
+  addDeferred(game, {
+    label: `🧟 Vigormortis: ${deadMinion.name} conserva su habilidad y envenena a su vecino Aldeano ${victim.name}.`,
+    dueNight: game.nightNumber, sourcePlayerId: deadMinion.id, severity: 'warn', role: 'VIGORMORTIS',
+  });
 }
 
 // ── Sucesión del Demonio ─────────────────────────────────────────────
@@ -1564,11 +1835,9 @@ function checkMastermindExtraDayExecution(game, executedPlayer) {
   if (game.mastermindDay == null || game.mastermindDone) return false;
   game.mastermindDone = true;
   const evilExecuted = executedPlayer.alignment === 'evil' || ['minion', 'demon'].includes(executedPlayer.type);
-  game.winner = evilExecuted ? 'good' : 'evil';
-  game.phase = 'game_over';
-  game.winReason = evilExecuted
+  endGame(game, evilExecuted ? 'good' : 'evil', evilExecuted
     ? '🧩 Día extra (Mente Maestra): ejecutado un malvado — ganan los buenos'
-    : '🧩 Día extra (Mente Maestra): ejecutado un bueno — ganan los malos';
+    : '🧩 Día extra (Mente Maestra): ejecutado un bueno — ganan los malos');
   return true;
 }
 
@@ -1610,6 +1879,29 @@ function nominate(game, nominatorId, nomineeId) {
 
   const alreadyNominated = game.nominations.some(n => n.nominatorId === nominatorId);
   if (alreadyNominated) throw new Error('Ya has nominado a alguien hoy');
+
+  // Motín (día 3 en adelante): el nominado muere de inmediato, sin votación.
+  // Antes de morir puede nominar a su vez, así que el día NO se cierra aquí.
+  if (!isNarratorNominee && riotDayActive(game)) {
+    game.nominations.push({
+      id: uuidv4(), nominatorId, nomineeId,
+      nominatorName: nominator.name, nomineeName: nominee.name,
+      nomineeAvatar: nominee.avatar || null, nominatorAvatar: nominator.avatar || null,
+      isNarratorNominee: false, votes: [], against: [], ghostDeclines: [],
+      resolved: true, tally: 0, executed: true, riotKill: true,
+      stage: 'resolved', voteOrder: [], voteTurnIndex: 0,
+    });
+    nominee.alive = false;
+    clearBearerDeathTokens(nominee);
+    game.executionAttemptToday = true;
+    addDeferred(game, {
+      label: `🔥 Motín: ${nominee.name} muere al ser nominado. Puede nominar a su vez antes de morir.`,
+      dueNight: game.nightNumber, sourcePlayerId: nominee.id, severity: 'warn', role: 'RIOT',
+    });
+    if (nominee.type === 'demon') resolveDemonDeath(game, nominee);
+    checkWinCondition(game);
+    return { riotKill: true, killed: nominee };
+  }
 
   // Bruja: si el nominador está maldito y la Bruja está sana → muere al nominar
   // (con 3 o menos jugadores vivos la Bruja pierde su habilidad)
@@ -1777,6 +2069,17 @@ function executeNominationWinner(game) {
 
   const winner = tied[0];
 
+  // Legión: la ejecución falla si TODOS los que votaron eran malvados.
+  if (legionVetoesExecution(game, winner)) {
+    winner.executed = true;
+    game.executionAttemptToday = true;
+    addDeferred(game, {
+      label: `⚔️ Legión: solo votaron malvados — la ejecución de ${winner.nomineeName} FALLA y nadie muere.`,
+      dueNight: game.nightNumber, severity: 'warn', role: 'LEGION',
+    });
+    return { executed: null, gameOver: false, tie: false, legionVeto: true, nomineeName: winner.nomineeName };
+  }
+
   // Ejecución del Narrador: con Ateo (sano) en juego gana el bando bueno;
   // sin Ateo el Narrador no muere pero la ejecución del día se gasta.
   if (winner.nomineeId === 'NARRATOR') {
@@ -1784,10 +2087,8 @@ function executeNominationWinner(game) {
     game.executionAttemptToday = true;
     const atheist = game.players.find(p => p.role === 'ATHEIST');
     if (atheist && !atheist.poisoned) {
-      game.phase = 'game_over';
-      game.winner = 'good';
-      game.winReason = 'El pueblo ejecutó al Narrador con el Ateo en juego: gana el bando bueno.';
-      return { executed: { id: 'NARRATOR', name: 'Narrador' }, gameOver: true, winner: 'good', tie: false, narratorExecuted: true };
+      endGame(game, 'good', 'El pueblo ejecutó al Narrador con el Ateo en juego: gana el bando bueno.');
+      return { executed: { id: 'NARRATOR', name: 'Narrador' }, gameOver: true, winner: game.winner, tie: false, narratorExecuted: true };
     }
     return { executed: { id: 'NARRATOR', name: 'Narrador' }, gameOver: false, winner: null, tie: false, narratorExecuted: true };
   }
@@ -1865,6 +2166,18 @@ function executeNominationWinner(game) {
   clearBearerDeathTokens(nominee);
   game.executedToday = nominee.id;
   if (nominee.role === 'ZOMBUUL') nominee.zombuulReallyDead = true;
+
+  // Leviatán: al segundo jugador bueno ejecutado ganan los malvados.
+  if (!atheistActive && nominee.alignment === 'good') {
+    const leviathan = game.players.find(p => p.role === 'LEVIATHAN' && p.alive && !p.poisoned);
+    if (leviathan) {
+      game.leviathanGoodExecutions = (game.leviathanGoodExecutions || 0) + 1;
+      if (game.leviathanGoodExecutions >= 2) {
+        endGame(game, 'evil', '🐉 Leviatán: se ejecutó al segundo jugador bueno — ganan los malvados');
+        return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
+      }
+    }
+  }
   // Ficha "Murió hoy" para el Enterrador: dura el día y se lee esa noche.
   placeToken(nominee, { type: 'EXECUTED_TODAY', roleId: 'UNDERTAKER', label: 'Murió hoy', expiry: ['ONE_DAY'] }, game);
   // Barbero ejecutado: esta noche el Demonio puede intercambiar dos personajes.
@@ -1890,9 +2203,8 @@ function executeNominationWinner(game) {
   }
 
   if (!atheistActive && nominee.role === 'SAINT' && !nominee.poisoned) {
-    game.winner = 'evil'; game.phase = 'game_over';
-    game.winReason = 'Santo ejecutado';
-    return { executed: nominee, gameOver: true, winner: 'evil', tie: false };
+    endGame(game, 'evil', 'Santo ejecutado');
+    return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
   }
 
   // Sembrador de Miedo: si el propio Fearmonger nominó y ejecutó a su marcado, el equipo del ejecutado pierde.
@@ -1901,11 +2213,9 @@ function executeNominationWinner(game) {
     const fearmonger = fmToken ? game.players.find(p => p.id === fmToken.sourcePlayerId) : null;
     if (fearmonger && fearmonger.alive && !fearmonger.poisoned && winner.nominatorId === fearmonger.id) {
       const evilExecuted = nominee.alignment === 'evil';
-      game.winner = evilExecuted ? 'good' : 'evil';
-      game.phase = 'game_over';
-      game.winReason = evilExecuted
+      endGame(game, evilExecuted ? 'good' : 'evil', evilExecuted
         ? '😨 Sembrador de Miedo ejecutó a su objetivo malvado — su plan fracasa, ganan los buenos'
-        : '😨 Sembrador de Miedo nominó y ejecutó a su objetivo — el equipo del ejecutado pierde';
+        : '😨 Sembrador de Miedo nominó y ejecutó a su objetivo — el equipo del ejecutado pierde');
       return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
     }
   }
@@ -1915,9 +2225,8 @@ function executeNominationWinner(game) {
     const twinPair = game.evilTwinPair || null; // { evilId, goodId }
     const evilTwin = game.players.find(p => p.role === 'EVIL_TWIN' && p.alive && !p.poisoned);
     if (evilTwin && twinPair && twinPair.goodId === nominee.id) {
-      game.winner = 'evil'; game.phase = 'game_over';
-      game.winReason = '👯 El gemelo bueno fue ejecutado — gana el Mal (Gemela Malvada)';
-      return { executed: nominee, gameOver: true, winner: 'evil', tie: false };
+      endGame(game, 'evil', '👯 El gemelo bueno fue ejecutado — gana el Mal (Gemela Malvada)');
+      return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
     }
   }
 
@@ -1929,9 +2238,8 @@ function executeNominationWinner(game) {
         demonSucceeded: true, mastermindDefer: game.mastermindPending || false,
       };
     }
-    game.winner = 'good'; game.phase = 'game_over';
-    game.winReason = 'Demonio ejecutado';
-    return { executed: nominee, gameOver: true, winner: 'good', tie: false };
+    endGame(game, 'good', 'Demonio ejecutado');
+    return { executed: nominee, gameOver: true, winner: game.winner, tie: false };
   }
 
   checkWinCondition(game);
@@ -2070,9 +2378,8 @@ function applyWish(game, apply, opts = {}) {
       return 'Todos los muertos recuperan su voto.';
 
     case 'DECLARE_WINNER':
-      game.winner = opts.winner === 'evil' ? 'evil' : 'good';
-      game.phase = 'game_over';
-      game.winReason = `🧙 Deseo del Hechicero concedido: ganan los ${game.winner === 'evil' ? 'malvados' : 'buenos'}`;
+      endGame(game, opts.winner === 'evil' ? 'evil' : 'good',
+        `🧙 Deseo del Hechicero concedido: ganan los ${opts.winner === 'evil' ? 'malvados' : 'buenos'}`);
       return `Ganan los ${game.winner === 'evil' ? 'malvados' : 'buenos'}.`;
 
     default:
@@ -2181,18 +2488,12 @@ function slayerAction(game, slayerId, targetId) {
     if (target.role === 'ZOMBUUL') target.zombuulReallyDead = true;
     target.alive = false;
     game.nightDeaths.push(target.id);
-    const scarlet   = game.players.find(p => p.role === 'SCARLET_WOMAN' && p.alive);
-    const liveCount = game.players.filter(p => p.alive).length;
-    if (scarlet && liveCount >= 5) {
-      scarlet.role = 'IMP'; scarlet.type = 'demon';
-      return { hit: true, gameOver: false };
+    // Cadena COMPLETA de sucesión (Demonio propio → Dama Escarlata → Rata de
+    // Laboratorio → Mente Maestra), igual que en una ejecución o muerte manual.
+    if (!game.players.some(p => p.role === 'ATHEIST') && resolveDemonDeath(game, target)) {
+      return { hit: true, gameOver: false, demonSucceeded: true, mastermindDefer: game.mastermindPending || false };
     }
-    // Mente Maestra: la partida no termina — se juega 1 día más.
-    if (!game.players.some(p => p.role === 'ATHEIST') && tryMastermindDefer(game)) {
-      return { hit: true, gameOver: false, mastermindDefer: true };
-    }
-    game.winner = 'good'; game.phase = 'game_over';
-    game.winReason = 'Cazador mató al Demonio';
+    endGame(game, 'good', 'Cazador mató al Demonio');
     return { hit: true, gameOver: true };
   }
   return { hit: false, gameOver: false };
@@ -2221,6 +2522,8 @@ function startDay(game) {
   // El veneno (UNTIL_NEXT_DUSK) PERSISTE durante el día. Manuales intactas.
   clearExpiringTokens(game, 'dawn');
   syncStatusFlags(game);
+  // Leviatán (día > 5) y Motín (día 3) se resuelven al amanecer.
+  applyDemonDayRules(game);
   checkWinCondition(game);
   return game;
 }
@@ -2235,25 +2538,19 @@ function startNight(game) {
   if (!hasAtheist && game.mastermindDay != null && !game.mastermindDone && game.phase !== 'game_over') {
     game.mastermindDone = true;
     if (!game.executionAttemptToday) {
-      game.winner = 'good';
-      game.phase = 'game_over';
-      game.winReason = '🧩 Mente Maestra: nadie fue ejecutado en el día extra — ganan los buenos';
+      endGame(game, 'good', '🧩 Mente Maestra: nadie fue ejecutado en el día extra — ganan los buenos');
       return game;
     }
     // Hubo ejecución pero no terminó la partida (empate resuelto sin muerte, etc.):
     // el Demonio sigue muerto → ganan los buenos.
-    game.winner = 'good';
-    game.phase = 'game_over';
-    game.winReason = '🧩 Mente Maestra: el día extra terminó — el Demonio está muerto, ganan los buenos';
+    endGame(game, 'good', '🧩 Mente Maestra: el día extra terminó — el Demonio está muerto, ganan los buenos');
     return game;
   }
   // F5: Vórtice — cada día sin ejecución el Mal gana (solo noches ≥2)
   if (!hasAtheist && game.nightNumber > 0 && game.phase !== 'game_over') {
     const vortox = game.players.find(p => p.alive && p.role === 'VORTOX' && !p.poisoned);
     if (vortox && !game.executionAttemptToday && !game.executedToday) {
-      game.winner = 'evil';
-      game.phase = 'game_over';
-      game.winReason = '☠ Vórtice: día sin ejecución';
+      endGame(game, 'evil', '☠ Vórtice: día sin ejecución');
       return game;
     }
   }
@@ -2345,15 +2642,13 @@ function checkWinCondition(game) {
     const lastDeadDemon = game.players.filter(p => p.type === 'demon' && !p.alive).pop();
     if (lastDeadDemon && resolveDemonDeath(game, lastDeadDemon)) return false;
     if (tryMastermindDefer(game)) return false;
-    game.winner = 'good'; game.phase = 'game_over';
-    game.winReason = 'Sin Demonios vivos';
+    endGame(game, 'good', 'Sin Demonios vivos');
     return true;
   }
   if (living.length <= 2) {
     // Durante el día extra de la Mente Maestra la regla de 2 vivos no aplica.
     if (game.mastermindPending || (game.mastermindDay != null && !game.mastermindDone)) return false;
-    game.winner = 'evil'; game.phase = 'game_over';
-    game.winReason = 'Solo 2 jugadores vivos';
+    endGame(game, 'evil', 'Solo 2 jugadores vivos');
     return true;
   }
   return false;
@@ -2363,8 +2658,7 @@ function mayorWin(game) {
   const living = game.players.filter(p => p.alive);
   const mayor  = game.players.find(p => p.role === 'MAYOR' && p.alive);
   if (mayor && living.length === 3) {
-    game.winner = 'good'; game.phase = 'game_over';
-    game.winReason = 'Alcalde — 3 vivos sin ejecución';
+    endGame(game, 'good', 'Alcalde — 3 vivos sin ejecución');
     return true;
   }
   return false;
@@ -2486,7 +2780,7 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
 
   const aliveQueue = (game.nightQueue || []).filter(pid => {
     const p = players.find(x => x.id === pid);
-    return p?.alive;
+    return wakesTonight(p);
   });
   const submittedCount = aliveQueue.filter(pid => game.nightSubmissions?.[pid]).length;
 
@@ -2654,7 +2948,7 @@ module.exports = {
   nominate, vote, resolveVote, executeNominationWinner, slayerAction,
   roshamboThrow, psychopathDayKill, barberSwap, closeBarberStep, syncBarberState,
   applyWish,
-  applyNightAction, advanceNightQueue,
+  applyNightAction, advanceNightQueue, endGame,
   resolveNightQueue, generatePassiveNightInfo,
   startDay, startNight, openNominations,
   checkWinCondition, mayorWin, resolveDemonDeath,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { ROLE_BY_ID, ALL_ROLES } from '../data/roles';
 import { typeLabel, MASK } from '../utils/identity';
 
@@ -52,20 +52,10 @@ export default function SetupWizard({ game, send, onClose }) {
 
   // Ids de la campaña activa: sirve para marcar lo que viene "de fuera".
   const campaignIds = useMemo(() => new Set(roleList.map(r => r.id)), [roleList]);
-  // ¿Mostrar el compendio entero o sólo la campaña activa?
-  const [showAll, setShowAll] = useState(false);
 
   const [step, setStep] = useState(0);
   // El "saco" = roles disponibles para asignar. Arranca de lo ya asignado.
   const [bag, setBag] = useState(() => new Set(Object.values(assignments)));
-
-  // Vista cerrada = campaña activa, PERO lo que ya está en el saco nunca se
-  // esconde: si no, un personaje metido desde el compendio quedaría marcado
-  // sin forma de desmarcarlo.
-  const pickList = useMemo(() => {
-    if (showAll) return catalog;
-    return [...roleList, ...catalog.filter(r => bag.has(r.id) && !campaignIds.has(r.id))];
-  }, [showAll, catalog, roleList, bag, campaignIds]);
 
   const baseOrder = (setup.seatOrder && setup.seatOrder.length) ? setup.seatOrder : players.map(p => p.id);
   const seatOrder = [...baseOrder, ...players.filter(p => !baseOrder.includes(p.id)).map(p => p.id)];
@@ -111,19 +101,15 @@ export default function SetupWizard({ game, send, onClose }) {
     return n;
   });
 
-  const moveSeat = (i, dir) => {
-    const j = i + dir;
-    if (j < 0 || j >= seats.length) return;
-    const order = seats.map(s => s.id);
-    [order[i], order[j]] = [order[j], order[i]];
-    send('SETUP_SET_SEAT_ORDER', { seatOrder: order });
-  };
+  // Reordenar asientos: el paso 2 arrastra filas enteras, no sólo vecinos.
+  const setSeatOrder = (order) => send('SETUP_SET_SEAT_ORDER', { seatOrder: order });
 
   const assignSeat = (seatId, roleId) => {
     const next = { ...assignments };
     if (roleId) next[seatId] = roleId; else delete next[seatId];
     send('SETUP_SET_ASSIGNMENTS', { assignments: next });
   };
+  const setAssignments = (next) => send('SETUP_SET_ASSIGNMENTS', { assignments: next });
 
   return (
     <div className="wizard-overlay" onClick={onClose}>
@@ -150,12 +136,12 @@ export default function SetupWizard({ game, send, onClose }) {
         {/* Cuerpo con scroll propio */}
         <div className="wizard-body">
           {step === 0 && (
-            <BagStep roleList={pickList} campaignIds={campaignIds} roleInfo={roleInfo} bag={bag} toggleBag={toggleBag}
-              needed={needed} playerCount={players.length} showAll={showAll} setShowAll={setShowAll} />
+            <BagStep roleList={roleList} catalog={catalog} campaignIds={campaignIds} roleInfo={roleInfo}
+              bag={bag} toggleBag={toggleBag} needed={needed} playerCount={players.length} />
           )}
           {step === 1 && (
-            <SeatStep seats={seats} assignments={assignments} bag={bag} roleList={roleList} catalog={catalog} roleInfo={roleInfo}
-              moveSeat={moveSeat} assignSeat={assignSeat} />
+            <SeatStep seats={seats} assignments={assignments} bag={bag} catalog={catalog} roleInfo={roleInfo}
+              setSeatOrder={setSeatOrder} assignSeat={assignSeat} setAssignments={setAssignments} />
           )}
           {step === 2 && (
             <DecisionsStep decisions={decisions} seats={seats} assignments={assignments} roleList={roleList} catalog={catalog} roleInfo={roleInfo} send={send} />
@@ -180,7 +166,7 @@ export default function SetupWizard({ game, send, onClose }) {
 }
 
 // ── Paso 1: el saco ──────────────────────────────────────────────────
-function BagStep({ roleList, campaignIds, roleInfo, bag, toggleBag, needed, playerCount, showAll, setShowAll }) {
+function BagStep({ roleList, catalog, campaignIds, roleInfo, bag, toggleBag, needed, playerCount }) {
   const [q, setQ] = useState('');
   const atheistInBag = bag.has('ATHEIST');
   const have = {
@@ -191,31 +177,34 @@ function BagStep({ roleList, campaignIds, roleInfo, bag, toggleBag, needed, play
   };
   const needMap = needed ? { townfolk: needed.townfolk, outsider: needed.outsiders, minion: needed.minions, demon: needed.demons } : null;
   const baseTypes = atheistInBag ? TYPES.filter(t => t.k === 'townfolk' || t.k === 'outsider') : TYPES;
-  // Viajeros/Fabulados no cuentan para la composición: sólo se listan con el
-  // compendio abierto, o si ya hay alguno metido en el saco.
-  const showExtras = showAll || roleList.some(r => EXTRA_TYPES.some(t => t.k === r.type) && bag.has(r.id));
-  const visibleTypes = showExtras ? [...baseTypes, ...EXTRA_TYPES] : baseTypes;
+  const visibleTypes = [...baseTypes, ...EXTRA_TYPES];
   const needle = q.trim().toLowerCase();
-  const matches = r => !needle
-    || r.name.toLowerCase().includes(needle)
-    || r.id.toLowerCase().includes(needle);
+
+  // Sin búsqueda: la campaña activa (más lo que ya esté en el saco, aunque
+  // venga de fuera — si no, no habría forma de desmarcarlo).
+  // Con búsqueda: TODO el compendio, para que ningún personaje sea inalcanzable.
+  const pool = useMemo(() => {
+    if (needle) {
+      return catalog.filter(r =>
+        r.name.toLowerCase().includes(needle) || r.id.toLowerCase().includes(needle));
+    }
+    return [...roleList, ...catalog.filter(r => bag.has(r.id) && !campaignIds.has(r.id))];
+  }, [needle, catalog, roleList, bag, campaignIds]);
   return (
     <div>
       <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 8px' }}>
         Elige qué personajes entran en el saco ({playerCount} jugadores).
       </p>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar personaje…"
-          style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-100)', padding: '5px 7px' }} />
-        <button onClick={() => setShowAll(v => !v)} className="btn-night"
-          title="Repartir personajes de cualquier campaña, viajeros y fabulados"
-          style={{ fontSize: 9, whiteSpace: 'nowrap', borderColor: showAll ? 'var(--gold)' : undefined, color: showAll ? 'var(--gold-hot)' : undefined }}>
-          {showAll ? '📚 Compendio completo' : '🎪 Solo esta campaña'}
-        </button>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar en los 181 personajes…"
+          style={{ flex: 1, fontSize: 11, background: 'var(--ink-600)', border: 'var(--hairline-bone)', borderRadius: 2, color: 'var(--bone-100)', padding: '6px 8px' }} />
+        {needle && (
+          <button onClick={() => setQ('')} className="btn-night" style={{ fontSize: 10, padding: '4px 9px' }}>✕</button>
+        )}
       </div>
-      {showAll && (
+      {needle && (
         <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--moon)', fontStyle: 'italic', margin: '0 0 10px' }}>
-          Compendio completo: personajes de otras campañas marcados con ✦. Se reparten igual, pero el guion deja de ser oficial.
+          Buscando en todo el compendio. ✦ = fuera de la campaña activa.
         </p>
       )}
       {atheistInBag && (
@@ -224,8 +213,11 @@ function BagStep({ roleList, campaignIds, roleInfo, bag, toggleBag, needed, play
         </p>
       )}
       {visibleTypes.map(({ k, label }) => {
-        const items = roleList.filter(r => r.type === k && matches(r));
-        if (needle && items.length === 0) return null;
+        const items = pool.filter(r => r.type === k);
+        // Los 4 tipos de composición siempre se ven (aunque estén vacíos) para
+        // no perder el contador tengo/necesito. Viajeros/Fabulados sólo si hay.
+        const isExtra = EXTRA_TYPES.some(t => t.k === k);
+        if (items.length === 0 && (isExtra || needle)) return null;
         return (
           <div key={k} style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -259,18 +251,16 @@ function BagStep({ roleList, campaignIds, roleInfo, bag, toggleBag, needed, play
 }
 
 // ── Paso 2: asignar a asientos ───────────────────────────────────────
-function SeatStep({ seats, assignments, bag, roleList, catalog, roleInfo, moveSeat, assignSeat }) {
+// El desplegable ofrece SÓLO lo que está en el saco: si ofreciera toda la
+// campaña, la lista real quedaría enterrada entre 180 opciones. ¿Falta un
+// personaje? Se añade en el paso 1.
+function SeatStep({ seats, assignments, bag, catalog, roleInfo, setSeatOrder, assignSeat, setAssignments }) {
   const usedRoles = new Set(Object.values(assignments));
-  // El saco va primero, pero el desplegable ofrece TODA la campaña: si olvidas
-  // meter un personaje en el saco no debe quedar inalcanzable aquí. Y detrás,
-  // el compendio entero: ningún personaje del manual queda fuera de alcance.
-  const campaignIds = new Set(roleList.map(r => r.id));
-  const pool = (catalog && catalog.length) ? catalog : roleList;
-  // El saco puede contener personajes de fuera de la campaña: se buscan en el
-  // catálogo completo, no sólo en `roleList`.
-  const bagRoles   = pool.filter(r => bag.has(r.id));
-  const restRoles  = roleList.filter(r => !bag.has(r.id));
-  const otherRoles = pool.filter(r => !campaignIds.has(r.id) && !bag.has(r.id));
+  const bagRoles = useMemo(
+    () => catalog.filter(r => bag.has(r.id)).sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [catalog, bag]);
+  const freeRoles = bagRoles.filter(r => !usedRoles.has(r.id));
+
   // Asientos válidos para la Marioneta = vecinos del Demonio.
   const demonSeatIdx = seats.findIndex(s => roleInfo[assignments[s.id]]?.type === 'demon');
   const adjToDemon = new Set();
@@ -278,55 +268,139 @@ function SeatStep({ seats, assignments, bag, roleList, catalog, roleInfo, moveSe
     adjToDemon.add(seats[(demonSeatIdx - 1 + seats.length) % seats.length].id);
     adjToDemon.add(seats[(demonSeatIdx + 1) % seats.length].id);
   }
+
+  // ── Arrastrar filas (ratón y táctil con un único código: pointer events) ──
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const rowRefs = useRef([]);
+
+  const indexAtY = (y) => {
+    for (let i = 0; i < rowRefs.current.length; i++) {
+      const el = rowRefs.current[i];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (y < r.top + r.height / 2) return i;
+    }
+    return seats.length - 1;
+  };
+  const onHandleDown = (i) => (e) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setDragIdx(i); setOverIdx(i);
+  };
+  const onHandleMove = (e) => {
+    if (dragIdx == null) return;
+    setOverIdx(indexAtY(e.clientY));
+  };
+  const onHandleUp = () => {
+    if (dragIdx != null && overIdx != null && overIdx !== dragIdx) {
+      const order = seats.map(s => s.id);
+      const [moved] = order.splice(dragIdx, 1);
+      order.splice(overIdx, 0, moved);
+      setSeatOrder(order);
+    }
+    setDragIdx(null); setOverIdx(null);
+  };
+
+  const shuffleSeats = () => {
+    const order = shuffled(seats.map(s => s.id));
+    setSeatOrder(order);
+  };
+  // Reparto al azar: sólo personajes del saco, uno por asiento.
+  const randomizeRoles = () => {
+    const pool = shuffled(bagRoles.map(r => r.id));
+    const next = {};
+    seats.forEach((s, i) => { if (pool[i]) next[s.id] = pool[i]; });
+    setAssignments(next);
+  };
+
+  const shortfall = seats.length - bagRoles.length;
+
   return (
     <div>
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 10px' }}>
-        Asigna un rol del saco a cada asiento. La Marioneta debe ser vecina del Demonio.
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 8px' }}>
+        Arrastra <b>⠿</b> para reordenar la mesa. La Marioneta debe ser vecina del Demonio.
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <button onClick={randomizeRoles} className="btn-action primary" disabled={shortfall > 0}
+          style={{ flex: 2, fontSize: 11, padding: '7px 0', opacity: shortfall > 0 ? 0.4 : 1 }}
+          title="Reparte al azar los personajes del saco entre los asientos">
+          🎲 Repartir roles al azar
+        </button>
+        <button onClick={shuffleSeats} className="btn-night" style={{ flex: 1, fontSize: 11, padding: '7px 0' }}
+          title="Baraja el orden de los asientos en la mesa">
+          🔀 Barajar mesa
+        </button>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: shortfall > 0 ? 'var(--blood-hi)' : 'var(--bone-400)' }}>
+          Saco: {bagRoles.length} · Asientos: {seats.length}
+          {shortfall > 0 && ` · faltan ${shortfall} en el saco`}
+        </span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: freeRoles.length === 0 ? 'var(--good)' : 'var(--bone-400)' }}>
+          {freeRoles.length} sin repartir
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}>
         {seats.map((s, i) => {
           const roleId = assignments[s.id];
           const role = roleId ? roleInfo[roleId] : null;
-          const isMarionette = roleId === 'MARIONETTE';
-          const badSeat = isMarionette && demonSeatIdx >= 0 && !adjToDemon.has(s.id);
+          const badSeat = roleId === 'MARIONETTE' && demonSeatIdx >= 0 && !adjToDemon.has(s.id);
+          const evil = role?.alignment === 'evil';
+          const isDragging = dragIdx === i;
+          const isTarget = dragIdx != null && overIdx === i && !isDragging;
           return (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.2)', borderRadius: 3, padding: '5px 7px', border: badSeat ? '1px solid var(--blood-dim)' : 'var(--hairline-bone)' }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-600)', width: 16, textAlign: 'right' }}>{i + 1}</span>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <button onClick={() => moveSeat(i, -1)} disabled={i === 0} style={{ fontSize: 8, lineHeight: 1, color: 'var(--bone-400)', opacity: i === 0 ? 0.3 : 1 }}>▲</button>
-                <button onClick={() => moveSeat(i, 1)} disabled={i === seats.length - 1} style={{ fontSize: 8, lineHeight: 1, color: 'var(--bone-400)', opacity: i === seats.length - 1 ? 0.3 : 1 }}>▼</button>
+            <div key={s.id} ref={el => { rowRefs.current[i] = el; }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, borderRadius: 4, padding: '6px 7px',
+                background: isDragging ? 'rgba(201,162,74,0.12)' : 'rgba(0,0,0,0.22)',
+                borderLeft: `3px solid ${role ? (evil ? 'var(--blood-hi)' : 'var(--good)') : 'transparent'}`,
+                border: badSeat ? '1px solid var(--blood-dim)' : 'var(--hairline-bone)',
+                borderTop: isTarget ? '2px solid var(--gold-hot)' : undefined,
+                opacity: isDragging ? 0.55 : 1,
+              }}>
+              <span onPointerDown={onHandleDown(i)}
+                title="Arrastra para mover este asiento"
+                style={{ cursor: 'grab', touchAction: 'none', color: 'var(--bone-500)', fontSize: 15, lineHeight: 1, padding: '0 3px', userSelect: 'none' }}>⠿</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-600)', width: 18, textAlign: 'right' }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 12.5, color: 'var(--bone-100)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: role ? (evil ? 'var(--blood-hi)' : 'var(--bone-500)') : 'var(--bone-600)' }}>
+                  {role ? `${role.name} · ${typeLabel(role.type)}` : 'sin rol'}
+                  {adjToDemon.has(s.id) && ' · vecino del Demonio'}
+                </div>
               </div>
-              <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
               <select value={roleId || ''} onChange={e => assignSeat(s.id, e.target.value || null)}
-                style={{ fontSize: 10, background: 'var(--ink-600)', border: '1px solid', borderColor: role ? (role.alignment === 'evil' ? 'var(--blood-dim)' : 'var(--hairline-bone)') : 'var(--hairline-bone)', borderRadius: 2, color: role ? (role.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--bone-200)') : 'var(--bone-500)', padding: '3px 5px', maxWidth: 150 }}>
+                style={{ fontSize: 10, background: 'var(--ink-600)', border: '1px solid', borderColor: evil ? 'var(--blood-dim)' : 'var(--hairline-bone)', borderRadius: 2, color: role ? (evil ? 'var(--blood-hi)' : 'var(--bone-200)') : 'var(--bone-500)', padding: '4px 5px', maxWidth: 130 }}>
                 <option value="">— sin asignar —</option>
-                <optgroup label="En el saco">
-                  {bagRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Resto de la campaña">
-                  {restRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
-                    <option key={r.id} value={r.id}>{r.name} ({typeLabel(r.type)})</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Compendio completo (otras campañas)">
-                  {otherRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
-                    <option key={r.id} value={r.id}>✦ {r.name} ({typeLabel(r.type)})</option>
-                  ))}
-                </optgroup>
+                {bagRoles.filter(r => !usedRoles.has(r.id) || r.id === roleId).map(r => (
+                  <option key={r.id} value={r.id}>{r.name} ({typeLabel(r.type)})</option>
+                ))}
               </select>
             </div>
           );
         })}
       </div>
-      {demonSeatIdx >= 0 && [...adjToDemon].length > 0 && (
-        <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--moon)', fontStyle: 'italic', marginTop: 6 }}>
-          Vecinos del Demonio: {[...adjToDemon].map(id => seats.find(s => s.id === id)?.name).join(', ')}.
+
+      {shortfall > 0 && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--blood-hi)', fontStyle: 'italic', marginTop: 8 }}>
+          El saco tiene menos personajes que asientos. Vuelve al paso 1 para añadirlos.
         </p>
       )}
     </div>
   );
+}
+
+// Baraja una copia (Fisher-Yates).
+function shuffled(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 // ── Paso 3: decisiones de montaje ────────────────────────────────────

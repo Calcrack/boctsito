@@ -260,7 +260,9 @@ function NightView({ player }) {
             }}>
               🌙 Vista del atardecer — se actualizará al amanecer
             </p>
-            <GameTable isNarrator={false} />
+            <div className="table-embed">
+              <GameTable isNarrator={false} />
+            </div>
           </>
         )}
       </div>

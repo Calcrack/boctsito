@@ -57,6 +57,11 @@ input, textarea { font-family: inherit; color: inherit; }
     position: static;
     height: 100vh;
   }
+  /* En una columna el `1fr` del escenario se reparte con los paneles y puede
+     quedar en casi nada: la mesa necesita un cuadrado con el que trabajar. */
+  .stage {
+    min-height: min(96vw, 68vh);
+  }
 }
 
 /* ── TOPBAR ────────────────────────────────────────────────── */

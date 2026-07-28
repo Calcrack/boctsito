@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "node --watch index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node test/gherkin.core.test.js && node test/gherkin.roles.test.js",
+    "coverage": "node test/coverage.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

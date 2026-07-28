@@ -255,7 +255,7 @@ function RoleTab({ target, send, onClose }) {
 }
 
 // ── Pestaña: Habilidad ───────────────────────────────────────────────
-function AbilityTab({ target, game, send, onClose }) {
+export function AbilityTab({ target, game, send, onClose }) {
   const role = target.role ? ROLE_BY_ID[target.role] : null;
   const cfg = target.role ? panelForRole(target.role, game.phase) : null;
   // Tiene panel, pero no en esta fase: se lo decimos al narrador en vez de callarnos.
@@ -263,6 +263,7 @@ function AbilityTab({ target, game, send, onClose }) {
   const [targets, setTargets] = useState([]);
   const [text, setText] = useState('');
   const [pickedRole, setPickedRole] = useState('');
+  const [count, setCount] = useState(0);   // contador del Yaggababble
 
   const living = game.players.filter(p => p.alive && p.id !== target.id);
   const pool = cfg?.deadOnly ? game.players.filter(p => !p.alive)
@@ -352,6 +353,81 @@ function AbilityTab({ target, game, send, onClose }) {
         </>
       )}
 
+      {/* Llevar a la sala privada: Pescador, Artista, Erudito, Maestro, Amnésico */}
+      {cfg?.privateRoom && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          <button className="btn-action primary" style={{ flex: 1, fontSize: 11 }}
+            onClick={() => send('MOVE_TO_SECRET', { targetPlayerId: target.id })}>
+            🚪 Llevarlo al confesionario
+          </button>
+          <button className="btn-night" style={{ flex: 1, fontSize: 11 }}
+            onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: target.id })}>
+            🚶 Ir yo a su sala
+          </button>
+        </div>
+      )}
+
+      {/* Contador (Yaggababble: veces que dijo su frase hoy) */}
+      {cfg?.counter && (
+        <>
+          <p style={label}>{cfg.counter.label}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <button className="btn-night" style={{ fontSize: 14, padding: '2px 10px' }}
+              onClick={() => setCount(c => Math.max(0, c - 1))}>−</button>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 20, color: 'var(--gold-hot)', minWidth: 28, textAlign: 'center' }}>{count}</span>
+            <button className="btn-night" style={{ fontSize: 14, padding: '2px 10px' }}
+              onClick={() => setCount(c => Math.min(cfg.counter.max ?? 9, c + 1))}>+</button>
+            <span style={{ ...hint, margin: 0 }}>
+              {count === 0 ? 'no mata a nadie esta noche' : `elige ${count} víctima${count > 1 ? 's' : ''}`}
+            </span>
+          </div>
+          {count > 0 && targets.length === count && (
+            <button className="btn-action danger" style={{ width: '100%', marginBottom: 10 }}
+              onClick={() => { run(cfg.action); setCount(0); }}>
+              💀 Matar a {targets.map(id => game.players.find(p => p.id === id)?.name).join(', ')}
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Cambio de bando (Político) */}
+      {cfg?.alignmentSwitch && (
+        <button className="btn-action" style={{ width: '100%', marginBottom: 10 }}
+          onClick={() => send('NIGHT_NARRATOR_ACTION', { actorId: target.id, actionType: cfg.action, targetIds: [] })}>
+          🔄 Cambiarlo de bando (ahora es {target.alignment === 'evil' ? 'malvado' : 'bueno'})
+        </button>
+      )}
+
+      {/* Texto que se guarda como dato de la partida (Amnésico) */}
+      {cfg?.setText && (
+        <>
+          <p style={label}>{cfg.setText.label}</p>
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={2} style={{ ...input, marginBottom: 6, resize: 'vertical' }} />
+          <button className="btn-action" style={{ width: '100%', marginBottom: 10 }}
+            onClick={() => send('NIGHT_NARRATOR_ACTION', { actorId: target.id, actionType: cfg.setText.action, targetIds: [text] })}>
+            {cfg.setText.button}
+          </button>
+          {game.amnesiacAbility && (
+            <p style={{ ...hint, margin: '0 0 10px' }}>Habilidad fijada: «{game.amnesiacAbility}»</p>
+          )}
+        </>
+      )}
+
+      {/* Escala de respuesta (Amnésico frío/caliente, General bando ganador) */}
+      {cfg?.scale && (
+        <>
+          <p style={label}>{cfg.scale.label}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {cfg.scale.options.map(o => (
+              <button key={o.value} className="btn-night" style={{ flex: 1, fontSize: 11, minWidth: 78 }}
+                onClick={() => send('NIGHT_NARRATOR_ACTION', { actorId: target.id, actionType: cfg.scale.action, targetIds: [o.value] })}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Respuesta binaria forzable */}
       {cfg?.toggle && (
         <>
@@ -388,12 +464,12 @@ function AbilityTab({ target, game, send, onClose }) {
       )}
 
       {/* Ejecutar la acción nocturna programada */}
-      {cfg?.action && targets.length === cfg.targets && cfg.targets > 0 && (
+      {cfg?.action && !cfg.counter && targets.length === cfg.targets && cfg.targets > 0 && (
         <button className="btn-action primary" style={{ width: '100%' }} onClick={() => run(cfg.action)}>
           Ejecutar habilidad de {role.name}
         </button>
       )}
-      {cfg?.action && cfg.targets === 0 && (
+      {cfg?.action && cfg.targets === 0 && !cfg.scale && !cfg.alignmentSwitch && (
         <button className="btn-action primary" style={{ width: '100%' }} onClick={() => run(cfg.action)}>
           Generar información de {role.name}
         </button>

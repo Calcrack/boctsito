@@ -339,7 +339,12 @@ function endGame(game, winner, reason) {
 }
 
 // ¿Este jugador despierta esta noche? Vivo, o Esbirro conservado por Vigormortis.
-function wakesTonight(p) { return !!p && (p.alive || p.vigormortisAlive); }
+function wakesTonight(p, game) {
+  if (!p) return false;
+  if (p.alive || p.vigormortisAlive) return true;
+  // Coleccionista de Huesos: un muerto recupera su habilidad SOLO esta noche.
+  return !!game && p.abilityBackNight === game.nightNumber;
+}
 
 // ── Reglas de día ligadas al Demonio (Leviatán, Motín) ───────────────
 // Se evalúan al amanecer, antes de comprobar las condiciones normales.
@@ -547,7 +552,7 @@ function generatePassiveNightInfo(game) {
 
 function generateSingleRoleInfo(game, playerId) {
   const player = game.players.find(p => p.id === playerId);
-  if (!wakesTonight(player)) return;
+  if (!wakesTonight(player, game)) return;
 
   const isFirstNight = game.nightNumber === 1;
   const living = game.players.filter(p => p.alive);
@@ -686,7 +691,7 @@ function generateCurrentPassiveInfo(game) {
   const currentId = game.nightQueue[game.nightQueueIndex];
   if (!currentId) return;
   const player = game.players.find(p => p.id === currentId);
-  if (!wakesTonight(player)) return;
+  if (!wakesTonight(player, game)) return;
   const roleToCheck = player.role === 'DRUNK' ? player.drunkAs : player.role;
   if (PASSIVE_INFO_ROLES.has(roleToCheck)) {
     generateSingleRoleInfo(game, currentId);
@@ -700,7 +705,7 @@ function buildNightQueue(game) {
     if (roleId === 'UNDERTAKER' && !game.executedToday) continue;
     const matched = game.players.filter(p =>
       // Vigormortis: los Esbirros que mató conservan su habilidad y siguen despertando.
-      (p.alive || p.vigormortisAlive) &&
+      wakesTonight(p, game) &&
       (p.role === roleId || (p.role === 'DRUNK' && p.drunkAs === roleId))
     );
     for (const player of matched) queue.push(player.id);
@@ -711,7 +716,7 @@ function buildNightQueue(game) {
 function resolveNightQueue(game) {
   for (const playerId of game.nightQueue) {
     const player = game.players.find(p => p.id === playerId);
-    if (!wakesTonight(player)) continue;
+    if (!wakesTonight(player, game)) continue;
     const sub = game.nightSubmissions[playerId];
     if (!sub) continue;
     if (player.role === 'DRUNK') {
@@ -763,7 +768,7 @@ function advanceNightQueue(game, playerId, action, targetIds) {
   let idx = game.nightQueueIndex + 1;
   while (idx < game.nightQueue.length) {
     const next = game.players.find(p => p.id === game.nightQueue[idx]);
-    if (wakesTonight(next)) break;
+    if (wakesTonight(next, game)) break;
     idx++;
   }
   game.nightQueueIndex = idx;
@@ -1131,6 +1136,8 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       if (actor?.poisoned) {
         break;
       }
+      // Licántropo: mató a un bueno esta noche → el Demonio no mata.
+      if (game.demonBlockedNight === game.nightNumber) break;
       
       const target = targets[0];
       if (!target) break;
@@ -1257,6 +1264,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
 
     // ── Acciones genéricas para campañas con narrador (BMR / S&V) ──────
     // Rutas directas al bloque KILL (sin lógica extra)
+    case 'PO_KILL':
     case 'VORTOX_KILL':
     case 'KAZALI_KILL':
     case 'LLEECH_KILL':
@@ -1270,6 +1278,8 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       // fall-through
     }
     case 'KILL': {
+      // Licántropo: si bloqueó al Demonio esta noche, su ataque no ocurre.
+      if (actor?.type === 'demon' && game.demonBlockedNight === game.nightNumber) break;
       for (const t of targets) {
         if (!t || !t.alive) continue;
         if (t.protected || t.safeTonight) continue;
@@ -1461,6 +1471,269 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // Acciones que la guía nocturna ya disparaba pero el servidor ignoraba.
+    // Sin esto el botón colocaba (a veces) una ficha decorativa y nada más.
+    // ══════════════════════════════════════════════════════════════════
+
+    // ── Encantador de Serpientes: si acierta al Demonio, intercambio ────
+    case 'SNAKE_CHARMER': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      if (!isActorEffective(actor) || t.type !== 'demon') {
+        actor.nightInfo = '🐍 Encantador de Serpientes\nNo pasa nada.';
+        break;
+      }
+      const demonRole = t.role;
+      // Intercambian personaje Y alineación.
+      t.role = actor.role; t.type = actor.type; t.alignment = 'good';
+      actor.role = demonRole; actor.type = 'demon'; actor.alignment = 'evil';
+      // El nuevo Aldeano (ex-Demonio) queda envenenado.
+      placeToken(t, {
+        type: 'POISONED', roleId: 'SNAKE_CHARMER', label: 'Envenenado (Encantador)',
+        expiry: ['PERMANENT'], sourceRole: 'SNAKE_CHARMER', sourcePlayerId: actorId,
+      }, game);
+      addDeferred(game, {
+        label: `🐍 Encantador de Serpientes: ${actor.name} es AHORA el Demonio (${ROLES[demonRole]?.name}). ${t.name} pasa a ser ${ROLES[t.role]?.name} y queda envenenado.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'SNAKE_CHARMER',
+      });
+      break;
+    }
+
+    // ── Predicador: si es Esbirro, lo aprende y pierde su habilidad ─────
+    case 'PREACHER': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      const hit = t.type === 'minion' && isActorEffective(actor);
+      if (hit) {
+        placeToken(t, {
+          type: 'NO_ABILITY', roleId: 'PREACHER', label: 'Sin habilidad (Predicador)',
+          expiry: ['PERMANENT'], sourceRole: 'PREACHER', sourcePlayerId: actorId,
+        }, game);
+      }
+      actor.nightInfo = `⛪ Predicador\n${t.name}: ${hit ? 'SÍ es Esbirro — pierde su habilidad.' : 'no es Esbirro.'}`;
+      break;
+    }
+
+    // ── Viuda: veneno permanente + ve el Grimorio ───────────────────────
+    case 'WIDOW_POISON': {
+      if (!targets[0]) break;
+      placeToken(targets[0], {
+        type: 'POISONED', roleId: 'WIDOW', label: 'Envenenado (Viuda)',
+        expiry: ['PERMANENT'], sourceRole: 'WIDOW', sourcePlayerId: actorId,
+      }, game);
+      if (actor) {
+        actor.nightInfo = '🕷️ GRIMORIO (Viuda):\n' + game.players
+          .map(p => `${p.name}: ${ROLES[p.role]?.name || '?'}`).join('\n');
+      }
+      addDeferred(game, {
+        label: `🕷️ Viuda: avisa a UN jugador bueno al azar de que hay una Viuda en juego.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'WIDOW',
+      });
+      break;
+    }
+
+    // ── Licántropo: si el elegido es bueno, muere y el Demonio no mata ──
+    case 'LYCANTHROPE_KILL': {
+      const t = targets[0];
+      if (!actor || !t || !t.alive) break;
+      if (!isActorEffective(actor) || t.alignment !== 'good') {
+        actor.nightInfo = '🐺 Licántropo\nNo muere nadie; el Demonio ataca con normalidad.';
+        break;
+      }
+      if (t.protected || t.safeTonight || isDeathBlocked(game, t) || checkFoolProtection(game, t, actorId, 'LYCANTHROPE')) break;
+      t.alive = false;
+      clearBearerDeathTokens(t);
+      game.nightDeaths.push(t.id);
+      placeToken(t, { type: 'DIES', roleId: 'LYCANTHROPE', label: 'Muere (Licántropo)', expiry: ['AT_DAWN'], sourceRole: 'LYCANTHROPE', sourcePlayerId: actorId }, game);
+      // El Demonio no mata esta noche.
+      game.demonBlockedNight = game.nightNumber;
+      ROLE_INFO.onDemonKill(game, t, addDeferred);
+      checkLleechHostDeath(game, t);
+      addDeferred(game, {
+        label: `🐺 Licántropo: ${t.name} era bueno y muere. El Demonio NO mata esta noche.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'LYCANTHROPE',
+      });
+      break;
+    }
+
+    // ── Cazador de Damiselas: si acierta, la Damisela pasa a Aldeano ────
+    case 'HUNTSMAN': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      actor.huntsmanUsed = true;
+      if (!isActorEffective(actor) || t.role !== 'DAMSEL') {
+        actor.nightInfo = '🏹 Cazador de Damiselas\nNo era la Damisela.';
+        break;
+      }
+      // La Damisela se convierte en un Aldeano que NO esté en juego.
+      const inPlay = new Set(game.players.map(p => p.role));
+      const pool = getRolesByType('townfolk', game.campaignId)
+        .filter(r => !inPlay.has(r.id) && !r.misperception);
+      const nuevo = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+      if (nuevo) {
+        t.role = nuevo.id; t.type = 'townfolk'; t.alignment = 'good';
+        t.nightInfo = `✨ Ya no eres la Damisela.\nAhora eres ${nuevo.name}.`;
+      }
+      actor.nightInfo = `🏹 Cazador de Damiselas\n¡Acertaste! ${t.name} era la Damisela.`;
+      addDeferred(game, {
+        label: `🏹 El Cazador acertó: ${t.name} deja de ser Damisela y pasa a ser ${nuevo?.name || 'un Aldeano fuera de juego'}. Avísale de su nuevo personaje.`,
+        dueNight: game.nightNumber, sourcePlayerId: t.id, severity: 'warn', role: 'HUNTSMAN',
+      });
+      break;
+    }
+
+    // ── Damisela: los Esbirros intentan adivinar quién es (1 vez) ───────
+    case 'DAMSEL_GUESS': {
+      // targets[0] = jugador señalado por los Esbirros
+      const t = targets[0];
+      if (!t) break;
+      if (game.damselGuessUsed) {
+        addDeferred(game, { label: '👗 Los Esbirros ya gastaron su intento con la Damisela.', dueNight: game.nightNumber, severity: 'info', role: 'DAMSEL' });
+        break;
+      }
+      game.damselGuessUsed = true;
+      const damsel = game.players.find(p => p.role === 'DAMSEL');
+      const acierto = !!damsel && damsel.id === t.id && !damsel.poisoned && !damsel.drunkAs;
+      if (acierto) {
+        endGame(game, 'evil', '👗 Un Esbirro adivinó a la Damisela — ganan los malvados');
+      } else {
+        addDeferred(game, {
+          label: `👗 Los Esbirros fallaron: ${t.name} no era la Damisela (o estaba envenenada). No pueden reintentarlo.`,
+          dueNight: game.nightNumber, severity: 'warn', role: 'DAMSEL',
+        });
+      }
+      break;
+    }
+
+    // ── Sacerdotisa Mayor: el Narrador señala con quién debería hablar ──
+    case 'HIGH_PRIESTESS': {
+      if (!actor || !targets[0]) break;
+      actor.nightInfo = `🌙 Sacerdotisa Mayor\nDeberías hablar con: ${targets[0].name}.`;
+      break;
+    }
+
+    // ── General: el Narrador le dice qué bando cree que va ganando ──────
+    case 'GENERAL_INFO': {
+      if (!actor) break;
+      // opts viaja en targetIds[0] como marcador textual: 'good' | 'evil' | 'tie'
+      const v = (targetIds && targetIds[0]) || 'tie';
+      const txt = v === 'good' ? 'el BIEN va ganando' : v === 'evil' ? 'el MAL va ganando' : 'va EMPATADO';
+      actor.nightInfo = `🎖️ General\nEl Narrador cree que ${txt}.`;
+      break;
+    }
+
+    // ── Guardián Nocturno: se revela a un jugador (una vez) ─────────────
+    case 'NIGHTWATCHMAN': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      actor.nightwatchmanUsed = true;
+      if (!isActorEffective(actor)) break;
+      t.nightInfo = `🔦 ${actor.name} es el Guardián Nocturno.`;
+      addDeferred(game, {
+        label: `🔦 Guardián Nocturno: despierta a ${t.name} y muéstrale que ${actor.name} es el Guardián.`,
+        dueNight: game.nightNumber, sourcePlayerId: t.id, severity: 'warn', role: 'NIGHTWATCHMAN',
+      });
+      break;
+    }
+
+    // ── Cazarrecompensas: revelar un malvado ───────────────────────────
+    case 'BOUNTY_HUNTER_REVEAL': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      actor.bountyKnownId = t.id;
+      actor.nightInfo = `🎯 Cazarrecompensas\nUn jugador malvado: ${t.name}.`;
+      break;
+    }
+
+    // ── Arpía: el primero creerá que el segundo es malvado ─────────────
+    case 'HARPY': {
+      const [a, b] = targets;
+      if (!a || !b || !isActorEffective(actor)) break;
+      placeToken(a, {
+        type: 'HARPY_MADNESS', roleId: 'HARPY', label: `Cree que ${b.name} es malvado`,
+        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'HARPY', sourcePlayerId: actorId,
+      }, game);
+      a.nightInfo = `🦅 ${b.name} es MALVADO. Mañana debes actuar en consecuencia.`;
+      addDeferred(game, {
+        label: `🦅 Arpía: ${a.name} debe actuar mañana como si ${b.name} fuera malvado. Si no lo hace, puedes ejecutarlo.`,
+        dueNight: game.nightNumber, sourcePlayerId: a.id, severity: 'warn', role: 'HARPY',
+      });
+      break;
+    }
+
+    // ── Coleccionista de Huesos: un muerto recupera su habilidad ───────
+    case 'BONE_COLLECT': {
+      const t = targets[0];
+      if (!t) break;
+      if (actor) actor.boneCollectorUsed = true;
+      t.abilityBackNight = game.nightNumber;   // solo esta noche
+      placeToken(t, {
+        type: 'ABILITY_BACK', roleId: 'BONE_COLLECTOR', label: 'Habilidad recuperada esta noche',
+        expiry: ['UNTIL_NEXT_DUSK'], sourceRole: 'BONE_COLLECTOR', sourcePlayerId: actorId,
+      }, game);
+      addDeferred(game, {
+        label: `💀 Coleccionista de Huesos: ${t.name} (muerto) recupera su habilidad esta noche — despiértalo en su turno.`,
+        dueNight: game.nightNumber, sourcePlayerId: t.id, severity: 'warn', role: 'BONE_COLLECTOR',
+      });
+      break;
+    }
+
+    // ── Yaggababble: muere 1 jugador por cada vez que dijo su frase ────
+    case 'YAGGABABBLE_KILL': {
+      if (!actor || !isActorEffective(actor)) break;
+      for (const t of targets) {
+        if (!t || !t.alive) continue;
+        if (t.protected || t.safeTonight || isDeathBlocked(game, t)) continue;
+        if (checkFoolProtection(game, t, actorId, 'YAGGABABBLE')) continue;
+        t.alive = false;
+        clearBearerDeathTokens(t);
+        game.nightDeaths.push(t.id);
+        placeToken(t, { type: 'DIES', roleId: 'YAGGABABBLE', label: 'Muere (Yaggababble)', expiry: ['AT_DAWN'], sourceRole: 'YAGGABABBLE', sourcePlayerId: actorId }, game);
+        ROLE_INFO.onDemonKill(game, t, addDeferred);
+        checkGrandmotherDeath(game, t, actorId, 'YAGGABABBLE');
+        checkLleechHostDeath(game, t);
+      }
+      break;
+    }
+
+    // ── Político: cambia de bando y gana con el contrario ──────────────
+    case 'POLITICIAN_SWITCH': {
+      if (!actor) break;
+      actor.alignment = actor.alignment === 'evil' ? 'good' : 'evil';
+      actor.politicianSwitched = true;
+      addDeferred(game, {
+        label: `🎩 Político: ${actor.name} cambia de bando — ahora es ${actor.alignment === 'evil' ? 'MALVADO' : 'BUENO'} y gana con ese equipo.`,
+        dueNight: game.nightNumber, sourcePlayerId: actor.id, severity: 'warn', role: 'POLITICIAN',
+      });
+      break;
+    }
+
+    // ── Amnésico: el Narrador fija su habilidad y responde sus intentos ─
+    case 'AMNESIAC_SET': {
+      if (!actor) break;
+      game.amnesiacAbility = (targetIds && targetIds[0]) || game.amnesiacAbility || '';
+      addDeferred(game, {
+        label: `🌫️ Amnésico: su habilidad secreta queda fijada. Recuerda despertarlo si es una habilidad nocturna.`,
+        dueNight: game.nightNumber, sourcePlayerId: actor.id, severity: 'info', role: 'AMNESIAC',
+      });
+      break;
+    }
+
+    case 'AMNESIAC_GUESS': {
+      if (!actor) break;
+      const grado = (targetIds && targetIds[0]) || 'frio';
+      const M = {
+        frio:     '🧊 FRÍO — muy lejos.',
+        templado: '🌡️ TEMPLADO — vas por buen camino.',
+        caliente: '🔥 CALIENTE — estás cerca.',
+        bingo:    '🎯 ¡BINGO! — es exactamente eso.',
+      };
+      actor.nightInfo = `🌫️ Amnésico\n${M[grado] || M.frio}`;
+      if (grado === 'bingo') actor.amnesiacSolved = true;
+      break;
+    }
+
     // ── Soñador: 1 personaje bueno + 1 malvado, uno de ellos el real ────
     case 'DREAMER_INFO': {
       if (!actor || !targets[0]) break;
@@ -1552,6 +1825,11 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         t.deadVoteNominationId = null;
         game.nightDeaths = game.nightDeaths.filter(id => id !== t.id);
       }
+      break;
+
+    // Info libre escrita por el Narrador (NightControl).
+    case 'SEND_INFO':
+      if (actor && targetIds && targetIds[0]) actor.nightInfo = String(targetIds[0]);
       break;
 
     case 'CLEAR_STATUS':
@@ -2590,6 +2868,7 @@ function startNight(game) {
   game.players.filter(p => p.alive && p.role === 'BUTLER').forEach(p => { p.butlerMaster = null; });
   
   // FIX: Determinar si el Recluso registra como malvado esta noche (50% probabilidad)
+  game.demonBlockedNight = null;   // Licántropo: se recalcula cada noche
   game.recluseRegistersAsEvil = Math.random() < 0.5;
   
   game.autoVotes = { skipDay: [], skipNom: [], extend: [] };
@@ -2785,7 +3064,7 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
 
   const aliveQueue = (game.nightQueue || []).filter(pid => {
     const p = players.find(x => x.id === pid);
-    return wakesTonight(p);
+    return wakesTonight(p, game);
   });
   const submittedCount = aliveQueue.filter(pid => game.nightSubmissions?.[pid]).length;
 

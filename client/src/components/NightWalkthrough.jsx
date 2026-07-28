@@ -3,34 +3,17 @@ import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID, getCampaign } from '../data/roles';
 import { typeLabel, MASK } from '../utils/identity';
 import StatusChips from './StatusChips';
+import { AbilityTab } from './NarratorTools';
 
 const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 
 // Auto-aplica fichas recordatorias al confirmar una acción nocturna.
 // Usa campaign.reminders[roleId] como fuente de verdad; si no hay reminders definidos → no-op.
-function fireAutoTokens(send, actor, targetIds, game) {
-  const campaign = getCampaign(game.campaignId);
-  const roleId = actor.role;
-  const reminders = campaign.reminders?.[roleId];
-  if (!reminders || reminders.length === 0) return;
-  const role = ROLE_BY_ID[roleId];
-  reminders.forEach((t, idx) => {
-    const pid = targetIds[idx] ?? targetIds[0];
-    if (!pid) return;
-    send('ADD_TOKEN', {
-      playerId: pid,
-      token: {
-        instanceId: `${roleId}:${t.id}:${Date.now() + idx}`,
-        tokenId: t.id,
-        roleId,
-        roleName: role?.name || roleId,
-        img: role?.img,
-        label: t.label,
-        duration: t.duration || 'night',
-      },
-    });
-  });
-}
+// OBSOLETO desde que el servidor coloca las fichas.
+// Antes leía `campaign.reminders[roleId]`, pero NINGUNA campaña define
+// `reminders`, así que era un no-op silencioso: el narrador pulsaba y no
+// aparecía ninguna ficha. Ahora `applyNightAction` coloca la ficha correcta
+// con su caducidad real (placeToken), que es la única fuente de verdad.
 
 // Orden global BotC (todas las ediciones combinadas, posiciones oficiales).
 // Usado para insertar roles cross-edition en el lugar correcto.
@@ -50,6 +33,7 @@ const GLOBAL_FIRST_NIGHT_ORDER = [
   'GRANDMOTHER','CHAMBERMAID',
   'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
   'JUGGLER',
+  'HUNTSMAN','POLITICIAN','FISHERMAN','ARTIST','SAVANT',
 ];
 
 const GLOBAL_OTHER_NIGHT_ORDER = [
@@ -75,6 +59,7 @@ const GLOBAL_OTHER_NIGHT_ORDER = [
   'SPY',
   'BOUNTY_HUNTER','CULT_LEADER',
   'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
+  'AMNESIAC','DAMSEL','POLITICIAN','FISHERMAN','ARTIST','SAVANT',
 ];
 
 function buildSteps(game) {
@@ -255,7 +240,8 @@ const NIGHT_ROLE_PATTERN = {
   CULT_LEADER:     { kind: 'P_INFO', emoji: '✨',
                      note: 'Cada noche: adopta la alineación de 1 vecino vivo. Narrador decide cuál vecino.' },
   ENGINEER:        { kind: 'P_ENGINEER', emoji: '⚙️' },
-  GENERAL:         { kind: 'P1', what: 'opinion', emoji: '🎖️', label: '¿Quién va ganando?' },
+  GENERAL:         { kind: 'P_PANEL', emoji: '🎖️',
+                     note: 'Dile qué bando crees que va ganando. Es tu opinión: elígela abajo.' },
   HIGH_PRIESTESS:  { kind: 'P3', effect: 'HIGH_PRIESTESS', emoji: '🌙', label: 'Jugador a mostrar', notSelf: false },
   HUNTSMAN:        { kind: 'P3',     effect: 'HUNTSMAN',                  emoji: '🏹', label: 'Elegir a',            notSelf: true,
                      note: 'Una sola vez. Si es la Damisela: se transforma en 1 Aldeano (Narrador elige cuál). Marcar "usado".' },
@@ -274,6 +260,19 @@ const NIGHT_ROLE_PATTERN = {
                      note: 'Si es Esbirro: responder SÍ + desactivar su habilidad mientras el Predicador viva.' },
   // ── Carousel forasteros con paso nocturno ────────────────────────────────
   PUZZLEMASTER:    { kind: 'P_PUZZLEMASTER', emoji: '🧩' },
+  // ── Roles que se resuelven hablando contigo: panel completo en la guía ──
+  AMNESIAC:        { kind: 'P_PANEL', emoji: '🌫️',
+                     note: 'Fija su habilidad secreta. Cada día te pregunta en privado: respóndele frío / templado / caliente / bingo.' },
+  FISHERMAN:       { kind: 'P_PANEL', emoji: '🎣',
+                     note: 'Una vez por partida viene a pedirte consejo. Llévalo al confesionario y escríbeselo.' },
+  ARTIST:          { kind: 'P_PANEL', emoji: '🎨',
+                     note: 'Una vez por partida te hace una pregunta de sí/no en privado.' },
+  SAVANT:          { kind: 'P_PANEL', emoji: '📖',
+                     note: 'Cada día: dale dos afirmaciones, una verdadera y otra falsa.' },
+  POLITICIAN:      { kind: 'P_PANEL', emoji: '🎩',
+                     note: 'Si fue el más responsable de que su equipo pierda, cámbialo de bando con el botón.' },
+  DAMSEL:          { kind: 'P_PANEL', emoji: '👗',
+                     note: 'Con los Esbirros: pueden señalar UNA vez en toda la partida a quién creen que es la Damisela.' },
   SNITCH:          { kind: 'P_INFO', emoji: '🤫',
                      note: 'Primera noche: además del Demonio, cada Esbirro recibe 3 bluffs propios.' },
   LIL_MONSTA:    { kind: 'P_LIL_MONSTA', emoji: '👶' },
@@ -292,8 +291,8 @@ const NIGHT_ROLE_PATTERN = {
   SUMMONER:        { kind: 'P_SUMMONER', emoji: '🌟' },
   WIDOW:           { kind: 'P3',     effect: 'WIDOW_POISON',              emoji: '🕷️', label: 'Envenenar permanente a', notSelf: false, autoToken: true,
                      note: 'Primera noche. Ver Grimorio completo. El elegido queda envenenado permanentemente. Informar a 1 bueno al azar: "hay una Viuda".' },
-  YAGGABABBLE:     { kind: 'P_INFO', emoji: '🗣️',
-                     note: 'Registrar cuántas veces dijo la frase hoy. Esa noche: hasta N ataques opcionales (uno por repetición).' },
+  YAGGABABBLE:     { kind: 'P_PANEL', emoji: '🗣️',
+                     note: 'Lleva la cuenta de cuántas veces dijo su frase hoy y elige una víctima por cada vez.' },
   // ── Carousel aldeanos/esbirros faltantes ────────────────────────────────
   MASTERMIND:  { kind: 'P_INFO', emoji: '🧩',
                  note: 'Pasivo. Si el Demonio es ejecutado: el juego continúa 1 día extra. Si alguien bueno es ejecutado ese día → malos ganan. Si malo o nadie → buenos ganan.' },
@@ -552,6 +551,14 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
     case 'P_BARISTA':       return <BaristaPanel      actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_HARLOT':        return <HarlotPanel       actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_APPRENTICE':    return <ApprenticePanel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    // Panel completo del personaje dentro del paso nocturno: mismos controles
+    // que el mini-panel de la ruleta, sin tener que salir de la guía.
+    case 'P_PANEL':         return (
+      <div style={panelStyle}>
+        {p.note && <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-200)', margin: '0 0 8px' }}>{p.note}</p>}
+        <AbilityTab target={actor} game={game} send={send} onClose={() => {}} />
+      </div>
+    );
     default:                return null;
   }
 }
@@ -758,7 +765,7 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
     const fallback = n => `${pattern.emoji} ${roleName || ''}\n${pattern.label} ${n} esta noche.`;
     const nightInfo = (infoLabels[pattern.effect] || fallback)(tname);
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [targetId], nightInfo });
-    if (pattern.autoToken) fireAutoTokens(send, actor, [targetId], game);
+
     setOk(true);
   };
   return (
@@ -799,7 +806,7 @@ function P3x2Panel({ actor, pattern, game, send, roleName }) {
     const n1 = game.players.find(p => p.id === t1)?.name;
     const n2 = game.players.find(p => p.id === t2)?.name;
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [t1, t2], nightInfo: buildInfo(n1, n2) });
-    if (pattern.autoToken) fireAutoTokens(send, actor, [t1, t2], game);
+
     setOk(true);
   };
   return (

@@ -985,6 +985,12 @@ function syncStatusFlags(game) {
     const toks = p.tokens || [];
     p.poisoned  = toks.some(t => t.type === 'POISONED' || t.type === 'DRUNK_NIGHT');
     p.protected = toks.some(t => t.type === 'PROTECTED');
+    // Peso del voto: lo marcan las fichas del Burócrata y del Ladrón, que
+    // caducan al anochecer. Sin ficha, el voto vuelve a valer 1 salvo que el
+    // narrador lo haya forzado a mano (deseo del Hechicero → ficha manual).
+    if (toks.some(t => t.type === 'VOTE_TRIPLE'))        p.voteWeight = 3;
+    else if (toks.some(t => t.type === 'VOTE_NEGATIVE')) p.voteWeight = -1;
+    else if (p.voteWeight === 3 || p.voteWeight === -1)  p.voteWeight = 1;
   }
 }
 
@@ -1803,6 +1809,154 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
     }
 
+    // ── Señor de Typhon: ataque normal, mismo motor que KILL ────────────
+    // (declarado aparte para que el arte de la ficha sea el suyo y el
+    //  narrador vea la acción con su nombre en el registro)
+    case 'LORD_OF_TYPHON_KILL': {
+      const t = targets[0];
+      if (!t || !t.alive) break;
+      if (actor?.poisoned) break;
+      if (game.demonBlockedNight === game.nightNumber) break;
+      if (t.protected || t.safeTonight || isDeathBlocked(game, t)) break;
+      if (checkFoolProtection(game, t, actorId, 'LORD_OF_TYPHON')) break;
+      if (t.role === 'SOLDIER' && !t.poisoned) break;
+      if (zombuulFakeDeath(game, t)) break;
+      t.alive = false;
+      clearBearerDeathTokens(t);
+      game.nightDeaths.push(t.id);
+      placeToken(t, { type: 'DIES', roleId: 'LORD_OF_TYPHON', label: 'Muere', expiry: ['AT_DAWN'], sourceRole: 'LORD_OF_TYPHON', sourcePlayerId: actorId }, game);
+      ROLE_INFO.onDemonKill(game, t, addDeferred);
+      checkGrandmotherDeath(game, t, actorId, 'LORD_OF_TYPHON');
+      checkLleechHostDeath(game, t);
+      checkScarletWoman(game, actor);
+      break;
+    }
+
+    // ── Violinista: duelo público, una vez por partida ──────────────────
+    case 'FIDDLER_DUEL': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      if (actor.fiddlerUsed) {
+        addDeferred(game, { label: '🎻 El Violinista ya gastó su duelo.', dueNight: game.nightNumber, severity: 'info', role: 'FIDDLER' });
+        break;
+      }
+      actor.fiddlerUsed = true;
+      game.fiddlerDuel = { fiddlerId: actor.id, rivalId: t.id, night: game.nightNumber };
+      actor.nightInfo = `🎻 Violinista\nDuelo contra ${t.name}. Mañana todos votan cuál de los 2 gana la partida.`;
+      addDeferred(game, {
+        label: `🎻 Violinista: duelo entre ${actor.name} y ${t.name}. Abre la votación especial mañana; gana la partida el bando del elegido.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'FIDDLER',
+      });
+      break;
+    }
+
+    // ── Gnomo: todos conocen a un jugador de su alineación ──────────────
+    case 'GNOME_KNOWN': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      game.gnomeKnownId = t.id;
+      placeToken(t, {
+        type: 'GNOME_KNOWN', roleId: 'GNOME', label: 'Jugador conocido (Gnomo)',
+        expiry: ['PERMANENT'], sourceRole: 'GNOME', sourcePlayerId: actorId,
+      }, game);
+      actor.nightInfo = `🧙‍♂️ Gnomo\nAnuncia en público: ${t.name} es de la alineación del Gnomo.`;
+      addDeferred(game, {
+        label: `🧙‍♂️ Gnomo: anuncia en público que ${t.name} comparte alineación con el Gnomo. Si alguien nomina a ${t.name}, el Gnomo puede matarlo.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'GNOME',
+      });
+      break;
+    }
+
+    // ── Xaan: en la noche X, todos los Aldeanos quedan envenenados ──────
+    case 'XAAN_POISON': {
+      if (!actor) break;
+      const victims = game.players.filter(p => p.alive && p.type === 'townfolk');
+      for (const v of victims) {
+        placeToken(v, {
+          type: 'POISONED', roleId: 'XAAN', label: 'Envenenado (Xaan)',
+          expiry: ['UNTIL_NEXT_DUSK'], sourceRole: 'XAAN', sourcePlayerId: actorId,
+        }, game);
+      }
+      game.xaanNightDone = game.nightNumber;
+      actor.nightInfo = `🌑 Xaan\nEsta es la noche X: ${victims.length} Aldeano(s) quedan envenenados hasta el anochecer.`;
+      addDeferred(game, {
+        label: `🌑 Xaan: TODOS los Aldeanos (${victims.length}) están envenenados hasta el anochecer. Toda su información debe ser FALSA.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'XAAN',
+      });
+      break;
+    }
+
+    // ── Ogro: copia la alineación del elegido, EN SILENCIO ──────────────
+    case 'OGRE_ALIGN': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      if (isActorEffective(actor)) actor.alignment = t.alignment;
+      placeToken(actor, {
+        type: 'ALIGNMENT_COPIED', roleId: 'OGRE', label: `Alineación de ${t.name}`,
+        expiry: ['PERMANENT'], sourceRole: 'OGRE', sourcePlayerId: actorId,
+      }, game);
+      addDeferred(game, {
+        label: `👹 Ogro: ${actor.name} adopta la alineación de ${t.name} (${actor.alignment === 'evil' ? 'MALVADA' : 'BUENA'}). NO se lo digas: nunca debe saberlo.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'warn', role: 'OGRE',
+      });
+      break;
+    }
+
+    // ── Burócrata / Ladrón: manipulan el peso del voto de mañana ────────
+    case 'BUREAUCRAT_VOTE':
+    case 'THIEF_VOTE': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      const isThief = actionType === 'THIEF_VOTE';
+      t.voteWeight = isThief ? -1 : 3;
+      placeToken(t, {
+        type: isThief ? 'VOTE_NEGATIVE' : 'VOTE_TRIPLE',
+        roleId: isThief ? 'THIEF' : 'BUREAUCRAT',
+        label: isThief ? 'Voto negativo' : 'Voto triple',
+        expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'],
+        sourceRole: isThief ? 'THIEF' : 'BUREAUCRAT', sourcePlayerId: actorId,
+      }, game);
+      actor.nightInfo = isThief
+        ? `🕵️‍♂️ Ladrón\nMañana el voto de ${t.name} cuenta en negativo.`
+        : `📋 Burócrata\nMañana el voto de ${t.name} cuenta por 3.`;
+      break;
+    }
+
+    // ── Tonto del Pueblo: descubre la alineación de un jugador ──────────
+    case 'VILLAGE_IDIOT_INFO': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      const real = t.alignment === 'evil' ? 'MALVADO' : 'BUENO';
+      const shown = isActorEffective(actor) ? real : (real === 'MALVADO' ? 'BUENO' : 'MALVADO');
+      actor.nightInfo = `🤪 Tonto del Pueblo\n${t.name} es ${shown}.`;
+      break;
+    }
+
+    // ── Duendecillo: conoce 1 Aldeano en juego ──────────────────────────
+    case 'PIXIE_INFO': {
+      const t = targets[0];
+      if (!actor || !t) break;
+      const roleName = ROLES[t.role]?.name || t.role;
+      actor.nightInfo = `🧚 Duendecillo\nEl Aldeano que conoces es: ${roleName}.`;
+      actor.pixieKnownRole = t.role;
+      addDeferred(game, {
+        label: `🧚 Duendecillo: cree conocer al ${roleName}. Si está loco de ser ese personaje, hereda su habilidad cuando ${t.name} muera.`,
+        dueNight: game.nightNumber, sourcePlayerId: actorId, severity: 'info', role: 'PIXIE',
+      });
+      break;
+    }
+
+    // ── Juguetero: el Demonio no ataca esta noche ───────────────────────
+    case 'DEMON_NO_ATTACK': {
+      game.demonBlockedNight = game.nightNumber;
+      game.toymakerSkipUsed = true;
+      addDeferred(game, {
+        label: '🧸 Juguetero: el Demonio NO ataca esta noche. Sáltate su paso de ataque.',
+        dueNight: game.nightNumber, severity: 'warn', role: 'TOYMAKER',
+      });
+      break;
+    }
+
     case 'MAKE_DRUNK':
       // Borracho de una noche (≈ envenenado): se limpia al próximo anochecer.
       for (const t of targets) if (t) placeToken(t, {
@@ -2323,7 +2477,13 @@ function resolveVote(game, nominationId) {
 
   const living   = game.players.filter(p => p.alive).length;
   const required = Math.ceil(living / 2);
-  const total    = nomination.votes.length;
+  // Peso del voto: Burócrata (×3), Ladrón (−1), deseo del Hechicero (×2)…
+  // Sin ficha, cada voto vale 1.
+  const total    = nomination.votes.reduce((sum, id) => {
+    const v = game.players.find(p => p.id === id);
+    const w = Number.isFinite(v?.voteWeight) ? v.voteWeight : 1;
+    return sum + w;
+  }, 0);
 
   nomination.resolved = true;
   nomination.tally    = total;

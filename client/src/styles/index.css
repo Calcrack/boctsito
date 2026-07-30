@@ -6,6 +6,7 @@
 @import './layout.css';
 @import './seats.css';
 @import './components.css';
+@import './narrator.css';
 @import './atmosphere.css';
 
 @tailwind base;

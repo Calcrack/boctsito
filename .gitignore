@@ -3,3 +3,4 @@ server/.env
 server/rankings.json
 server/data.json
 node_modules
+client/test/.smoke-out

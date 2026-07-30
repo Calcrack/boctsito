@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node ./node_modules/vite/bin/vite.js build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke": "node ./node_modules/vite/bin/vite.js build --config vite.smoke.config.mjs --logLevel error && node ./test/.smoke-out/smoke.cjs"
   },
   "dependencies": {
     "react": "^18.2.0",

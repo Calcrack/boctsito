@@ -18,29 +18,33 @@ const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 // Orden global BotC (todas las ediciones combinadas, posiciones oficiales).
 // Usado para insertar roles cross-edition en el lugar correcto.
 const GLOBAL_FIRST_NIGHT_ORDER = [
+  'STORM_CATCHER',
   'POPPY_GROWER','MAGICIAN',
-  'KAZALI','LEGION','LIL_MONSTA','RIOT','LEVIATHAN',
-  'LUNATIC','MARIONETTE','MEZEPHELES','WIDOW','SUMMONER','SHUGENJA','STEWARD',
+  'KAZALI','LEGION','LIL_MONSTA','RIOT','LEVIATHAN','YAGGABABBLE','LLEECH',
+  'LUNATIC','MARIONETTE','GNOME','WRAITH','MEZEPHELES','WIDOW','XAAN','SUMMONER','SHUGENJA','STEWARD',
   'PHILOSOPHER',
+  'BARISTA','BUREAUCRAT','THIEF',
   'SAILOR','COURTIER','GODFATHER','DEVILS_ADVOCATE',
-  'PUKKA',
+  'POISONER','PUKKA',
   'SNAKE_CHARMER','EVIL_TWIN','WITCH','CERENOVUS',
   'PUZZLEMASTER','ALCHEMIST','AMNESIAC','APPRENTICE',
-  'CLOCKMAKER','DREAMER','SEAMSTRESS','MATHEMATICIAN',
-  'WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','FORTUNE_TELLER',
-  'BUTLER','SPY',
+  'PIXIE','CLOCKMAKER','DREAMER','SEAMSTRESS','MATHEMATICIAN',
+  'WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','FORTUNE_TELLER','VILLAGE_IDIOT',
+  'BUTLER','SPY','OGRE','HERMIT',
   'BOUNTY_HUNTER','KNIGHT','BOFFIN','NOBLE','DAMSEL','SNITCH',
   'GRANDMOTHER','CHAMBERMAID',
   'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
   'JUGGLER',
-  'HUNTSMAN','POLITICIAN','FISHERMAN','ARTIST','SAVANT',
+  'HUNTSMAN','POLITICIAN','FISHERMAN','ARTIST','SAVANT','WIZARD',
 ];
 
 const GLOBAL_OTHER_NIGHT_ORDER = [
+  'TOYMAKER',
   'POPPY_GROWER',
   'LUNATIC',
-  'LLEECH','KAZALI','LEGION','LIL_MONSTA','HARLOT','OJO','AL_HADIKHIA',
-  'BARISTA','WIDOW','MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER','SUMMONER','YAGGABABBLE',
+  'LLEECH','KAZALI','LEGION','LIL_MONSTA','HARLOT','OJO','AL_HADIKHIA','LORD_OF_TYPHON','FIDDLER',
+  'BARISTA','BUREAUCRAT','THIEF','DUCHESS',
+  'WIDOW','MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER','SUMMONER','YAGGABABBLE','XAAN','WRAITH',
   'PHILOSOPHER','SAILOR','COURTIER','INNKEEPER',
   'POISONER','MONK',
   'DEVILS_ADVOCATE','EXORCIST',
@@ -51,15 +55,16 @@ const GLOBAL_OTHER_NIGHT_ORDER = [
   'GAMBLER',
   'PREACHER','LYCANTHROPE','HUNTSMAN','ENGINEER','ACROBAT',
   'CANNIBAL','RAVENKEEPER',
-  'UNDERTAKER','EMPATH','FORTUNE_TELLER','BUTLER',
+  'UNDERTAKER','EMPATH','FORTUNE_TELLER','VILLAGE_IDIOT','BUTLER',
   'SWEETHEART','SAGE','BARBER','DREAMER',
-  'FLOWERGIRL','TOWN_CRIER','ORACLE','SEAMSTRESS','MATHEMATICIAN',
+  'FLOWERGIRL','TOWN_CRIER','ORACLE','SEAMSTRESS','MATHEMATICIAN','JUGGLER',
   'GOSSIP','PROFESSOR','BONE_COLLECTOR','MINSTREL','TEA_LADY','PACIFIST','FOOL','MOONCHILD','TINKER',
-  'GRANDMOTHER','CHAMBERMAID',
+  'GRANDMOTHER','CHAMBERMAID','HERMIT',
   'SPY',
-  'BOUNTY_HUNTER','CULT_LEADER',
+  'BOUNTY_HUNTER','CULT_LEADER','NIGHTWATCHMAN',
   'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
-  'AMNESIAC','DAMSEL','POLITICIAN','FISHERMAN','ARTIST','SAVANT',
+  'CACKLEJACK','ZENOMANCER',
+  'AMNESIAC','DAMSEL','POLITICIAN','FISHERMAN','ARTIST','SAVANT','WIZARD',
 ];
 
 function buildSteps(game) {
@@ -321,6 +326,51 @@ const NIGHT_ROLE_PATTERN = {
                     note: 'De día: puede intercambiar asientos de hasta 3 parejas. Los jugadores no pueden levantarse.' },
   VOUDON:         { kind: 'P_INFO', emoji: '🧿',
                     note: 'Mientras viva: solo muertos + Voudon votan. No se necesita mayoría para ejecutar.' },
+  BUREAUCRAT:     { kind: 'P3', effect: 'BUREAUCRAT_VOTE', emoji: '📋', label: 'Voto triple para', notSelf: true,
+                    note: 'Mañana el voto del elegido cuenta por 3. La ficha caduca al anochecer.' },
+  THIEF:          { kind: 'P3', effect: 'THIEF_VOTE', emoji: '🕵️‍♂️', label: 'Voto negativo para', notSelf: true,
+                    note: 'Mañana el voto del elegido resta en vez de sumar. La ficha caduca al anochecer.' },
+  DUCHESS:        { kind: 'P_PANEL', emoji: '👒',
+                    note: 'Marca a los 3 visitantes de hoy y dale a cada uno cuántos eran malvados. A UNO de ellos dale el número FALSO.' },
+  // ── Demonios y esbirros fuera de las campañas base ──────────────────────
+  LORD_OF_TYPHON: { kind: 'P3', effect: 'LORD_OF_TYPHON_KILL', emoji: '🐍', label: 'Atacar a', notSelf: false,
+                    note: 'Los malvados van en línea con él en el centro. +1 Esbirro: valida los asientos en el montaje.' },
+  FIDDLER:        { kind: 'P3', effect: 'FIDDLER_DUEL', emoji: '🎻', label: 'Rival del duelo', notSelf: true,
+                    note: 'Una sola vez por partida. Elige un jugador del bando contrario: mañana todos votan cuál de los 2 gana la partida.' },
+  LEVIATHAN:      { kind: 'P_INFO', emoji: '🐋', firstNightOnly: true,
+                    note: 'No mata de noche. Anuncia cada día que el Leviatán está en juego. 2 buenos ejecutados, o pasar del día 5 → ganan los malvados.' },
+  MARIONETTE:     { kind: 'P_INFO', emoji: '🎎', firstNightOnly: true,
+                    note: 'Se cree buena y NO despierta con el mal: solo el Demonio la conoce. Siéntala vecina del Demonio y dale info FALSA siempre.' },
+  GNOME:          { kind: 'P3', effect: 'GNOME_KNOWN', emoji: '🧙‍♂️', label: 'Jugador conocido por todos', notSelf: true,
+                    firstNightOnly: true,
+                    note: 'Anuncia el nombre EN PÚBLICO: comparte alineación con el Gnomo. Si alguien lo nomina, el Gnomo puede matar al nominador.' },
+  WRAITH:         { kind: 'P_INFO', emoji: '👻',
+                    note: 'No tiene acción: solo abre los ojos. Despiértalo siempre que despiertes a cualquier otro malvado.' },
+  XAAN:           { kind: 'P_XAAN', emoji: '🌑' },
+  OGRE:           { kind: 'P3', effect: 'OGRE_ALIGN', emoji: '👹', label: 'Copiar alineación de', notSelf: true,
+                    firstNightOnly: true,
+                    note: 'Cambia su alineación EN SILENCIO. Nunca debe saber cuál copió, ni siquiera si no cambió nada.' },
+  VILLAGE_IDIOT:  { kind: 'P3', effect: 'VILLAGE_IDIOT_INFO', emoji: '🤪', label: 'Descubrir alineación de', notSelf: true,
+                    note: 'Puede haber hasta 3 Tontos del Pueblo y exactamente uno está borracho: a ese dale SIEMPRE la alineación contraria.' },
+  PIXIE:          { kind: 'P3', effect: 'PIXIE_INFO', emoji: '🧚', label: 'Aldeano que conoce', notSelf: true,
+                    typeFilter: 'townfolk', firstNightOnly: true,
+                    note: 'Impón la locura de ser ese personaje. Si la cumple, hereda su habilidad cuando el original muera.' },
+  HERMIT:         { kind: 'P_INFO', emoji: '🧘',
+                    note: 'Tiene TODAS las habilidades de Forastero del guion: resuélvelas una por una en el orden en que actuarían.' },
+  // ── Fabulados con paso nocturno ─────────────────────────────────────────
+  TOYMAKER:       { kind: 'P_YESNO', emoji: '🧸', label: '¿El Demonio ataca esta noche?',
+                    yesLabel: '⚔️ Sí, ataca', noLabel: '🚫 No ataca (Juguetero)',
+                    noEffect: 'DEMON_NO_ATTACK',
+                    note: 'Debe usar la noche sin ataque al menos 1 vez por partida.' },
+  STORM_CATCHER:  { kind: 'P_PANEL', emoji: '⛈️', firstNightOnly: true,
+                    note: 'Nombra un personaje bueno: si está en juego, solo puede morir por ejecución, pero los malvados saben quién lo tiene.' },
+  CACKLEJACK:     { kind: 'P_PANEL', emoji: '🃏',
+                    note: 'El que cambia de personaje es un jugador DISTINTO del que eligió de día. Aplícalo con "Cambiar rol".' },
+  ZENOMANCER:     { kind: 'P_PANEL', emoji: '🔭',
+                    note: 'Escribe la misión de cada jugador. Al cumplirla, dale información verdadera.' },
+  // ── Hechicero: se resuelve en privado con el panel de deseos ────────────
+  WIZARD:         { kind: 'P_PANEL', emoji: '🧙',
+                    note: 'Si te ha pedido su deseo, atiéndelo AQUÍ y en privado. Puede tener precio: concédelo, niégalo o pídele otro.' },
 };
 
 function calcEvilNeighbors(game, playerId) {
@@ -357,11 +407,19 @@ function calcMinDistance(game) {
   return Math.min(...mis.map(mi => Math.min(Math.abs(mi - di), n - Math.abs(mi - di))));
 }
 
-export default function NightWalkthrough({ onActiveActor, embedded = false }) {
+// ¿Este paso ya está resuelto? Sirve para el ✓ de la tira de pasos.
+function stepDone(step, game) {
+  if (step.type === 'info') {
+    const evils = game.players.filter(p => p.type === 'minion' || p.type === 'demon');
+    return evils.length > 0 && evils.every(p => p.nightInfo);
+  }
+  return !!step.actor.nightInfo;
+}
+
+export default function NightWalkthrough({ onActiveActor, onProgress, controlsRef }) {
   const { state, send } = useGame();
   const { game } = state;
   const [idx, setIdx] = useState(0);
-  const [completed, setCompleted] = useState(new Set());
 
   useEffect(() => { setIdx(0); }, [game?.nightNumber]);
 
@@ -377,69 +435,161 @@ export default function NightWalkthrough({ onActiveActor, embedded = false }) {
     return () => onActiveActor && onActiveActor(null);
   }, [step?.type, step?.actor?.id, onActiveActor]);
 
+  useEffect(() => { onProgress?.({ current, total }); }, [current, total, onProgress]);
+
+  // Mando a distancia para los atajos de teclado del narrador.
+  if (controlsRef) {
+    controlsRef.current = {
+      next: () => setIdx(i => Math.min(total - 1, i + 1)),
+      prev: () => setIdx(i => Math.max(0, i - 1)),
+      goTo: n => setIdx(Math.max(0, Math.min(total - 1, n))),
+    };
+  }
+
   if (!isNight) return null;
 
   const minions = game.players.filter(p => p.type === 'minion' && ROLE_BY_ID[p.role]?.misperception?.wakesWithEvil !== false);
   const demons  = game.players.filter(p => p.type === 'demon');
 
-  const containerStyle = { width: '100%', display: 'flex', flexDirection: 'column', maxHeight: '70vh', background: 'rgba(8,9,16,0.7)', border: '1px solid var(--gold)', borderRadius: 10, overflow: 'hidden', flexShrink: 0 };
-
   return (
-    <div style={containerStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: 'rgba(201,162,74,0.08)', borderBottom: 'var(--hairline)' }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--gold-hot)' }}>
-          🌙 Guía · Noche {game.nightNumber} — paso {current + 1}/{total}
-        </span>
+    <div className="nx-card accent" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="nx-card-head">
+        <p className="nx-head-title">🌙 Guía de la noche {game.nightNumber}</p>
+        <span className="nx-mono">paso {total ? current + 1 : 0}/{total}</span>
       </div>
 
-      <div style={{ padding: '14px 16px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      {/* Tira de pasos: saltar a cualquier rol sin pasar por todos */}
+      {total > 1 && (
+        <div className="nx-steps">
+          {steps.map((s, i) => {
+            const done = stepDone(s, game);
+            const evil = s.type === 'role' && s.role.alignment === 'evil';
+            const emoji = s.type === 'info' ? '😈' : (NIGHT_ROLE_PATTERN[s.role.id]?.emoji || '·');
+            const title = s.type === 'info'
+              ? 'Info de Esbirros y Demonio'
+              : `${s.role.name} — ${s.actor.name}`;
+            return (
+              <button key={i} title={title} onClick={() => setIdx(i)}
+                className={`nx-step${i === current ? ' now' : ''}${done ? ' done' : ''}${evil ? ' evil' : ''}`}>
+                {i + 1}{emoji !== '·' ? ` ${emoji}` : ''}{done && i !== current ? ' ✓' : ''}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ padding: '14px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {!step ? (
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-400)', fontStyle: 'italic', textAlign: 'center' }}>
-            No hay roles que actúen esta noche.
+          <p className="nx-hint" style={{ textAlign: 'center' }}>
+            No hay personajes que actúen esta noche.
           </p>
         ) : step.type === 'info' ? (
           <div>
-            <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--blood-hi)', marginBottom: 8 }}>Info Esbirros &amp; Demonio</p>
-            <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 8 }}>
+            <p className="nx-title" style={{ color: 'var(--blood-hi)', marginBottom: 4 }}>Info de Esbirros y Demonio</p>
+            <p className="nx-hint" style={{ marginBottom: 10 }}>
               Entra a la sala de cada uno y dale su información por voz.
             </p>
             {[...minions, ...demons].map(m => (
-              <div key={m.id} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 4, padding: '8px 10px', marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--blood-hi)', flex: 1 }}>
+              <div key={m.id} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6, padding: '9px 11px', marginBottom: 7 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                  <span className="nx-head-title evil" style={{ flex: 1 }}>
                     {m.name} · {m.type === 'demon' ? '👹 Demonio' : '😈 Esbirro'}
                   </span>
                   {m.discordId && (
                     <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: m.id })}
-                      className="btn-action primary" style={{ fontSize: 13, padding: '6px 12px' }}>🚪 Ir a su sala</button>
+                      className="nx-btn sm primary">🚪 Ir a su sala</button>
                   )}
                 </div>
                 {m.nightInfo
-                  ? <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', whiteSpace: 'pre-line', margin: 0 }}>{m.nightInfo}</p>
-                  : <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-500)', fontStyle: 'italic', margin: 0 }}>Info pendiente.</p>}
+                  ? <p className="nx-sub" style={{ whiteSpace: 'pre-line' }}>{m.nightInfo}</p>
+                  : <p className="nx-hint">Info pendiente.</p>}
               </div>
             ))}
             {game.nightNumber === 1 && <BluffsPanel game={game} send={send} />}
           </div>
         ) : (
-          <RoleStepView step={step} game={game} send={send} />
+          <>
+            <RoleStepView step={step} game={game} send={send} />
+            <StepExtras actor={step.actor} role={step.role} game={game} send={send} />
+          </>
         )}
       </div>
 
-      <div style={{ padding: '8px 16px 10px', borderTop: 'var(--hairline)' }}>
+      <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(232,225,209,0.1)' }}>
         {step?.type === 'role' && step.actor.discordId && (
           <button onClick={() => send('MOVE_NARRATOR_TO_ROOM', { playerId: step.actor.id })}
-            className="btn-action primary" style={{ width: '100%', fontSize: 14, padding: '8px 0', marginBottom: 8 }}>
-            🚪 Ir a su habitación
+            className="nx-btn primary" style={{ marginBottom: 8 }}>
+            🚪 Ir a la habitación de {step.actor.name}
           </button>
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setIdx(Math.max(0, current - 1))} disabled={current <= 0}
-            className="btn-action" style={{ flex: 1, opacity: current <= 0 ? 0.35 : 1 }}>← Anterior</button>
-          <button onClick={() => setIdx(Math.min(total - 1, current + 1))} disabled={current >= total - 1}
-            className="btn-action primary" style={{ flex: 1, opacity: current >= total - 1 ? 0.35 : 1 }}>Siguiente →</button>
+        <div className="nx-btn-row">
+          <button onClick={() => setIdx(Math.max(0, current - 1))} disabled={current <= 0} className="nx-btn">◂ Anterior</button>
+          <button onClick={() => setIdx(Math.min(total - 1, current + 1))} disabled={current >= total - 1} className="nx-btn primary">Siguiente ▸</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Extras del paso ──────────────────────────────────────────────────
+// Lo que antes solo existía en el panel "Acciones de Noche": mandarle un
+// texto libre a alguien y colocarle una ficha a mano. Plegado, porque no
+// hace falta casi nunca — pero cuando hace falta, no hay dónde buscarlo.
+const QUICK_TOKENS = [
+  { tokenId: 'POISONED',   label: '🧪 Envenenado' },
+  { tokenId: 'DRUNK_NIGHT',label: '🍺 Borracho' },
+  { tokenId: 'PROTECTED',  label: '🛡 Protegido' },
+  { tokenId: 'SAFE_TONIGHT',label: '✅ A salvo' },
+  { tokenId: 'NO_ABILITY', label: '🚫 Sin habilidad' },
+  { tokenId: 'MARKED',     label: '⭐ Marcado' },
+];
+
+function StepExtras({ actor, role, game, send }) {
+  const [open, setOpen] = useState(false);
+  const [targetId, setTargetId] = useState(actor.id);
+  const [text, setText] = useState('');
+
+  const target = game.players.find(p => p.id === targetId) || actor;
+
+  const sendInfo = () => {
+    if (!text.trim()) return;
+    send('NIGHT_NARRATOR_ACTION', { actorId: target.id, nightInfo: text.trim() });
+    setText('');
+  };
+  const placeToken = (t) => {
+    send('ADD_TOKEN', { playerId: target.id, token: { tokenId: t.tokenId, roleId: role.id, label: t.label, duration: 'permanent' } });
+  };
+
+  return (
+    <div className="nx-card" style={{ marginTop: 12 }}>
+      <div className="nx-card-head clickable" onClick={() => setOpen(o => !o)}>
+        <p className="nx-head-title">✎ Mano del narrador</p>
+        <span className="nx-mono">{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div className="nx-card-body">
+          <p className="nx-hint" style={{ marginBottom: 6 }}>Sobre quién actúas:</p>
+          <select className="nx-select" value={targetId} onChange={e => setTargetId(e.target.value)}>
+            {game.players.map(p => (
+              <option key={p.id} value={p.id}>{p.name}{!p.alive ? ' ☠' : ''}</option>
+            ))}
+          </select>
+
+          <p className="nx-hint" style={{ margin: '12px 0 6px' }}>Ficha a mano (pulsa otra vez para quitarla):</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {QUICK_TOKENS.map(t => (
+              <button key={t.tokenId} className="nx-btn sm" onClick={() => placeToken(t)}>{t.label}</button>
+            ))}
+          </div>
+
+          <p className="nx-hint" style={{ margin: '12px 0 6px' }}>Decirle algo por escrito:</p>
+          <textarea className="nx-textarea" rows={2} value={text} onChange={e => setText(e.target.value)}
+            placeholder={`Información para ${target.name}…`} />
+          <button className="nx-btn" style={{ marginTop: 6 }} disabled={!text.trim()} onClick={sendInfo}>
+            Enviárselo a {target.name}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -454,10 +604,10 @@ function RoleStepView({ step, game, send }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        {shown.img && <img src={shown.img} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 24, color: evil ? 'var(--blood-hi)' : 'var(--bone-100)' }}>{shown.name}</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--bone-300)' }}>
+        {shown.img && <img src={shown.img} style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 26, lineHeight: 1.15, color: evil ? 'var(--blood-hi)' : 'var(--bone-50)' }}>{shown.name}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--bone-200)' }}>
             🗣 {actor.name}{actor.poisoned ? ' · 🧪 envenenado' : ''}{!actor.alive ? ' · ☠' : ''}
           </div>
         </div>
@@ -482,7 +632,7 @@ function RoleStepView({ step, game, send }) {
         </div>
       )}
 
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-300)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>{shown.ability}</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-200)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>{shown.ability}</p>
 
       {actor.nightInfo ? (
         <div style={{ background: 'rgba(201,162,74,0.07)', border: 'var(--hairline)', borderRadius: 4, padding: '8px 10px', marginBottom: 10 }}>
@@ -551,6 +701,7 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
     case 'P_BARISTA':       return <BaristaPanel      actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_HARLOT':        return <HarlotPanel       actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_APPRENTICE':    return <ApprenticePanel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_XAAN':          return <XaanPanel         actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     // Panel completo del personaje dentro del paso nocturno: mismos controles
     // que el mini-panel de la ruleta, sin tener que salir de la guía.
     case 'P_PANEL':         return (
@@ -563,11 +714,13 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
   }
 }
 
-const panelStyle = { marginTop: 10, background: 'rgba(201,162,74,0.06)', border: '1px solid rgba(201,162,74,0.25)', borderRadius: 6, padding: '12px 14px' };
-const labelStyle = { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 8px' };
-const selStyle   = { fontSize: 13, background: 'var(--ink-600)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2, color: 'var(--bone-100)', padding: '5px 7px', width: '100%', marginBottom: 4 };
-const btnPrimary = { width: '100%', fontSize: 13, padding: '7px 0' };
-const poisonNote = <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: '#4ade80', fontStyle: 'italic', margin: '0 0 6px' }}>🧪 Envenenado: elige libremente (info FALSA).</p>;
+// Estilos compartidos por los ~30 paneles de rol. Tocarlos aquí cambia
+// todos a la vez: es la razón de que sigan siendo objetos y no clases.
+const panelStyle = { marginTop: 12, background: 'color-mix(in srgb, var(--scene-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--scene-accent) 30%, transparent)', borderRadius: 8, padding: '14px' };
+const labelStyle = { fontFamily: 'var(--mono)', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--scene-accent)', margin: '0 0 10px' };
+const selStyle   = { fontSize: 15, fontFamily: 'var(--serif)', background: 'var(--ink-700)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: 'var(--bone-100)', padding: '9px 10px', width: '100%', marginBottom: 6 };
+const btnPrimary = { width: '100%', fontSize: 16, padding: '10px 0' };
+const poisonNote = <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: '#4ade80', fontStyle: 'italic', margin: '0 0 8px' }}>🧪 Envenenado: elige libremente (la info es FALSA).</p>;
 
 // P2 — par verdadero + señuelo + personaje (Lavandera, Bibliotecario, Investigador)
 function P2Panel({ actor, pattern, game, send, roleName }) {
@@ -726,7 +879,10 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
     : game.players.filter(p =>
         (p.alive || p.diedThisNight) &&
         (pattern.notSelf ? p.id !== actor.id : true) &&
-        (pattern.evilOnly && !actor.poisoned ? p.alignment === 'evil' : true)
+        (pattern.evilOnly && !actor.poisoned ? p.alignment === 'evil' : true) &&
+        // typeFilter: solo jugadores de ese tipo (Duendecillo → Aldeanos).
+        // Envenenado/borracho: sin filtro, el narrador miente con libertad.
+        (pattern.typeFilter && !actor.poisoned ? p.type === pattern.typeFilter : true)
       );
 
   const infoLabels = {
@@ -757,6 +913,22 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
     NIGHTWATCHMAN:            n => `🔦 Guardián Nocturno\nInformó a ${n} de su identidad.`,
     HIGH_PRIESTESS:           n => `🌙 Alta Sacerdotisa\nJugador a mostrar al Rey esta noche: ${n}.`,
     BOUNTY_HUNTER_REVEAL:     n => `💰 Cazarrecompensas\nRevela a ${n} como jugador malvado.`,
+    LORD_OF_TYPHON_KILL:      n => `🐍 Señor de Typhon\nAtacó a ${n} esta noche.`,
+    FIDDLER_DUEL:             n => `🎻 Violinista\nDuelo contra ${n}: mañana todos votan cuál de los 2 gana la partida.`,
+    GNOME_KNOWN:              n => `🧙‍♂️ Gnomo\nAnuncia en público: ${n} es de la alineación del Gnomo.`,
+    OGRE_ALIGN:               n => `👹 Ogro\nCopió la alineación de ${n} — NO se lo digas.`,
+    BUREAUCRAT_VOTE:          n => `📋 Burócrata\nMañana el voto de ${n} cuenta por 3.`,
+    THIEF_VOTE:               n => `🕵️‍♂️ Ladrón\nMañana el voto de ${n} cuenta en negativo.`,
+    VILLAGE_IDIOT_INFO:       n => {
+      const t = game.players.find(p => p.id === targetId);
+      const real = t?.alignment === 'evil' ? 'MALVADO' : 'BUENO';
+      const shown = actor.poisoned ? (real === 'MALVADO' ? 'BUENO' : 'MALVADO') : real;
+      return `🤪 Tonto del Pueblo\n${n} es ${shown}.`;
+    },
+    PIXIE_INFO:               n => {
+      const t = game.players.find(p => p.id === targetId);
+      return `🧚 Duendecillo\nEl Aldeano que conoces es: ${ROLE_BY_ID[t?.role]?.name || '?'}.`;
+    },
   };
 
   const confirm = () => {
@@ -1130,6 +1302,16 @@ function YesNoPanel({ actor, pattern, send, roleName }) {
   const [ok, setOk] = useState(actor.nightInfo != null);
   const chosen = val === 'yes' ? (pattern.yesLabel || 'SÍ') : val === 'no' ? (pattern.noLabel || 'NO') : null;
   const info = chosen ? `${pattern.emoji} ${roleName}\n${pattern.label}: ${chosen}.` : null;
+  // Cada respuesta puede disparar su propia acción en el motor
+  // (Juguetero: "no ataca" → bloquea al Demonio esta noche).
+  const effect = val === 'yes' ? pattern.effect : val === 'no' ? pattern.noEffect : null;
+  const confirm = () => {
+    if (!info) return;
+    const payload = { actorId: actor.id, nightInfo: info };
+    if (effect) { payload.actionType = effect; payload.targetIds = []; }
+    send('NIGHT_NARRATOR_ACTION', payload);
+    setOk(true);
+  };
   return (
     <div style={panelStyle}>
       <p style={labelStyle}>{ok ? '✓ Anotado' : pattern.label}</p>
@@ -1143,8 +1325,41 @@ function YesNoPanel({ actor, pattern, send, roleName }) {
           {pattern.noLabel || 'NO'}
         </button>
       </div>
-      <button onClick={() => { if (info) { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: info }); setOk(true); } }}
+      <button onClick={confirm}
         disabled={!info} className="btn-action primary" style={{ ...btnPrimary, opacity: info ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// P_XAAN — Xaan: en la noche X envenena a TODOS los Aldeanos
+function XaanPanel({ actor, pattern, game, send, roleName }) {
+  const [ok, setOk] = useState(actor.nightInfo != null);
+  const outsiders = game.players.filter(p => p.type === 'outsider').length;
+  const townfolk  = game.players.filter(p => p.alive && p.type === 'townfolk');
+  const isNightX  = game.nightNumber === outsiders;
+
+  const confirm = () => {
+    send('NIGHT_NARRATOR_ACTION', {
+      actorId: actor.id, actionType: 'XAAN_POISON', targetIds: [],
+      nightInfo: `${pattern.emoji} ${roleName}\nNoche X: ${townfolk.length} Aldeano(s) envenenados hasta el anochecer.`,
+    });
+    setOk(true);
+  };
+  return (
+    <div style={panelStyle}>
+      <p style={labelStyle}>{ok ? '✓ Aldeanos envenenados' : 'Xaan — cuenta de noches'}</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-200)', margin: '0 0 8px', lineHeight: 1.5 }}>
+        Forasteros en juego: <strong>{outsiders}</strong> → la noche X es la <strong>noche {outsiders}</strong>.
+        Vas por la <strong>noche {game.nightNumber}</strong>.
+      </p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, margin: '0 0 8px', color: isNightX ? 'var(--blood-hi)' : 'var(--bone-400)', fontStyle: isNightX ? 'normal' : 'italic' }}>
+        {isNightX
+          ? `⚠ ES la noche X: envenena a los ${townfolk.length} Aldeanos vivos hasta el anochecer.`
+          : 'Todavía no es la noche X: el Xaan no hace nada esta noche.'}
+      </p>
+      <button onClick={confirm} className="btn-action primary" style={{ ...btnPrimary, opacity: ok ? 0.5 : 1 }}>
+        🌑 Envenenar a todos los Aldeanos
+      </button>
     </div>
   );
 }

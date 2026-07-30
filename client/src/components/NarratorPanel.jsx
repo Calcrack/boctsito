@@ -1,22 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BarberPanel, RoshamboBox } from './NarratorTools';
 import { useGame } from '../context/GameContext';
-import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST, getCampaign } from '../data/roles';
+import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST } from '../data/roles';
 import { formatIdentity, MASK } from '../utils/identity';
+import { phaseInfo, hasBlock, mainAction } from '../data/narratorPhases';
+import useNarratorHotkeys, { HOTKEYS } from '../hooks/useNarratorHotkeys';
 import SetupWizard from './SetupWizard';
-import NightControl from './NightControl';
+import NightSettings from './NightSettings';
 import NightWalkthrough from './NightWalkthrough';
 import StatusChips from './StatusChips';
 import GameTable from './GameTable';
-
-const shuffleArr = (arr) => {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-};
+import ActionModal from './ActionModal';
 
 function MiniAvatar({ player, size = 20 }) {
   return (
@@ -35,34 +29,13 @@ function MiniAvatar({ player, size = 20 }) {
   );
 }
 
-const BASE_DISTRIBUTION = {
-  5:  { townfolk: 3, outsiders: 0, minions: 1, demons: 1 },
-  6:  { townfolk: 3, outsiders: 1, minions: 1, demons: 1 },
-  7:  { townfolk: 5, outsiders: 0, minions: 1, demons: 1 },
-  8:  { townfolk: 5, outsiders: 1, minions: 1, demons: 1 },
-  9:  { townfolk: 5, outsiders: 2, minions: 1, demons: 1 },
-  10: { townfolk: 7, outsiders: 0, minions: 2, demons: 1 },
-  11: { townfolk: 7, outsiders: 1, minions: 2, demons: 1 },
-  12: { townfolk: 7, outsiders: 2, minions: 2, demons: 1 },
-  13: { townfolk: 9, outsiders: 0, minions: 3, demons: 1 },
-  14: { townfolk: 9, outsiders: 1, minions: 3, demons: 1 },
-  15: { townfolk: 9, outsiders: 2, minions: 3, demons: 1 },
-};
-
-function getNeeded(count, roles) {
-  const base = BASE_DISTRIBUTION[count];
-  if (!base) return null;
-  const hasBaron = roles.includes('BARON');
-  const dist = { ...base };
-  if (hasBaron) {
-    dist.outsiders = Math.min(dist.outsiders + 2, count - dist.demons - dist.minions);
-    dist.townfolk = count - dist.outsiders - dist.minions - dist.demons;
-  }
-  return dist;
-}
-
-const TABS = ['setup', 'mesa', 'ranking'];
-const TAB_LABELS = { setup: 'Config', mesa: 'Mesa', ranking: '🏆' };
+// Pestañas del menú ⋯ (todo lo que no es narrar: configuración y utilidades)
+const MENU_TABS = [
+  { id: 'partida',  label: '⚙ Partida' },
+  { id: 'discord',  label: '💬 Discord' },
+  { id: 'ranking',  label: '🏆 Rankings' },
+  { id: 'atajos',   label: '⌨ Atajos' },
+];
 
 function PuzzlemasterDayPanel({ pm, alreadyUsed, send }) {
   const [moved, setMoved] = useState(false);
@@ -118,51 +91,58 @@ function PuzzlemasterDayPanel({ pm, alreadyUsed, send }) {
 export default function NarratorPanel() {
   const { state, send } = useGame();
   const { game, discordMembers, rankings, campaigns: serverCampaigns, importResult } = state;
-  const [tab, setTab] = useState('setup');
   const [activeNightActorId, setActiveNightActorId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState('');
-  const [selectedRoles, setSelectedRoles] = useState([]);
   const [discordMap, setDiscordMap] = useState({});
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showManualAssign, setShowManualAssign] = useState(false);
-  const [manualAssignments, setManualAssignments] = useState({});
-  const [showReorder, setShowReorder] = useState(false);
-  const [reorderList, setReorderList] = useState([]);
-  const [showAutoMode, setShowAutoMode] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [rosterOpen, setRosterOpen] = useState(true);
-  const [confirmWin, setConfirmWin] = useState(null);
+  const [menuTab, setMenuTab] = useState(null);          // null = menú ⋯ cerrado
+  const [nightStep, setNightStep] = useState({ current: 0, total: 0 });
+  const [rosterTarget, setRosterTarget] = useState(null); // jugador abierto desde el roster
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
   const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
 
-  useEffect(() => {
-    if (tab === 'setup') { send('GET_DISCORD_MEMBERS', {}); send('GET_CAMPAIGNS', {}); }
-    if (tab === 'ranking') send('GET_RANKINGS', {});
-  }, [tab]);
+  const guideRef  = useRef(null);   // mando de la Guía (siguiente / anterior / ir a)
+  const searchRef = useRef(null);   // buscador del roster
+
+  const onProgress = useCallback(info => setNightStep(info), []);
 
   useEffect(() => {
-    if (game && game.phase !== 'lobby') setTab('mesa');
+    if (game?.phase === 'lobby') { send('GET_DISCORD_MEMBERS', {}); send('GET_CAMPAIGNS', {}); }
   }, [game?.phase === 'lobby']);
 
-  // Al cambiar de campaña, los roles seleccionados ya no aplican.
-  useEffect(() => { setSelectedRoles([]); }, [game?.campaignId]);
-
-  // Referencia (roster) colapsada por defecto durante la noche; se abre a demanda.
   useEffect(() => {
-    const night = game && ['first_night', 'night'].includes(game.phase);
-    setRosterOpen(!night);
-  }, [game?.phase]);
+    if (menuTab === 'ranking') send('GET_RANKINGS', {});
+    if (menuTab === 'discord') send('GET_DISCORD_MEMBERS', {});
+  }, [menuTab]);
+
+  // La escala del narrador afecta a las tres columnas, no solo a una.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ui-scale', String(uiScale));
+    return () => document.documentElement.style.removeProperty('--ui-scale');
+  }, [uiScale]);
+
+  const act = mainAction(game);
+  const runMain = useCallback(() => {
+    if (!act || act.disabled) return;
+    if (act.openWizard) { setWizardOpen(true); return; }
+    act.run?.(send);
+  }, [act, send]);
+
+  useNarratorHotkeys({
+    enabled: !wizardOpen && !menuTab && !rosterTarget,
+    onMain: runMain,
+    onNext: () => guideRef.current?.next(),
+    onPrev: () => guideRef.current?.prev(),
+    onGoTo: n => guideRef.current?.goTo(n),
+    onSearch: () => searchRef.current?.focus(),
+    onEscape: () => { setMenuTab(null); setRosterTarget(null); },
+  });
 
   if (!game) return <div style={{ padding: 32, fontFamily: 'var(--serif)', color: 'var(--bone-400)' }}>Cargando...</div>;
 
   const { players, phase, nominations, activeNomination, nightDeaths } = game;
   const isNight = ['first_night', 'night'].includes(phase);
-  const campaign = getCampaign(game.campaignId);
-  // Para campañas personalizadas usamos los roles que envía el servidor.
-  const campaignRoleList = (game.campaignRoles && game.campaignRoles.length)
-    ? game.campaignRoles
-    : campaign.roles;
-
+  const ph = phaseInfo(game);
   const addPlayer = () => {
     if (!newPlayerName.trim()) return;
     const discord = discordMap[newPlayerName] || {};
@@ -170,57 +150,68 @@ export default function NarratorPanel() {
     setNewPlayerName('');
   };
 
-  // Barra de alertas (abajo): sólo cuando hay una decisión/consecuencia pendiente.
-  const pendingAdvice = (game.advice || []).filter(a => a.severity === 'warn' || a.severity === 'danger');
-  const hasAlerts = pendingAdvice.length > 0 || (game.deferredEffects || []).length > 0 || (game.deferredOptions || []).length > 0;
+  const alive = players.filter(p => p.alive).length;
 
   return (
-    <div className={`app-shell ${isNight ? 'is-night' : 'is-day'}${hasAlerts ? ' has-alerts' : ''}`}>
+    <div className={`app-shell ${isNight ? 'is-night' : 'is-day'}`}>
 
-
-      {/* ── Topbar ── */}
+      {/* ── Topbar de mando: dónde estoy · qué hago ahora · utilidades ── */}
       <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark" />
-          <span className="brand-title">Los Campanarios</span>
+        <div className="nx-topbar-phase">
+          <span style={{ fontSize: 20 }}>{ph.icon}</span>
+          <span className="nx-phase-name">{ph.label}</span>
+          {isNight && nightStep.total > 0 && (
+            <span className="nx-phase-step">paso {nightStep.current + 1}/{nightStep.total}</span>
+          )}
         </div>
 
         <div className="topbar-center">
-          <div className="phase-badge">
-            <div className="dot" />
-            <span>{phase} · Día {game.dayNumber} · Noche {game.nightNumber}</span>
-          </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {TABS.map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className="btn-night"
-                style={{ borderColor: tab === t ? 'var(--gold)' : undefined, color: tab === t ? 'var(--gold-hot)' : undefined }}>
-                {TAB_LABELS[t]}
-              </button>
-            ))}
-          </div>
+          {act ? (
+            <div className="nx-main-slot">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={runMain} disabled={act.disabled}
+                  className={`nx-btn-main${act.tone === 'danger' ? ' danger' : ''}`}
+                  title="Atajo: barra espaciadora">
+                  {act.label}
+                </button>
+                {act.secondary && (
+                  <button onClick={() => act.secondary.run(send)} className="nx-btn sm">
+                    {act.secondary.label}
+                  </button>
+                )}
+              </div>
+              {act.note && <span className="nx-main-note">{act.note}</span>}
+            </div>
+          ) : (
+            <span className="nx-main-note">Resuelve la votación abierta para seguir.</span>
+          )}
         </div>
 
         <div className="topbar-right">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginRight: 6 }} title="Tamaño de texto del narrador">
-            <button onClick={() => changeScale(-0.1)} className="btn-night" style={{ fontSize: 11, padding: '2px 7px' }}>A−</button>
-            <button onClick={() => changeScale(0.1)} className="btn-night" style={{ fontSize: 13, padding: '2px 7px' }}>A+</button>
+          <span className="nx-count">{alive}♥ <span className="dead">{players.length - alive}☠</span></span>
+          <div style={{ display: 'flex', gap: 2 }} title="Tamaño de la interfaz">
+            <button onClick={() => changeScale(-0.1)} className="nx-icon-btn">A−</button>
+            <button onClick={() => changeScale(0.1)} className="nx-icon-btn" style={{ fontSize: 17 }}>A+</button>
           </div>
-          {showResetConfirm ? (
-            <>
-              <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--blood-hi)' }}>¿Resetear?</span>
-              <button onClick={() => { send('RESET_GAME', {}); setShowResetConfirm(false); }} className="btn-action danger" style={{ fontSize: 11, padding: '4px 10px' }}>Sí</button>
-              <button onClick={() => setShowResetConfirm(false)} className="btn-action" style={{ fontSize: 11, padding: '4px 10px' }}>No</button>
-            </>
-          ) : (
-            <button onClick={() => setShowResetConfirm(true)} className="btn-night">Reset</button>
-          )}
+          <button onClick={() => setMenuTab('partida')} className="nx-btn sm" title="Ajustes, Discord, rankings y atajos">⋯</button>
         </div>
       </header>
 
-      {/* ── Left panel ── */}
-      <aside className="left-panel" style={{ zoom: uiScale }}>
-        {tab === 'setup' && (
+      {menuTab && (
+        <SettingsMenu
+          tab={menuTab} setTab={setMenuTab} onClose={() => setMenuTab(null)}
+          game={game} send={send} rankings={rankings} discordMembers={discordMembers} players={players}
+        />
+      )}
+
+      {rosterTarget && players.some(p => p.id === rosterTarget) && (
+        <ActionModal target={players.find(p => p.id === rosterTarget)} isNarrator
+          onClose={() => setRosterTarget(null)} />
+      )}
+
+      {/* ── Columna izquierda — AHORA ── */}
+      <aside className="left-panel">
+        {hasBlock(game, 'setup') && (
           <>
             {/* Campaign selector (oficiales + personalizadas del servidor) */}
             <div>
@@ -301,114 +292,44 @@ export default function NarratorPanel() {
             </div>
 
             {/* Asistente de montaje — el Narrador decide TODO (cero azar) */}
-            {phase === 'lobby' && (
-              <button onClick={() => setWizardOpen(true)} className="btn-action primary"
-                disabled={players.length < 1}
-                style={{ width: '100%', padding: '14px 0', fontSize: 14, opacity: players.length < 1 ? 0.4 : 1 }}>
-                🎬 Montar partida (asistente)
-              </button>
-            )}
-            {phase === 'lobby' && wizardOpen && (
-              <SetupWizard game={game} send={send} onClose={() => setWizardOpen(false)} />
-            )}
+            <button onClick={() => setWizardOpen(true)} className="nx-btn primary"
+              disabled={players.length < 1} style={{ fontSize: 17, padding: '13px 0' }}>
+              🎬 Montar partida (asistente)
+            </button>
 
-            {/* Partida sin narrador (modo automático: reparto aleatorio permitido) */}
-            <div>
-              <p className="panel-label">Sin narrador</p>
-
-              {/* Auto mode (partida sin narrador) — oculto por defecto cuando hay narrador */}
-              {game.autoMode ? null : (
-                <button onClick={() => setShowAutoMode(s => !s)} className="btn-night"
-                  style={{ width: '100%', marginTop: 8, fontSize: 9, opacity: 0.7 }}>
-                  {showAutoMode ? 'Ocultar' : '⚙ Partida sin narrador (modo automático)'}
-                </button>
-              )}
-              {(showAutoMode || game.autoMode) && (
-              <div style={{ marginTop: 8, padding: '10px 12px', background: 'rgba(141,90,180,0.07)', borderRadius: 4, border: '1px solid rgba(141,90,180,0.2)' }}>
-                <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(141,90,180,0.8)', margin: '0 0 8px' }}>Modo automático</p>
-
-                {/* Time controls */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  {[
-                    { label: 'Día', key: 'dayMs', val: game.autoDayMs ?? 300000 },
-                    { label: 'Nominaciones', key: 'nomMs', val: game.autoNomMs ?? 420000 },
-                  ].map(({ label, key, val }) => (
-                    <div key={key} style={{ flex: 1, background: 'rgba(0,0,0,0.2)', borderRadius: 3, padding: '6px 8px' }}>
-                      <p style={{ fontFamily: 'var(--mono)', fontSize: 7, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--bone-400)', margin: '0 0 5px' }}>{label} (min)</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <button
-                          onClick={() => send('SET_AUTO_TIMINGS', { [key]: val - 60000 })}
-                          disabled={val <= 60000}
-                          className="btn-night" style={{ padding: '1px 7px', opacity: val <= 60000 ? 0.35 : 1 }}>−</button>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: 'var(--gold-hot)', flex: 1, textAlign: 'center' }}>
-                          {Math.round(val / 60000)}
-                        </span>
-                        <button
-                          onClick={() => send('SET_AUTO_TIMINGS', { [key]: val + 60000 })}
-                          disabled={val >= 1800000}
-                          className="btn-night" style={{ padding: '1px 7px', opacity: val >= 1800000 ? 0.35 : 1 }}>+</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {game.autoMode ? (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-200)', fontStyle: 'italic' }}>🤖 Activo — partida sin narrador</span>
-                    <button onClick={() => send('STOP_AUTO_MODE', {})} className="btn-night" style={{ fontSize: 8 }}>Detener</button>
-                  </div>
-                ) : (
-                  <>
-                    <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', margin: '0 0 6px' }}>
-                      Roles repartidos automáticamente. Los jugadores se gestionan solos.
-                    </p>
-                    <button
-                      onClick={() => {
-                        if (players.length < 5) { alert('Necesitas al menos 5 jugadores'); return; }
-                        send('AUTO_MODE', {});
-                      }}
-                      disabled={players.length < 5}
-                      className="btn-action"
-                      style={{ width: '100%', opacity: players.length < 5 ? 0.35 : 1 }}>
-                      🤖 Iniciar modo automático
-                    </button>
-                  </>
-                )}
-              </div>
-              )}
-
-            </div>
-
-            {/* Channel capacity limits */}
-            <ChannelLimitsControl game={game} send={send} />
-
-            {/* Role reveal */}
-            {phase === 'role_reveal' && (
-              <div>
-                <p className="panel-label">Revelar roles</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
-                  {players.map(p => {
-                    const role = p.role ? ALL_ROLES.find(r => r.id === p.role) : null;
-                    return (
-                      <button key={p.id} onClick={() => send('REVEAL_ROLE', { playerId: p.id })}
-                        style={{ background: 'rgba(0,0,0,0.25)', border: 'var(--hairline-bone)', borderRadius: 3, padding: '8px 10px', cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.2s' }}
-                        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(201,162,74,0.5)'}
-                        onMouseLeave={e => e.currentTarget.style.borderColor = ''}>
-                        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', margin: '0 0 2px' }}>{p.name}</p>
-                        <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-400)', margin: 0 }}>{role?.name || '?'}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button onClick={() => send('START_NIGHT', {})} className="btn-action primary" style={{ width: '100%' }}>
-                  Iniciar Primera Noche
-                </button>
-              </div>
-            )}
+            <p className="nx-hint">
+              El modo automático, los límites de canal y el resto de ajustes están en el menú <strong>⋯</strong> de arriba a la derecha.
+            </p>
           </>
         )}
 
-        {tab === 'mesa' && (
+        {/* Reparto: enseñar su personaje a cada jugador */}
+        {hasBlock(game, 'reveal') && (
+          <div className="nx-card">
+            <div className="nx-card-head"><p className="nx-head-title">🎭 Enseñar personaje</p></div>
+            <div className="nx-card-body">
+              <p className="nx-hint" style={{ marginBottom: 8 }}>Pulsa a cada jugador para mostrarle su personaje en su pantalla.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {players.map(p => {
+                  const role = p.role ? ALL_ROLES.find(r => r.id === p.role) : null;
+                  return (
+                    <button key={p.id} onClick={() => send('REVEAL_ROLE', { playerId: p.id })} className="nx-btn"
+                      style={{ padding: '8px 6px', textAlign: 'center' }}>
+                      <span style={{ display: 'block', fontSize: 15 }}>{p.name}</span>
+                      <span className="nx-mono" style={{ fontSize: 11 }}>{role?.name || '?'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {wizardOpen && phase === 'lobby' && (
+          <SetupWizard game={game} send={send} onClose={() => setWizardOpen(false)} />
+        )}
+
+        {!hasBlock(game, 'setup') && (
           <>
             {game.autoMode && (
               game.autoPhaseInfo
@@ -421,33 +342,20 @@ export default function NarratorPanel() {
                 )
             )}
 
-            {/* Botones de victoria */}
-            {phase !== 'lobby' && phase !== 'game_over' && (
-              <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                {confirmWin ? (
-                  <>
-                    <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-200)', flex: 1 }}>
-                      ¿Declarar victoria del <strong style={{ color: confirmWin === 'good' ? 'var(--good)' : 'var(--blood-hi)' }}>{confirmWin === 'good' ? 'Bien' : 'Mal'}</strong>?
-                    </p>
-                    <button onClick={() => { send('DECLARE_WINNER', { winner: confirmWin }); setConfirmWin(null); }}
-                      className="btn-action danger" style={{ fontSize: 11, padding: '4px 10px' }}>Sí, confirmar</button>
-                    <button onClick={() => setConfirmWin(null)} className="btn-night" style={{ fontSize: 11 }}>✕</button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => setConfirmWin('good')} className="btn-action"
-                      style={{ flex: 1, fontSize: 11, borderColor: 'var(--good)', color: 'var(--good)' }}>✨ Gana el Bien</button>
-                    <button onClick={() => setConfirmWin('evil')} className="btn-action danger"
-                      style={{ flex: 1, fontSize: 11 }}>⚔ Gana el Mal</button>
-                  </>
-                )}
-              </div>
+            {/* Noche: la Guía es el único centro de mando */}
+            {hasBlock(game, 'guide') && (
+              <>
+                <NightWalkthrough
+                  onActiveActor={setActiveNightActorId}
+                  onProgress={onProgress}
+                  controlsRef={guideRef}
+                />
+                <NightSettings />
+              </>
             )}
 
-            <PhaseStepControl phase={phase} game={game} send={send} />
-
             {/* Maestro de Acertijos — panel de acción de día */}
-            {phase !== 'lobby' && phase !== 'game_over' && (() => {
+            {(hasBlock(game, 'day') || hasBlock(game, 'nominations')) && (() => {
               const pm = players.find(p => p.role === 'PUZZLEMASTER' && p.alive);
               if (!pm) return null;
               const alreadyUsed = (pm.tokens || []).some(t => t.type === 'NO_ABILITY');
@@ -456,9 +364,6 @@ export default function NarratorPanel() {
               );
             })()}
 
-            {/* Control de noche por rol (matar / envenenar / proteger / info) */}
-            {isNight && <NightControl />}
-
             {/* Nominación manual: el narrador fija nominador y nominado (día o nominaciones) */}
             {(phase === 'day' || phase === 'nominations') && (
               <ManualNominateCard game={game} send={send} />
@@ -466,9 +371,9 @@ export default function NarratorPanel() {
 
             {activeNomination && <ActiveNominationCard game={game} send={send} />}
 
-            {nominations.length > 0 && (
+            {nominations.length > 0 && !isNight && (
               <div>
-                <p className="panel-label">Nominaciones</p>
+                <p className="panel-label">Nominaciones de hoy</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {nominations.map(n => {
                     const nominator = players.find(p => p.id === n.nominatorId);
@@ -498,182 +403,270 @@ export default function NarratorPanel() {
               </div>
             )}
 
-            {/* Pasos pendientes que no pueden esperar: Barbero y Roshambo */}
-            <BarberPanel />
-            <RoshamboBox />
-
-            {/* Jugadores: orden de rueda + roles + fichas/tokens + matar/revivir */}
-            <div>
-              <p className="panel-label" style={{ cursor: 'pointer' }} onClick={() => setRosterOpen(o => !o)}>
-                <span>Jugadores <span className="count">{players.filter(p => p.alive).length}/{players.length}</span></span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>{rosterOpen ? '▲' : '▼ ver'}</span>
-              </p>
-              {rosterOpen && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 320, overflowY: 'auto' }}>
-                {players.map((p, i) => {
-                  const role = ALL_ROLES.find(r => r.id === p.role);
-                  return (
-                    <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 3, opacity: p.alive ? 1 : 0.55 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-600)', minWidth: 14, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
-                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ink-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-100)', overflow: 'hidden', flexShrink: 0 }}>
-                          {role?.img ? <img src={role.img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
-                        </div>
-                        <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', color: role?.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)' }}>{role?.name || '?'}</span>
-                        {p.poisoned && <span style={{ fontSize: 9, color: '#4ade80' }}>⚠</span>}
-                        <button onClick={() => send('KICK_PLAYER_SESSION', { playerId: p.id })}
-                          title="Expulsar su sesión (libera el asiento para que pueda volver a unirse)"
-                          style={{ fontSize: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--moon)', padding: '2px 4px' }}>
-                          🔌
-                        </button>
-                        <button onClick={() => send(p.alive ? 'KILL_PLAYER' : 'REVIVE_PLAYER', { playerId: p.id })}
-                          style={{ fontSize: 10, background: 'none', border: 'none', cursor: 'pointer', color: p.alive ? 'var(--blood-hi)' : 'var(--good)', padding: '2px 4px' }}>
-                          {p.alive ? '☠' : '♻'}
-                        </button>
-                      </div>
-                      {(() => { const id = formatIdentity(p); return id.hasFalse ? (
-                        <div className="identity-false" style={{ fontSize: 10, paddingLeft: 20 }} title={id.tooltip}>
-                          <span className="mask">{MASK}</span>&nbsp;se cree {id.believedName} ({id.believedTypeLabel})
-                        </div>
-                      ) : null; })()}
-                      <StatusChips player={p} compact />
-                    </div>
-                  );
-                })}
-              </div>
-              )}
-            </div>
-
-            <ChannelControl players={players} send={send} />
+            {/* Jugadores: siempre a mano, con buscador */}
+            <RosterList players={players} send={send} searchRef={searchRef} onOpen={setRosterTarget} />
           </>
-        )}
-
-        {tab === 'ranking' && (
-          <RankingsManager rankings={rankings} send={send} />
         )}
       </aside>
 
-      {/* ── Stage ── */}
+      {/* ── Centro — la mesa ── */}
       <main className="stage">
         <GameTable isNarrator={true} activeActorId={activeNightActorId} />
       </main>
 
-      {/* ── Right panel — "Guía" (única fuente de instrucciones de noche) ── */}
+      {/* ── Columna derecha — PENDIENTE (igual en todas las fases) ── */}
       <aside className="right-panel">
-        {/* Efectos diferidos y avisos urgentes (antes fija abajo, ahora inline) */}
         <AlertsInline game={game} send={send} />
 
-        {/* Guía: una acción a la vez, centro de mando del narrador */}
-        {isNight && <NightWalkthrough onActiveActor={setActiveNightActorId} />}
+        {/* Pasos que no pueden esperar: Barbero y Roshambo */}
+        <BarberPanel />
+        <RoshamboBox />
 
         {/* Personajes que decides tú: la página avisa, no automatiza */}
         <RoleHints game={game} />
 
-        {/* Mapa de sospechas (agregado) */}
-        <SuspicionMap players={players} />
-
-        {/* Night deaths summary */}
+        {/* Muertes de esta noche */}
         {nightDeaths.length > 0 && (
-          <div>
-            <p className="panel-label" style={{ color: 'var(--blood-hi)' }}>Muertes esta noche</p>
-            {nightDeaths.map(id => {
-              const p = players.find(pl => pl.id === id);
-              const role = p?.role ? ROLE_BY_ID[p.role] : null;
-              return p ? (
-                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--bone-200)' }}>
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-700)', border: '1px solid var(--blood-dim)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--bone-100)' }}>
-                    {p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
+          <div className="nx-card danger">
+            <div className="nx-card-head"><p className="nx-head-title evil">☠ Muertes de esta noche</p></div>
+            <div className="nx-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {nightDeaths.map(id => {
+                const p = players.find(pl => pl.id === id);
+                const role = p?.role ? ROLE_BY_ID[p.role] : null;
+                return p ? (
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="nx-avatar">
+                      {p.avatar ? <img src={p.avatar} /> : p.name[0]}
+                    </div>
+                    {role?.img && <img src={role.img} style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover' }} />}
+                    <span className="nx-sub">{p.name}{role ? ` · ${role.name}` : ''}</span>
                   </div>
-                  {role?.img && <img src={role.img} style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover' }} />}
-                  <span>☠ {p.name}</span>
-                </div>
-              ) : null;
-            })}
+                ) : null;
+              })}
+            </div>
           </div>
         )}
 
+        {/* Mapa de sospechas (agregado) */}
+        <SuspicionMap players={players} />
+
+        {/* Registro: qué acabo de hacer */}
+        <StatusLog log={game.statusLog} />
       </aside>
 
     </div>
   );
 }
 
-function PhaseStepControl({ phase, game, send }) {
-  const { players } = game;
-  let main = null, secondary = null, stepLabel = '', stepLabel2 = '', label2Color = 'var(--gold)';
-
-  if (phase === 'first_night' || phase === 'night') {
-    const readyCount = game.nightReadyCount || 0;
-    const readyTotal = game.nightReadyTotal || 0;
-    const allReady = readyTotal > 0 && readyCount >= readyTotal;
-    const deaths = game.nightDeaths.map(id => players.find(p => p.id === id)?.name).filter(Boolean);
-    const notReady = game.nightNotReady || [];
-    // En modo manual el narrador dirige y avanza cuando quiere; "Hecho" solo cuenta en auto.
-    main = {
-      label: game.autoMode ? `Amanecer → (${readyCount}/${readyTotal} listos)` : `Amanecer → Día ${game.dayNumber + 1}`,
-      color: 'primary',
-      action: () => send('START_DAY', { nightDeaths: deaths }),
-      disabled: game.autoMode && !allReady,
-    };
-    if (game.autoMode && !allReady) {
-      secondary = { label: 'Forzar →', color: '', action: () => send('START_DAY', { nightDeaths: deaths }) };
-    }
-    stepLabel = deaths.length > 0 ? `Muertos: ${deaths.join(', ')}` : 'Nadie muerto esta noche';
-    stepLabel2 = !game.autoMode
-      ? '🎙 Dirige la noche desde la pestaña Noche'
-      : allReady
-        ? '✓ Todos confirmaron Hecho'
-        : notReady.length > 0
-          ? `⏳ Pendientes: ${notReady.map(p => p.name).join(', ')}`
-          : `⏳ Faltan ${readyTotal - readyCount} jugador(es)`;
-    label2Color = (!game.autoMode || allReady) ? 'var(--good)' : 'var(--gold)';
-  } else if (phase === 'day') {
-    main      = { label: 'Abrir Nominaciones', color: 'primary', action: () => send('OPEN_NOMINATIONS', {}) };
-    secondary = { label: 'Saltar a Noche', color: '', action: () => send('START_NIGHT', {}) };
-    stepLabel = 'Fase de discusión';
-  } else if (phase === 'voting') {
-    stepLabel = 'Votación en curso';
-  } else if (phase === 'nominations') {
-    const eligible = game.nominations.filter(n => n.resolved && n.meetsThreshold && !n.executed && !n.tieSkipped);
-    const maxTally = eligible.length > 0 ? Math.max(...eligible.map(n => n.tally)) : 0;
-    const tiedCount = eligible.filter(n => n.tally === maxTally).length;
-    const soleWinner = tiedCount === 1 ? eligible.find(n => n.tally === maxTally) : null;
-
-    if (eligible.length > 0) {
-      main = {
-        label: tiedCount > 1 ? `Finalizar (Empate ${tiedCount})` : `Ejecutar a ${soleWinner.nomineeName}`,
-        color: 'danger', action: () => send('FINALIZE_NOMINATIONS', {}),
-      };
-      secondary = { label: 'Noche sin ejecución', color: '', action: () => send('START_NIGHT', {}) };
-      stepLabel = `${eligible.length} nominación(es) con votos suficientes`;
-    } else {
-      main = { label: 'Iniciar Noche', color: '', action: () => send('START_NIGHT', {}) };
-      stepLabel = 'Esperando nominaciones';
-    }
-  }
-
-  if (!main && phase !== 'voting') return null;
-  if (phase === 'voting') return null; // handled by ActiveNominationCard
+// ── Roster: la lista de jugadores, siempre a un vistazo ──────────────
+// Pulsar una fila abre el mismo panel que pulsar su ficha en la mesa,
+// para que no haya dos caminos distintos según dónde pinches.
+function RosterList({ players, send, searchRef, onOpen }) {
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const shown = term ? players.filter(p => p.name.toLowerCase().includes(term)) : players;
 
   return (
-    <div>
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 4 }}>{stepLabel}</p>
-      {stepLabel2 && (
-        <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: label2Color, fontStyle: 'italic', marginBottom: 6 }}>{stepLabel2}</p>
+    <div className="nx-card">
+      <div className="nx-card-head">
+        <p className="nx-head-title">👥 Jugadores {players.filter(p => p.alive).length}/{players.length}</p>
+        <input ref={searchRef} className="nx-input" value={q} onChange={e => setQ(e.target.value)}
+          placeholder="Buscar (B)" style={{ width: 120, fontSize: 13, padding: '4px 8px' }} />
+      </div>
+      <div className="nx-card-body" style={{ padding: 8 }}>
+        <div className="nx-list tall">
+          {shown.map(p => {
+            const role = ALL_ROLES.find(r => r.id === p.role);
+            const ident = formatIdentity(p);
+            return (
+              <div key={p.id} className={`nx-row${p.alive ? '' : ' dead'}`} onClick={() => onOpen(p.id)}>
+                <span className="nx-seat-num">{players.indexOf(p) + 1}</span>
+                <div className="nx-avatar">
+                  {role?.img ? <img src={role.img} /> : p.avatar ? <img src={p.avatar} /> : p.name[0]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span className="nx-row-name">{p.name}</span>
+                    <span className={`nx-row-role${role?.alignment === 'evil' ? ' evil' : ''}`}>{role?.name || '—'}</span>
+                  </div>
+                  {ident.hasFalse && (
+                    <div className="identity-false" style={{ fontSize: 12 }} title={ident.tooltip}>
+                      <span className="mask">{MASK}</span>&nbsp;se cree {ident.believedName}
+                    </div>
+                  )}
+                  <StatusChips player={p} compact />
+                </div>
+                <button className={`nx-icon-btn ${p.alive ? 'danger' : 'good'}`} title={p.alive ? 'Matar' : 'Revivir'}
+                  onClick={e => { e.stopPropagation(); send(p.alive ? 'KILL_PLAYER' : 'REVIVE_PLAYER', { playerId: p.id }); }}>
+                  {p.alive ? '☠' : '♻'}
+                </button>
+              </div>
+            );
+          })}
+          {shown.length === 0 && <p className="nx-hint" style={{ padding: 8 }}>Nadie con ese nombre.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Registro: la memoria del narrador ────────────────────────────────
+function StatusLog({ log }) {
+  const [open, setOpen] = useState(false);
+  const entries = Array.isArray(log) ? log.slice(-30).reverse() : [];
+  if (entries.length === 0) return null;
+  return (
+    <div className="nx-card">
+      <div className="nx-card-head clickable" onClick={() => setOpen(o => !o)}>
+        <p className="nx-head-title">📜 Registro ({entries.length})</p>
+        <span className="nx-mono">{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div className="nx-card-body" style={{ padding: 8 }}>
+          <div className="nx-list short">
+            {entries.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, padding: '3px 4px' }}>
+                <span className="nx-mono nx-muted" style={{ flexShrink: 0 }}>N{e.night}</span>
+                <span className="nx-sub" style={{ fontSize: 14 }}>{e.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button
-          onClick={main.action}
-          disabled={!!main.disabled}
-          className={`btn-action ${main.color}`}
-          style={{ flex: 1, padding: '10px 0', opacity: main.disabled ? 0.45 : 1, cursor: main.disabled ? 'not-allowed' : 'pointer' }}>
-          {main.label}
-        </button>
-        {secondary && (
-          <button onClick={secondary.action} className={`btn-action ${secondary.color}`} style={{ padding: '10px 12px' }}>
-            {secondary.label}
-          </button>
+    </div>
+  );
+}
+
+// ── Menú ⋯ — todo lo que no es narrar ────────────────────────────────
+function SettingsMenu({ tab, setTab, onClose, game, send, rankings, discordMembers, players }) {
+  const [confirmWin, setConfirmWin] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="nx-menu-card" onClick={e => e.stopPropagation()}>
+        <div className="nx-menu-head">
+          {MENU_TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`nx-btn sm${tab === t.id ? ' on' : ''}`}>
+              {t.label}
+            </button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} className="nx-btn sm">✕ Cerrar</button>
+        </div>
+
+        <div className="nx-menu-body">
+          {tab === 'partida' && (
+            <>
+              <AutoModeBox game={game} send={send} players={players} />
+              <ChannelLimitsControl game={game} send={send} />
+              <ChannelControl players={players} send={send} />
+
+              <div className="nx-card danger">
+                <div className="nx-card-head"><p className="nx-head-title evil">Terminar la partida a mano</p></div>
+                <div className="nx-card-body">
+                  {confirmWin ? (
+                    <>
+                      <p className="nx-sub" style={{ marginBottom: 8 }}>
+                        ¿Declarar la victoria del <strong style={{ color: confirmWin === 'good' ? 'var(--good)' : 'var(--blood-hi)' }}>{confirmWin === 'good' ? 'Bien' : 'Mal'}</strong>?
+                      </p>
+                      <div className="nx-btn-row">
+                        <button className="nx-btn danger" onClick={() => { send('DECLARE_WINNER', { winner: confirmWin }); setConfirmWin(null); onClose(); }}>Sí, terminar</button>
+                        <button className="nx-btn" onClick={() => setConfirmWin(null)}>Cancelar</button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="nx-btn-row">
+                      <button className="nx-btn good" onClick={() => setConfirmWin('good')}>✨ Gana el Bien</button>
+                      <button className="nx-btn danger" onClick={() => setConfirmWin('evil')}>⚔ Gana el Mal</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="nx-card">
+                <div className="nx-card-head"><p className="nx-head-title">Empezar de cero</p></div>
+                <div className="nx-card-body">
+                  <p className="nx-hint" style={{ marginBottom: 8 }}>Borra la partida actual y vuelve al montaje. No se puede deshacer.</p>
+                  {confirmReset ? (
+                    <div className="nx-btn-row">
+                      <button className="nx-btn danger" onClick={() => { send('RESET_GAME', {}); setConfirmReset(false); onClose(); }}>Sí, resetear</button>
+                      <button className="nx-btn" onClick={() => setConfirmReset(false)}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <button className="nx-btn" onClick={() => setConfirmReset(true)}>Resetear partida</button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === 'discord' && (
+            <>
+              <NarratorsPicker game={game} discordMembers={discordMembers} send={send} />
+              <DiscordMemberPicker discordMembers={discordMembers} players={players} send={send} />
+            </>
+          )}
+
+          {tab === 'ranking' && <RankingsManager rankings={rankings} send={send} />}
+
+          {tab === 'atajos' && (
+            <div className="nx-card">
+              <div className="nx-card-head"><p className="nx-head-title">⌨ Atajos de teclado</p></div>
+              <div className="nx-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {HOTKEYS.map(h => (
+                  <div key={h.keys} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="nx-kbd" style={{ minWidth: 84, textAlign: 'center' }}>{h.keys}</span>
+                    <span className="nx-sub">{h.what}</span>
+                  </div>
+                ))}
+                <p className="nx-hint">Se desactivan solos mientras escribes en un campo de texto.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modo automático (partida sin narrador) — vive en el menú, no estorba narrando.
+function AutoModeBox({ game, send, players }) {
+  return (
+    <div className="nx-card">
+      <div className="nx-card-head"><p className="nx-head-title">🤖 Partida sin narrador</p></div>
+      <div className="nx-card-body">
+        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          {[
+            { label: 'Día', key: 'dayMs', val: game.autoDayMs ?? 300000 },
+            { label: 'Nominaciones', key: 'nomMs', val: game.autoNomMs ?? 420000 },
+          ].map(({ label, key, val }) => (
+            <div key={key} style={{ flex: 1, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '8px 10px' }}>
+              <p className="nx-hint" style={{ marginBottom: 4 }}>{label} (minutos)</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button className="nx-btn sm" disabled={val <= 60000}
+                  onClick={() => send('SET_AUTO_TIMINGS', { [key]: val - 60000 })}>−</button>
+                <span className="nx-mono" style={{ fontSize: 18, color: 'var(--gold-hot)', flex: 1, textAlign: 'center' }}>
+                  {Math.round(val / 60000)}
+                </span>
+                <button className="nx-btn sm" disabled={val >= 1800000}
+                  onClick={() => send('SET_AUTO_TIMINGS', { [key]: val + 60000 })}>+</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {game.autoMode ? (
+          <button className="nx-btn danger" onClick={() => send('STOP_AUTO_MODE', {})}>Detener el modo automático</button>
+        ) : (
+          <>
+            <p className="nx-hint" style={{ marginBottom: 8 }}>
+              Reparte los personajes al azar y lleva los tiempos solo. Solo para jugar sin narrador.
+            </p>
+            <button className="nx-btn" disabled={players.length < 5}
+              onClick={() => send('AUTO_MODE', {})}>
+              Iniciar modo automático{players.length < 5 ? ' (hacen falta 5 jugadores)' : ''}
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -883,20 +876,34 @@ function AlertsInline({ game, send }) {
   const advice = (game.advice || []).filter(a => a.severity === 'warn' || a.severity === 'danger');
   const deferred = game.deferredEffects || [];
 
-  if (advice.length === 0 && deferred.length === 0) return null;
+  if (advice.length === 0 && deferred.length === 0) {
+    return (
+      <p className="nx-hint" style={{ padding: '4px 2px' }}>
+        ✓ Nada pendiente ahora mismo.
+      </p>
+    );
+  }
 
   return (
-    <div style={{ padding: '6px 10px', background: 'rgba(168,58,45,0.18)', borderBottom: 'var(--hairline)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--blood-hi)', textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}>⚠ Pendiente</span>
-      {advice.map((a, i) => (
-        <span key={'a' + i} style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', whiteSpace: 'nowrap' }}>{a.text}</span>
-      ))}
-      {deferred.map(d => (
-        <span key={d.id} style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-50)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          {d.label}
-          <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="btn-night" style={{ fontSize: 9 }}>✓ Hecho</button>
-        </span>
-      ))}
+    <div className="nx-card danger">
+      <div className="nx-card-head">
+        <p className="nx-head-title evil">⚠ Pendiente ({advice.length + deferred.length})</p>
+      </div>
+      <div className="nx-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Lo que hay que resolver con un botón */}
+        {deferred.map(d => (
+          <div key={d.id} className="nx-alert danger">
+            <p>{d.label}</p>
+            <button onClick={() => send('RESOLVE_DEFERRED', { id: d.id })} className="nx-btn sm">✓ Hecho</button>
+          </div>
+        ))}
+        {/* Lo que solo hay que tener presente */}
+        {advice.map((a, i) => (
+          <div key={'a' + i} className={`nx-alert${a.severity === 'danger' ? ' danger' : ''}`}>
+            <p>{a.text}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -914,31 +921,30 @@ function RoleHints({ game }) {
   const color = s => (s === 'danger' ? 'var(--blood-hi)' : s === 'warn' ? 'var(--gold-hot)' : 'var(--moon)');
 
   return (
-    <div style={{ border: 'var(--hairline-bone)', borderRadius: 4, overflow: 'hidden' }}>
-      <div onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', cursor: 'pointer', background: 'rgba(0,0,0,0.2)' }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: urgent.length ? 'var(--gold-hot)' : 'var(--moon)' }}>
+    <div className="nx-card">
+      <div className="nx-card-head clickable" onClick={() => setOpen(o => !o)}>
+        <p className={`nx-head-title${urgent.length ? '' : ' good'}`}>
           🎙 Decides tú ({hints.length}{urgent.length ? ` · ${urgent.length} urgente${urgent.length > 1 ? 's' : ''}` : ''})
-        </span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
+        </p>
+        <span className="nx-mono">{open ? '▲' : '▼'}</span>
       </div>
       {open && (
-        <div style={{ maxHeight: 300, overflowY: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {hints.map((h, i) => (
-            <div key={i} style={{ borderLeft: `2px solid ${color(h.severity)}`, paddingLeft: 8 }}>
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', margin: '0 0 2px', fontWeight: 600 }}>
-                {h.playerName} <span style={{ color: 'var(--bone-500)', fontWeight: 400 }}>· {h.roleName}</span>
-                {!h.alive && <span style={{ color: 'var(--blood-hi)', fontSize: 10 }}> ☠</span>}
-                {h.impaired && <span style={{ color: 'var(--moon)', fontSize: 10 }}> 🧪 no funciona</span>}
-              </p>
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', margin: 0 }}>{h.text}</p>
-              {h.needs && (
-                <p style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', margin: '3px 0 0' }}>▸ {h.needs}</p>
-              )}
-            </div>
-          ))}
-          <p style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)', margin: 0 }}>
-            Pulsa la ficha del jugador en la ruleta para abrir su mini-panel.
+        <div className="nx-card-body">
+          <div className="nx-list" style={{ maxHeight: '38vh', gap: 10 }}>
+            {hints.map((h, i) => (
+              <div key={i} style={{ borderLeft: `3px solid ${color(h.severity)}`, paddingLeft: 9 }}>
+                <p className="nx-sub" style={{ fontWeight: 600 }}>
+                  {h.playerName} <span className="nx-muted" style={{ fontWeight: 400 }}>· {h.roleName}</span>
+                  {!h.alive && <span style={{ color: 'var(--blood-hi)' }}> ☠</span>}
+                  {h.impaired && <span style={{ color: 'var(--moon)' }}> 🧪 no funciona</span>}
+                </p>
+                <p className="nx-sub" style={{ color: 'var(--bone-300)' }}>{h.text}</p>
+                {h.needs && <p className="nx-mono" style={{ marginTop: 3 }}>▸ {h.needs}</p>}
+              </div>
+            ))}
+          </div>
+          <p className="nx-hint" style={{ marginTop: 8 }}>
+            Pulsa a ese jugador (en la mesa o en la lista) para abrir sus controles.
           </p>
         </div>
       )}
@@ -954,26 +960,28 @@ function SuspicionMap({ players }) {
   const total = withSusp.reduce((n, p) => n + p.accusations.length, 0);
 
   return (
-    <div style={{ border: 'var(--hairline-bone)', borderRadius: 4, overflow: 'hidden' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', cursor: 'pointer', background: 'rgba(0,0,0,0.2)' }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--moon)' }}>👁 Mapa de sospechas ({total})</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>{open ? '▲' : '▼'}</span>
+    <div className="nx-card">
+      <div className="nx-card-head clickable" onClick={() => setOpen(o => !o)}>
+        <p className="nx-head-title">👁 Sospechas de los jugadores ({total})</p>
+        <span className="nx-mono">{open ? '▲' : '▼'}</span>
       </div>
       {open && (
-        <div style={{ maxHeight: 220, overflowY: 'auto', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {withSusp.map(p => (
-            <div key={p.id}>
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', margin: '0 0 2px', fontWeight: 600 }}>{p.name} <span style={{ color: 'var(--moon)', fontSize: 10 }}>👁 {p.accusations.length}</span></p>
-              {p.accusations.map((a, i) => {
-                const sr = ALL_ROLES.find(r => r.id === a.roleId);
-                return (
-                  <p key={i} style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-400)', margin: '0 0 0 8px' }}>
-                    {a.accuserName} → {sr?.name || a.roleId}
-                  </p>
-                );
-              })}
-            </div>
-          ))}
+        <div className="nx-card-body">
+          <div className="nx-list short" style={{ gap: 8 }}>
+            {withSusp.map(p => (
+              <div key={p.id}>
+                <p className="nx-sub" style={{ fontWeight: 600 }}>{p.name} <span style={{ color: 'var(--moon)' }}>👁 {p.accusations.length}</span></p>
+                {p.accusations.map((a, i) => {
+                  const sr = ALL_ROLES.find(r => r.id === a.roleId);
+                  return (
+                    <p key={i} className="nx-hint" style={{ marginLeft: 10 }}>
+                      {a.accuserName} → {sr?.name || a.roleId}
+                    </p>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

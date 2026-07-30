@@ -32,8 +32,9 @@ input, textarea { font-family: inherit; color: inherit; }
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 270px 1fr 380px;
-  grid-template-rows: 52px 1fr;
+  /* La columna "Ahora" (Guía de noche) necesita más ancho que la de avisos. */
+  grid-template-columns: minmax(320px, 26vw) 1fr minmax(300px, 22vw);
+  grid-template-rows: 64px 1fr;
   grid-template-areas:
     "topbar topbar topbar"
     "left   stage  right";
@@ -51,7 +52,7 @@ input, textarea { font-family: inherit; color: inherit; }
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: 52px auto 1fr auto;
+    grid-template-rows: 64px auto 1fr auto;
     grid-template-areas: "topbar" "left" "stage" "right";
     overflow-y: auto;
     position: static;
@@ -189,11 +190,13 @@ input, textarea { font-family: inherit; color: inherit; }
     var(--scene-panel-bg, rgba(0,0,0,0.35)) 0%,
     rgba(0,0,0,0.12) 100%
   );
-  padding: 18px 16px;
+  padding: 14px 14px 18px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
+  /* A− / A+ del narrador */
+  zoom: var(--ui-scale, 1);
   transition: background 1.4s ease, border-color 1.4s ease;
 }
 
@@ -221,8 +224,10 @@ input, textarea { font-family: inherit; color: inherit; }
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 18px 16px;
-  gap: 18px;
+  padding: 14px 14px 18px;
+  gap: 12px;
+  /* A− / A+ del narrador */
+  zoom: var(--ui-scale, 1);
   transition: background 1.4s ease, border-color 1.4s ease;
 }
 

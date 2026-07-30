@@ -204,6 +204,127 @@ const HINTS = {
   }],
 
   // ── Extra ──────────────────────────────────────────────────────────
+  WIZARD: [{
+    when: c => c.game.wish && c.game.wish.status && c.game.wish.status !== 'none' && c.game.wish.status !== 'granted' && c.game.wish.status !== 'denied',
+    text: 'El Hechicero tiene un deseo pendiente. Atiéndelo EN PRIVADO: concédelo con su precio, pídele otro o deniégalo definitivamente. Nunca lo hagas público sin decidirlo tú.',
+    needs: 'Panel de deseos en su pestaña de Habilidad.',
+    severity: 'warn',
+  }, {
+    when: c => c.p.alive && (!c.game.wish || c.game.wish.status === 'none'),
+    text: 'Sigue con su deseo sin gastar. Puede pedírtelo en cualquier momento, en privado.',
+    needs: 'Panel de deseos (aparece cuando lo pida).',
+    severity: 'info',
+  }],
+
+  LORD_OF_TYPHON: [{
+    when: c => c.isFirstNight,
+    text: 'Comprueba el montaje: TODOS los malvados deben estar sentados en línea, con el Señor de Typhon justo en el centro. Hay 1 Esbirro más de lo normal.',
+    needs: 'Orden de asientos en el asistente de montaje.',
+    severity: 'warn',
+  }, {
+    when: nightStar,
+    text: 'Ataca cada noche* como un Demonio normal: elige un jugador y muere.',
+    needs: 'Panel "Atacar a" en la guía de noche.',
+    severity: 'info',
+  }],
+
+  FIDDLER: [{
+    when: c => nightStar(c) && !c.p.fiddlerUsed,
+    text: 'Todavía no ha usado su duelo. Si lo pide, elige con él un jugador del bando contrario: mañana TODOS votan cuál de los 2 gana la partida.',
+    needs: 'Panel "Rival del duelo" + votación especial al día siguiente.',
+    severity: 'warn',
+  }, {
+    when: c => c.isDay && c.game.fiddlerDuel && !c.game.fiddlerDuel.resolved,
+    text: 'Hay un duelo del Violinista pendiente: abre la votación entre los 2 candidatos y termina la partida con el bando del ganador.',
+    needs: '"Terminar partida" declarando ganador al bando del elegido.',
+    severity: 'danger',
+  }],
+
+  XAAN: [{
+    when: c => c.isNight,
+    text: c => {
+      const outs = c.game.players.filter(p => p.type === 'outsider').length;
+      return `La noche X es la noche ${outs} (= nº de Forasteros). Vas por la noche ${c.game.nightNumber}. En la noche X, TODOS los Aldeanos quedan envenenados hasta el anochecer.`;
+    },
+    needs: 'Botón "Envenenar a todos los Aldeanos" en su paso de la guía.',
+    severity: 'warn',
+  }],
+
+  GNOME: [{
+    when: c => c.isFirstNight,
+    text: 'Elige el jugador que todos conocerán y anúncialo EN PÚBLICO: comparte alineación con el Gnomo.',
+    needs: 'Panel "Jugador conocido por todos".',
+    severity: 'warn',
+  }, {
+    when: c => c.isDay && c.p.alive,
+    text: 'Si alguien nomina al jugador conocido, el Gnomo puede matar al nominador. Pregúntaselo en privado.',
+    needs: '"Matar" sobre quien haya nominado.',
+    severity: 'info',
+  }],
+
+  WRAITH: [{
+    when: anyNight,
+    text: 'No tiene acción: solo abre los ojos. Despiértalo SIEMPRE que despiertes a cualquier otro malvado.',
+    needs: 'Ninguno — solo recordarlo en cada paso del mal.',
+    severity: 'info',
+  }],
+
+  OGRE: [{
+    when: c => c.isFirstNight,
+    text: 'Elige un jugador (no él): el Ogro copia su alineación EN SILENCIO. Nunca debe saber cuál copió, ni siquiera si no cambió nada.',
+    needs: 'Panel "Copiar alineación de".',
+    severity: 'warn',
+  }],
+
+  PIXIE: [{
+    when: c => c.isFirstNight,
+    text: 'Muéstrale 1 Aldeano en juego e impón la locura de ser ese personaje. Si la cumple, hereda su habilidad cuando el original muera.',
+    needs: 'Panel "Aldeano que conoce" + "Cambiar rol" en modo creído.',
+    severity: 'info',
+  }],
+
+  VILLAGE_IDIOT: [{
+    when: anyNight,
+    text: 'Puede haber hasta 3 Tontos del Pueblo y exactamente UNO está borracho: a ese dale siempre la alineación CONTRARIA a la real.',
+    needs: 'Panel "Descubrir alineación de" + ficha "Borracho" en el elegido.',
+    severity: 'warn',
+  }],
+
+  HERMIT: [{
+    when: anyNight,
+    text: 'Tiene TODAS las habilidades de Forastero del guion: resuélvelas una por una, en el orden en que actuaría cada Forastero.',
+    needs: 'Los paneles de cada Forastero, uno tras otro.',
+    severity: 'warn',
+  }],
+
+  DUCHESS: [{
+    when: nightStar,
+    text: 'Marca a los 3 visitantes de hoy. Cada uno sabe cuántos visitantes eran malvados, pero a UNO de ellos debes darle el número FALSO.',
+    needs: 'Panel de la Duquesa: 3 objetivos + número por visitante.',
+    severity: 'warn',
+  }],
+
+  TOYMAKER: [{
+    when: c => c.isNight && !c.game.toymakerSkipUsed,
+    text: 'El Demonio puede decidir no atacar esta noche, y DEBE hacerlo al menos 1 vez por partida. Todavía no ha usado esa noche.',
+    needs: 'Botón "No ataca" en el paso del Juguetero.',
+    severity: 'warn',
+  }],
+
+  STORM_CATCHER: [{
+    when: c => c.isFirstNight,
+    text: 'Nombra un personaje bueno: si está en juego, solo puede morir por ejecución, pero los malvados saben quién lo tiene.',
+    needs: 'Selector de personaje + aviso al equipo malvado.',
+    severity: 'info',
+  }],
+
+  CACKLEJACK: [{
+    when: anyNight,
+    text: 'El jugador que cambia de personaje esta noche es uno DISTINTO del que se eligió de día.',
+    needs: '"Cambiar rol" sobre el jugador distinto.',
+    severity: 'info',
+  }],
+
   ZENOMANCER: [{
     when: () => true,
     text: 'Escribe la misión de cada jugador. Cuando alguien la complete, dale información VERDADERA desde su panel.',

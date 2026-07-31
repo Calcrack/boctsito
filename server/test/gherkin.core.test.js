@@ -148,31 +148,31 @@ t('Cocinero: cuenta parejas de vecinos malvados correctamente', () => {
   const info = by(g, 'COOK').nightInfo;
   ok(/Hay 1 pareja/.test(info), info);
 });
-t('Empática: cuenta vecinos malvados vivos', () => {
+t('Empático: cuenta vecinos malvados vivos', () => {
   // 0 EMPATH entre 4(MAYOR) y 1(POISONER) → 1
   const g = mk(['EMPATH', 'POISONER', 'IMP', 'MONK', 'MAYOR']);
   G.startNight(g);
   ok(/Tienes 1 vecino/.test(by(g, 'EMPATH').nightInfo), by(g, 'EMPATH').nightInfo);
 });
-t('Empática: salta a los vecinos muertos', () => {
+t('Empático: salta a los vecinos muertos', () => {
   const g = mk(['EMPATH', 'POISONER', 'IMP', 'MONK', 'MAYOR']);
   by(g, 'POISONER').alive = false;      // vecino malvado muerto → cuenta al siguiente vivo (IMP)
   G.startNight(g);
   ok(/Tienes 1 vecino/.test(by(g, 'EMPATH').nightInfo), by(g, 'EMPATH').nightInfo);
 });
-t('Empática envenenada: sigue dando un número (nunca "nada")', () => {
+t('Empático envenenada: sigue dando un número (nunca "nada")', () => {
   const g = mk(['EMPATH', 'POISONER', 'IMP', 'MONK', 'MAYOR']);
   G.startNight(g); poison(g, by(g, 'EMPATH')); G.generateSingleRoleInfo && G.generateSingleRoleInfo(g, by(g,'EMPATH').id);
   ok(/Tienes [0-2] vecino/.test(by(g, 'EMPATH').nightInfo), by(g, 'EMPATH').nightInfo);
 });
-t('Adivina: detecta al Demonio entre 2 elegidos', () => {
+t('Pitonisa: detecta al Demonio entre 2 elegidos', () => {
   const g = mk(['FORTUNE_TELLER', 'POISONER', 'IMP', 'MONK', 'MAYOR']);
   G.startNight(g);
   const ft = by(g, 'FORTUNE_TELLER');
   G.applyNightAction(g, 'FORTUNE_TELLER', ft.id, [by(g, 'IMP').id, by(g, 'MONK').id]);
   ok(ft.nightInfo.includes('SÍ hay Demonio'), ft.nightInfo);
 });
-t('Adivina: señuelo (smokeScreen) aparece como Demonio', () => {
+t('Pitonisa: señuelo (smokeScreen) aparece como Demonio', () => {
   const g = mk(['FORTUNE_TELLER', 'POISONER', 'IMP', 'MONK', 'MAYOR']);
   G.startNight(g);
   g.smokeScreenPlayerId = by(g, 'MONK').id;
@@ -200,7 +200,7 @@ t('Espía: ve el grimorio completo', () => {
   const s = by(g, 'SPY');
   ok(s.nightInfo.includes('GRIMORIO') && s.nightInfo.includes('Diablillo'), s.nightInfo);
 });
-t('Criacuervos: al morir de noche queda pendiente y aprende un personaje', () => {
+t('Guardián de Cuervos: al morir de noche queda pendiente y aprende un personaje', () => {
   const g = mk(['RAVENKEEPER', 'POISONER', 'IMP', 'MONK', 'MAYOR', 'SOLDIER', 'EMPATH']);
   G.startNight(g); G.startDay(g); G.startNight(g);
   const rk = by(g, 'RAVENKEEPER'), imp = by(g, 'IMP');
@@ -310,20 +310,20 @@ t('Virgen envenenada: no mata pero se gasta', () => {
   ok(by(g, 'MONK').alive);
   ok(by(g, 'VIRGIN').virginUsed);
 });
-t('Cazador/Slayer: mata al Demonio', () => {
+t('Exterminador/Slayer: mata al Demonio', () => {
   const g = mk(['SLAYER', 'MONK', 'IMP', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g); G.startDay(g);
   const r = G.slayerAction(g, by(g, 'SLAYER').id, by(g, 'IMP').id);
   no(by(g, 'IMP').alive, 'el Diablillo debe morir');
 });
-t('Cazador/Slayer: no funciona sobre un bueno y se gasta', () => {
+t('Exterminador/Slayer: no funciona sobre un bueno y se gasta', () => {
   const g = mk(['SLAYER', 'MONK', 'IMP', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g); G.startDay(g);
   G.slayerAction(g, by(g, 'SLAYER').id, by(g, 'MONK').id);
   ok(by(g, 'MONK').alive);
   ok(by(g, 'SLAYER').slayerUsed);
 });
-t('Cazador/Slayer envenenado: no mata al Demonio', () => {
+t('Exterminador/Slayer envenenado: no mata al Demonio', () => {
   const g = mk(['SLAYER', 'MONK', 'IMP', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g); poison(g, by(g, 'SLAYER')); G.startDay(g);
   G.slayerAction(g, by(g, 'SLAYER').id, by(g, 'IMP').id);
@@ -385,7 +385,7 @@ t('empate: nadie es ejecutado', () => {
 
 // ════════════════════════════════════════════════════════════════════
 G_('Sucesión del Demonio');
-t('Dama Escarlata: hereda el MISMO personaje con 5+ vivos', () => {
+t('Mujer Escarlata: hereda el MISMO personaje con 5+ vivos', () => {
   const g = mk(['SCARLET_WOMAN', 'MONK', 'IMP', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g); G.startDay(g);
   executeVote(g, by(g, 'MONK').id, by(g, 'IMP').id);
@@ -395,7 +395,7 @@ t('Dama Escarlata: hereda el MISMO personaje con 5+ vivos', () => {
   eq(newDemon[0].role, 'IMP');
   no(g.phase === 'game_over', 'la partida no debe terminar');
 });
-t('Dama Escarlata: con menos de 5 vivos NO hereda', () => {
+t('Mujer Escarlata: con menos de 5 vivos NO hereda', () => {
   const g = mk(['SCARLET_WOMAN', 'MONK', 'IMP', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   by(g, 'EMPATH').alive = false; by(g, 'POISONER').alive = false; by(g, 'SOLDIER').alive = false;
   G.startNight(g); G.startDay(g);
@@ -443,7 +443,7 @@ t('Zombuul: su primera muerte es fingida', () => {
   ok(z.zombuulFirstDied, 'debe marcarse la muerte fingida');
   no(g.phase === 'game_over', 'la partida no debe terminar');
 });
-t('Pequeña Monsta: un Esbirro pasa a cuidarla y cuenta como Demonio', () => {
+t('Lil’ Monsta: un Esbirro pasa a cuidarla y cuenta como Demonio', () => {
   const g = mk(['POISONER', 'MONK', 'LIL_MONSTA', 'MAYOR', 'SOLDIER', 'EMPATH', 'ACROBAT'], 'CAROUSEL');
   G.startNight(g); G.startDay(g);
   executeVote(g, by(g, 'MONK').id, by(g, 'LIL_MONSTA').id);
@@ -647,7 +647,7 @@ t('Visir: no muere ejecutado durante el día', () => {
   ok(by(g, 'VIZIER').alive, 'el Visir no debe morir de día');
   ok(r.vizierSurvived);
 });
-t('Sembrador de Miedo: nominar y ejecutar a su marcado decide la partida', () => {
+t('Fearmonger: nominar y ejecutar a su marcado decide la partida', () => {
   const g = mk(['FEARMONGER', 'MONK', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'ACROBAT'], 'CAROUSEL');
   G.startNight(g);
   const fm = by(g, 'FEARMONGER'), tgt = by(g, 'MAYOR');
@@ -814,12 +814,12 @@ t('Leviatán: 2 buenos ejecutados → ganan los malvados', () => {
   executeVote(g, by(g, 'MONK').id, by(g, 'SOLDIER').id);
   eq(g.winner, 'evil', 'motivo: ' + g.winReason);
 });
-t('Motín: en el día 3 los nominados mueren inmediatamente', () => {
+t('Riot: en el día 3 los nominados mueren inmediatamente', () => {
   const g = mk(['MONK', 'EMPATH', 'RIOT', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER'], 'CAROUSEL');
   for (let i = 0; i < 3; i++) { G.startNight(g); G.startDay(g); }
   G.openNominations(g);
   G.nominate(g, by(g, 'MONK').id, by(g, 'MAYOR').id);
-  no(by(g, 'MAYOR').alive, 'en día 3 con Motín el nominado muere al instante');
+  no(by(g, 'MAYOR').alive, 'en día 3 con Riot el nominado muere al instante');
 });
 t('Hereje: quien gana pierde', () => {
   const g = mk(['HERETIC', 'EMPATH', 'KAZALI', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER'], 'CAROUSEL');

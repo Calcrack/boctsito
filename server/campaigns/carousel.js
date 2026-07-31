@@ -4,253 +4,253 @@ const roles = {
   // ── ALDEANOS ────────────────────────────────────────────────────────────
   ACROBAT: {
     id: 'ACROBAT', name: 'Acróbata', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche*: elige un jugador. Si está o se vuelve borracho o envenenado esta noche, mueres.',
+    ability: 'Cada noche* elige 1 jugador: si está borracho o envenenado, o acaba estándolo esta noche, mueres.',
     firstNight: false, otherNights: true,
   },
   ALCHEMIST: {
     id: 'ALCHEMIST', name: 'Alquimista', alignment: 'good', type: 'townfolk',
-    ability: 'Tienes una habilidad de Esbirro. Cuando la uses, el Narrador puede pedirte que elijas diferente.',
+    ability: 'Tienes la habilidad de un Esbirro. Cuando la uses, el Narrador puede pedirte que hagas otra elección.',
     firstNight: true, otherNights: false,
     setup: { alchemistAbility: true },
   },
   AMNESIAC: {
     id: 'AMNESIAC', name: 'Amnésico', alignment: 'good', type: 'townfolk',
-    ability: 'No sabes cuál es tu habilidad. Cada día, adivina en privado cuál es: aprendes qué tan preciso eres.',
+    ability: 'No sabes cuál es tu habilidad. Cada día intenta adivinarla en privado y sabes lo cerca que estás.',
     firstNight: false, otherNights: false,
   },
   ATHEIST: {
     id: 'ATHEIST', name: 'Ateo', alignment: 'good', type: 'townfolk',
-    ability: 'Todos los jugadores son buenos. Los buenos ganan si el Narrador es ejecutado.',
+    ability: 'El Narrador puede romper las reglas. Si el Narrador es ejecutado, ganan los buenos, aunque estés muerto. [No hay malos]',
     firstNight: false, otherNights: false,
   },
   BALLOONIST: {
     id: 'BALLOONIST', name: 'Aeronauta', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche: aprendes un jugador de tipo diferente al de anoche.',
-    firstNight: false, otherNights: true,
+    ability: 'Cada noche descubres 1 jugador de un tipo diferente al de la noche anterior. [+0 o +1 Forastero]',
+    firstNight: true, otherNights: true,
   },
   BANSHEE: {
     id: 'BANSHEE', name: 'Banshee', alignment: 'good', type: 'townfolk',
-    ability: 'Si el Demonio te mata, todos lo aprenden. De ahora en adelante, puedes nominar dos veces por día.',
+    ability: 'Si el Demonio te mata, todos los jugadores lo saben. A partir de ahora, puedes nominar 2 veces por día y votar 2 veces por nominación.',
     firstNight: false, otherNights: false,
   },
   BOUNTY_HUNTER: {
     id: 'BOUNTY_HUNTER', name: 'Cazarrecompensas', alignment: 'good', type: 'townfolk',
-    ability: 'Comienzas sabiendo 1 jugador malo. Si el que conoces muere, aprendes otro jugador malo esta noche.',
+    ability: 'Empiezas conociendo 1 jugador malo. Si ese jugador muere, descubres 1 jugador malo esta noche. [1 Aldeano es malo]',
     firstNight: true, otherNights: true,
   },
   CANNIBAL: {
     id: 'CANNIBAL', name: 'Caníbal', alignment: 'good', type: 'townfolk',
-    ability: 'Tienes la habilidad del ejecutado recientemente. Si es malo, te envenenan.',
+    ability: 'Tienes la habilidad del último jugador muerto ejecutado. Si es malo, estás envenenado hasta que 1 bueno muera ejecutado.',
     firstNight: false, otherNights: true,
   },
   CHOIRBOY: {
-    id: 'CHOIRBOY', name: 'Niño Coro', alignment: 'good', type: 'townfolk',
-    ability: 'Si el Demonio mata al Rey, aprendes cuál es el Demonio.',
+    id: 'CHOIRBOY', name: 'Niño del Coro', alignment: 'good', type: 'townfolk',
+    ability: 'Si el Demonio mata al Rey, descubres qué jugador es el Demonio [+ Rey]',
     firstNight: false, otherNights: false,
   },
   CULT_LEADER: {
-    id: 'CULT_LEADER', name: 'Líder Cultista', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche, tomas la alineación de un vecino vivo. Si todos los buenos se unen a tu culto, tu equipo gana.',
-    firstNight: false, otherNights: true,
+    id: 'CULT_LEADER', name: 'Líder de Culto', alignment: 'good', type: 'townfolk',
+    ability: 'Cada noche te conviertes al alineamiento de 1 vecino vivo. Si todos los jugadores buenos eligen unirse a tu culto, tu bando gana.',
+    firstNight: true, otherNights: true,
   },
   ENGINEER: {
     id: 'ENGINEER', name: 'Ingeniero', alignment: 'good', type: 'townfolk',
-    ability: 'Una vez por partida, en la noche, elige qué Esbirros o qué Demonio está en juego.',
-    firstNight: false, otherNights: true,
+    ability: 'Una vez por partida, por la noche, elige qué Esbirros o qué Demonio está en juego.',
+    firstNight: true, otherNights: true,
   },
   FARMER: {
     id: 'FARMER', name: 'Granjero', alignment: 'good', type: 'townfolk',
-    ability: 'Cuando mueres de noche, un jugador bueno vivo se convierte en Granjero.',
+    ability: 'Cuando mueres por la noche, 1 jugador vivo bueno se convierte en Granjero.',
     firstNight: false, otherNights: false,
   },
   FISHERMAN: {
     id: 'FISHERMAN', name: 'Pescador', alignment: 'good', type: 'townfolk',
-    ability: 'Una vez por partida, durante el día, visita al Narrador para obtener consejo.',
+    ability: 'Una vez por partida, durante el día, puedes visitar al Narrador para que te aconseje sobre cómo debe ganar tu bando.',
     firstNight: false, otherNights: false,
   },
   GENERAL: {
     id: 'GENERAL', name: 'General', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche, aprendes qué alineación cree el Narrador que está ganando.',
-    firstNight: false, otherNights: true,
+    ability: 'Cada noche sabes qué alineamiento cree el Narrador que está ganando: bueno, malo o ninguno.',
+    firstNight: true, otherNights: true,
   },
   HIGH_PRIESTESS: {
-    id: 'HIGH_PRIESTESS', name: 'Sacerdotisa Mayor', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche, aprende cuál jugador cree el Narrador que deberías conocer.',
-    firstNight: false, otherNights: true,
+    id: 'HIGH_PRIESTESS', name: 'Suma Sacerdotisa', alignment: 'good', type: 'townfolk',
+    ability: 'Cada noche sabes con qué jugador cree el Narrador que deberías hablar más.',
+    firstNight: true, otherNights: true,
   },
   HUNTSMAN: {
-    id: 'HUNTSMAN', name: 'Cazador de Damiselas', alignment: 'good', type: 'townfolk',
-    ability: 'Una vez por partida, elige un jugador: la Damisela se convierte en un Aldeano que no está en juego.',
-    firstNight: false, otherNights: true,
+    id: 'HUNTSMAN', name: 'Cazador', alignment: 'good', type: 'townfolk',
+    ability: 'Una vez por partida, por la noche, elige 1 jugador vivo: si es la Damisela se convierte en 1 Aldeano que no esté en juego. [+ Damisela]',
+    firstNight: true, otherNights: true,
   },
   KING: {
     id: 'KING', name: 'Rey', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche, si los muertos igualan o superan a los vivos, aprendes un personaje vivo.',
+    ability: 'Cada noche, si hay igual o más muertos que vivos, descubres 1 personaje vivo. El Demonio sabe que eres el Rey.',
     firstNight: true, otherNights: true,
   },
   KNIGHT: {
     id: 'KNIGHT', name: 'Caballero', alignment: 'good', type: 'townfolk',
-    ability: 'Comienzas sabiendo 2 jugadores que no son el Demonio.',
+    ability: 'Empiezas conociendo 2 jugadores que no son el Demonio.',
     firstNight: true, otherNights: false,
   },
   LYCANTHROPE: {
     id: 'LYCANTHROPE', name: 'Licántropo', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche*: elige un jugador. Si es bueno, muere y el Demonio no mata esta noche.',
+    ability: 'Cada noche* elige 1 jugador vivo: si es bueno, muere y el Demonio no mata esta noche. Un jugador bueno aparece como malo.',
     firstNight: false, otherNights: true,
   },
   MAGICIAN: {
     id: 'MAGICIAN', name: 'Mago', alignment: 'good', type: 'townfolk',
-    ability: 'El Demonio cree que eres un Esbirro. Los Esbirros creen que eres un Demonio.',
+    ability: 'El Demonio piensa que eres un Esbirro. Los Esbirros piensan que eres un Demonio.',
     firstNight: true, otherNights: false,
   },
   NIGHTWATCHMAN: {
-    id: 'NIGHTWATCHMAN', name: 'Guardián Nocturno', alignment: 'good', type: 'townfolk',
-    ability: 'Una vez por partida, elige un jugador: aprenden que eres el Guardián Nocturno.',
-    firstNight: false, otherNights: true,
+    id: 'NIGHTWATCHMAN', name: 'Sereno', alignment: 'good', type: 'townfolk',
+    ability: 'Una vez por partida, por la noche, elige 1 jugador: descubre que eres Sereno.',
+    firstNight: true, otherNights: true,
   },
   NOBLE: {
     id: 'NOBLE', name: 'Noble', alignment: 'good', type: 'townfolk',
-    ability: 'Comienzas conociendo 3 jugadores, exactamente 1 de los cuales es malo.',
+    ability: 'Empiezas conociendo 3 jugadores, 1 y solo 1 de ellos es malo.',
     firstNight: true, otherNights: false,
   },
   POPPY_GROWER: {
-    id: 'POPPY_GROWER', name: 'Cultivador de Adormidera', alignment: 'good', type: 'townfolk',
-    ability: 'Los Esbirros y Demonios no se conocen. Si mueres, se conocen esa noche.',
+    id: 'POPPY_GROWER', name: 'Cultivador de Opio', alignment: 'good', type: 'townfolk',
+    ability: 'Los Esbirros y el Demonio no se conocen. Si mueres, se conocen esta noche.',
     firstNight: true, otherNights: false,
   },
   PREACHER: {
     id: 'PREACHER', name: 'Predicador', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche, elige un jugador: si es Esbirro, lo aprendes. Todos los Esbirros elegidos pierden habilidad.',
-    firstNight: false, otherNights: true,
+    ability: 'Cada noche elige 1 jugador: si es Esbirro lo sabe. Los Esbirros elegidos no tienen habilidad.',
+    firstNight: true, otherNights: true,
   },
   SHUGENJA: {
     id: 'SHUGENJA', name: 'Shugenja', alignment: 'good', type: 'townfolk',
-    ability: 'Empiezas sabiendo si el jugador malo más cercano está a tu izquierda o a tu derecha.',
+    ability: 'Empiezas sabiendo si el jugador malo más cercano está a tu izquierda o tu derecha. Si es equidistante, la información es arbitraria.',
     firstNight: true, otherNights: false,
   },
   STEWARD: {
     id: 'STEWARD', name: 'Administrador', alignment: 'good', type: 'townfolk',
-    ability: 'Empiezas conociendo a 1 jugador bueno.',
+    ability: 'Empiezas conociendo 1 jugador bueno.',
     firstNight: true, otherNights: false,
   },
 
   // ── FORASTEROS ──────────────────────────────────────────────────────────
   DAMSEL: {
     id: 'DAMSEL', name: 'Damisela', alignment: 'good', type: 'outsider',
-    ability: 'Todos los Esbirros saben que una Damisela está en juego. Si un Esbirro te adivina, pierdes.',
+    ability: 'Los Esbirros saben que una Damisela está en juego. Si un Esbirro adivina quién eres (una vez por partida) tu equipo pierde.',
     firstNight: true, otherNights: false,
   },
   GOLEM: {
     id: 'GOLEM', name: 'Gólem', alignment: 'good', type: 'outsider',
-    ability: 'Solo puedes nominar una vez. Si lo haces, si el nominado no es el Demonio, muere.',
+    ability: 'Sólo puedes nominar 1 vez. Cuando lo hagas, si el nominado no es el Demonio, muere.',
     firstNight: false, otherNights: false,
   },
   HATTER: {
     id: 'HATTER', name: 'Sombrerero', alignment: 'good', type: 'outsider',
-    ability: 'Si mueres hoy o esta noche, los Esbirros y Demonio pueden elegir nuevos personajes.',
+    ability: 'Si mueres hoy o esta noche, los Esbirros y el Demonio pueden elegir nuevos Esbirros y Demonios que ser.',
     firstNight: false, otherNights: false,
   },
   HERETIC: {
     id: 'HERETIC', name: 'Hereje', alignment: 'good', type: 'outsider',
-    ability: 'Quien gana, pierde. Quien pierde, gana, incluso si estás muerto.',
+    ability: 'Quien gane, pierde y quien pierda gana, aunque estés muerto.',
     firstNight: false, otherNights: false,
   },
   PLAGUE_DOCTOR: {
-    id: 'PLAGUE_DOCTOR', name: 'Doctor de la Peste', alignment: 'good', type: 'outsider',
-    ability: 'Cuando mueres, el Narrador gana una habilidad de Esbirro.',
+    id: 'PLAGUE_DOCTOR', name: 'Doctor de Plaga', alignment: 'good', type: 'outsider',
+    ability: 'Cuando mueres, el Narrador gana la habilidad de un Esbirro.',
     firstNight: false, otherNights: false,
   },
   POLITICIAN: {
     id: 'POLITICIAN', name: 'Político', alignment: 'good', type: 'outsider',
-    ability: 'Si fuiste responsable de que tu equipo pierda, cambias alineación y ganas.',
+    ability: 'Si eres el jugador más responsable de que tu equipo pierda, cambias de alineamiento y ganas, aunque estés muerto.',
     firstNight: false, otherNights: false,
   },
   PUZZLEMASTER: {
-    id: 'PUZZLEMASTER', name: 'Maestro Acertijos', alignment: 'good', type: 'outsider',
-    ability: '1 jugador está borracho. Si adivinas quién, aprendes al Demonio.',
+    id: 'PUZZLEMASTER', name: 'Maestro del Puzle', alignment: 'good', type: 'outsider',
+    ability: 'Un jugador está borracho, aunque estés muerto. Si adivinas quién es (una vez por partida), descubres quién es el Demonio, pero si fallas recibes información falsa.',
     firstNight: true, otherNights: false,
     setup: { puzzlemasterDrunk: true },
   },
   SNITCH: {
     id: 'SNITCH', name: 'Soplón', alignment: 'good', type: 'outsider',
-    ability: 'Cada Esbirro recibe 3 bluffs.',
+    ability: 'Los Esbirros empiezan conociendo 3 faroles.',
     firstNight: true, otherNights: false,
   },
 
   // ── ESBIRROS ────────────────────────────────────────────────────────────
   BOFFIN: {
     id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'evil', type: 'minion',
-    ability: 'El Demonio (incluso borracho o envenenado) tiene la habilidad de un personaje bueno que no está en juego. Ambos sabéis cuál.',
+    ability: 'El Demonio (incluso borracho o envenenado) tiene la habilidad de un bueno que no esté en juego. Ambos sabéis cuál.',
     firstNight: true, otherNights: false,
     setup: { boffinAbility: true },
   },
   BOOMDANDY: {
-    id: 'BOOMDANDY', name: 'Pólvora', alignment: 'evil', type: 'minion',
-    ability: 'Si eres ejecutado, todos excepto 3 mueren.',
+    id: 'BOOMDANDY', name: 'Boomdandy', alignment: 'evil', type: 'minion',
+    ability: 'Si eres ejecutado, todos los jugadores menos 3 mueren. Después de una cuenta atrás de 10 a 1, el jugador con más jugadores apuntándole muere.',
     firstNight: false, otherNights: false,
   },
   FEARMONGER: {
-    id: 'FEARMONGER', name: 'Sembrador de Miedo', alignment: 'evil', type: 'minion',
-    ability: 'Cada noche, elige un jugador: si lo nominas y ejecutas, tu equipo pierde.',
-    firstNight: false, otherNights: true,
+    id: 'FEARMONGER', name: 'Fearmonger', alignment: 'evil', type: 'minion',
+    ability: 'Cada noche elige 1 jugador: si le nominas y ejecutas, su equipo pierde. Todos los jugadores saben si has elegido a un nuevo jugador.',
+    firstNight: true, otherNights: true,
   },
   GOBLIN: {
     id: 'GOBLIN', name: 'Goblin', alignment: 'evil', type: 'minion',
-    ability: 'Si públicamente reclamas ser el Goblin cuando te nominan y eres ejecutado, tu equipo gana.',
+    ability: 'Si públicamente declaras ser Goblin cuando te nominen y eres ejecutado ese día, tu equipo gana.',
     firstNight: false, otherNights: false,
   },
   HARPY: {
     id: 'HARPY', name: 'Arpía', alignment: 'evil', type: 'minion',
-    ability: 'Cada noche, elige 2 jugadores: mañana, el primero cree que el segundo es malo.',
-    firstNight: false, otherNights: true,
+    ability: 'Cada noche elige 2 jugadores: mañana, el primer jugador está loco sobre que el segundo es malo o uno o ambos pueden morir.',
+    firstNight: true, otherNights: true,
   },
   MARIONETTE: {
     id: 'MARIONETTE', name: 'Marioneta', alignment: 'evil', type: 'minion',
-    ability: 'Crees que eres bueno, pero eres un Esbirro. El Demonio te conoce.',
+    ability: 'Piensas que eres un personaje bueno, pero no lo eres. El Demonio sabe quién eres. [Estás adyacente al Demonio]',
     firstNight: true, otherNights: false,
     // Capa 2: cree ser un rol bueno no en juego; no despierta con el mal; el Demonio la conoce.
     misperception: { believes: 'unusedGood', wakesWithEvil: false, demonKnows: true },
   },
   MEZEPHELES: {
-    id: 'MEZEPHELES', name: 'Mezefeles', alignment: 'evil', type: 'minion',
-    ability: 'Comienzas sabiendo una palabra secreta. El primer jugador bueno que la diga se vuelve malo.',
+    id: 'MEZEPHELES', name: 'Mezepheles', alignment: 'evil', type: 'minion',
+    ability: 'Empiezas conociendo 1 palabra secreta. El primer jugador bueno en decirla se convierte en malo esta noche.',
     firstNight: true, otherNights: false,
   },
   ORGAN_GRINDER: {
     id: 'ORGAN_GRINDER', name: 'Organillero', alignment: 'evil', type: 'minion',
-    ability: 'Todos cierran los ojos al votar. Cada noche, elige si estás borracho.',
-    firstNight: false, otherNights: true,
+    ability: 'Todos los jugadores cierran los ojos al votar y su voto se cuenta en secreto. Cada noche decides si estás borracho hasta el crepúsculo o no.',
+    firstNight: true, otherNights: true,
   },
   PSYCHOPATH: {
     id: 'PSYCHOPATH', name: 'Psicópata', alignment: 'evil', type: 'minion',
-    ability: 'Cada día, antes de nominaciones, puedes elegir públicamente un jugador: muere.',
+    ability: 'Cada día, antes de las nominaciones, puedes elegir públicamente 1 jugador: muere. Si eres ejecutado, solo mueres si pierdes a piedra-papel-tijera.',
     firstNight: false, otherNights: false,
   },
   MASTERMIND: {
     id: 'MASTERMIND', name: 'Mente Maestra', alignment: 'evil', type: 'minion',
-    ability: 'Si el Demonio es ejecutado, la partida continúa 1 día más. Si alguien es ejecutado ese día, su equipo pierde.',
+    ability: 'Si el Demonio muere por ejecución (terminando la partida), juega 1 día más. Si 1 jugador es ejecutado ese día, su equipo pierde.',
     firstNight: false, otherNights: false,
   },
   SUMMONER: {
     id: 'SUMMONER', name: 'Invocador', alignment: 'evil', type: 'minion',
-    ability: 'Recibes 3 bluffs. En la noche 3, elige un jugador: se vuelve un Demonio malo.',
+    ability: 'Recibes 3 faroles. En la tercera noche elige 1 jugador: se vuelve malo y el Demonio que elijas. [No hay Demonio]',
     firstNight: true, otherNights: true,
   },
   VIZIER: {
     id: 'VIZIER', name: 'Visir', alignment: 'evil', type: 'minion',
-    ability: 'Todos saben que eres el Visir. No puedes morir durante el día.',
+    ability: 'Todos los jugadores saben que eres el Visir. No puedes morir durante el día. Si algún bueno vota, puedes elegir ejecutar inmediatamente.',
     firstNight: false, otherNights: false,
   },
   WIDOW: {
     id: 'WIDOW', name: 'Viuda', alignment: 'evil', type: 'minion',
-    ability: 'En tu primera noche, mira el Grimorio y elige un jugador: se envenena.',
+    ability: 'En tu primera noche ves el Grimorio y eliges 1 jugador: está envenenado. 1 jugador bueno sabe que el Viuda está en juego.',
     firstNight: true, otherNights: false,
   },
   // El Hechicero es ESBIRRO (malvado): concede un deseo con precio, no es un
   // Aldeano. Estaba mal clasificado como Aldeano bueno.
   WIZARD: {
     id: 'WIZARD', name: 'Hechicero', alignment: 'evil', type: 'minion',
-    ability: 'Una vez por partida pide en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.',
+    ability: 'Una vez por partida pídele en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.',
     firstNight: false, otherNights: false,
   },
 
@@ -258,47 +258,47 @@ const roles = {
   // Yaggababble es DEMONIO, no Esbirro.
   YAGGABABBLE: {
     id: 'YAGGABABBLE', name: 'Yaggababble', alignment: 'evil', type: 'demon',
-    ability: 'Comienzas sabiendo una frase secreta. Por cada vez que la dijiste hoy, un jugador muere.',
+    ability: 'Empiezas conociendo 1 frase secreta. Cada vez que la digas públicamente hoy, 1 jugador puede morir.',
     firstNight: true, otherNights: true,
   },
   AL_HADIKHIA: {
     id: 'AL_HADIKHIA', name: 'Al-Hadikhia', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche*: elige 3 jugadores que eligen silenciosamente vivir o morir.',
+    ability: 'Cada noche* puedes elegir a 3 jugadores (todos descubren quiénes son): cada uno elige en silencio si vive o muere, pero si todos viven, todos mueren.',
     firstNight: false, otherNights: true,
   },
   KAZALI: {
     id: 'KAZALI', name: 'Kazali', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche*: elige un jugador que muere. Tú eliges qué jugadores son Esbirros.',
+    ability: 'Cada noche* elige 1 jugador: muere. [Eliges los Esbirros en juego y qué jugadores son. -? a +? Forasteros]',
     firstNight: true, otherNights: true,
   },
   LEGION: {
     id: 'LEGION', name: 'Legión', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche*: un jugador puede morir. Las ejecuciones fallan si solo malignos votaron.',
+    ability: 'Cada noche* 1 jugador puede morir. Las ejecuciones fallan si sólo votan los malos. Apareces también como Esbirro. [La mayoría de jugadores son Legión]',
     firstNight: true, otherNights: true,
   },
   LEVIATHAN: {
     id: 'LEVIATHAN', name: 'Leviatán', alignment: 'evil', type: 'demon',
-    ability: 'Si +1 buenos ejecutados, los malos ganan. Después del día 5, los malos ganan.',
+    ability: 'Si más de 1 jugador bueno es ejecutado, los malos ganan. Todos los jugadores saben que estás en juego. Después del día 5, los malos ganan.',
     firstNight: true, otherNights: false,
   },
   LIL_MONSTA: {
-    id: 'LIL_MONSTA', name: 'Pequeña Monsta', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche, los Esbirros eligen quién cuida y es el "Demonio".',
+    id: 'LIL_MONSTA', name: 'Lil’ Monsta', alignment: 'evil', type: 'demon',
+    ability: 'Cada noche los Esbirros eligen quién cuida a Lil’ Monsta y «es el Demonio». Cada noche* 1 jugador puede morir. [+1 Esbirro]',
     firstNight: true, otherNights: true,
   },
   LLEECH: {
-    id: 'LLEECH', name: 'Sangijuela', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche*: elige un jugador que muere. Mueres si tu anfitrión envenenado está muerto.',
+    id: 'LLEECH', name: 'Lleech', alignment: 'evil', type: 'demon',
+    ability: 'Cada noche* elige 1 jugador: muere. Empiezas eligiendo 1 jugador: está envenenado. Mueres si y sólo si ese jugador está muerto.',
     firstNight: true, otherNights: true,
   },
   OJO: {
     id: 'OJO', name: 'Ojo', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche*: elige un personaje que muere. Si no está en juego, el Narrador elige.',
+    ability: 'Cada noche* elige 1 personaje: muere. Si no está en juego, el Narrador decide quién muere.',
     firstNight: false, otherNights: true,
   },
   RIOT: {
-    id: 'RIOT', name: 'Motín', alignment: 'evil', type: 'demon',
-    ability: 'En el día 3, los Esbirros se vuelven Motín y los nominados mueren inmediatamente.',
+    id: 'RIOT', name: 'Riot', alignment: 'evil', type: 'demon',
+    ability: 'En día 3, los Esbirros se convierten en Riot y los nominados mueren pero pueden nominar a un jugador vivo inmediatamente. Esto debe pasar.',
     firstNight: true, otherNights: false,
   },
 };
@@ -320,13 +320,17 @@ const BASE_DISTRIBUTION = {
 // Orden nocturno derivado de análisis de habilidades
 const queueFirst = [
   'POPPY_GROWER', 'MAGICIAN',
+  'PREACHER',     // antes de los Esbirros: les quita la habilidad esta noche
+  'ENGINEER',     // antes que nadie: decide qué Esbirros / Demonio hay en juego
   'BOFFIN',       // demon conoce su habilidad buena antes de actuar
   'KAZALI', 'LEGION', 'LIL_MONSTA', 'LLEECH', 'RIOT', 'LEVIATHAN',
   // 'MARIONETTE' NO entra en la cola interactiva: es pasiva y no despierta con el mal.
-  'MEZEPHELES', 'SUMMONER', 'YAGGABABBLE',
+  // Sin asterisco en su habilidad → estos Esbirros SÍ actúan la primera noche.
+  'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
   'SHUGENJA', 'STEWARD',
   'PUZZLEMASTER', 'ALCHEMIST',
-  'BOUNTY_HUNTER', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
+  'HUNTSMAN',     // salva a la Damisela antes de que los Esbirros la busquen
+  'BOUNTY_HUNTER', 'CULT_LEADER', 'NIGHTWATCHMAN', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
   'WIDOW',        // al final: mira el Grimorio completo tras todos los tokens colocados
 ];

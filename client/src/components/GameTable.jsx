@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
 import { formatIdentity, MASK } from '../utils/identity';
 import ActionModal from './ActionModal';
+import RoleIcon from './RoleIcon';
 
 function getCirclePositions(count, radius) {
   return Array.from({ length: count }, (_, i) => {
@@ -195,7 +196,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
       {/* Role token mini-badge */}
       {role && (isNarrator || isMe) && (
         <div className={`role-token-mini ${role.alignment}`}>
-          <img src={role.img} alt={role.name} onError={e => { e.target.style.display = 'none'; }} />
+          <RoleIcon role={role} size={null} style={{ width: '100%', height: '100%' }} />
         </div>
       )}
 

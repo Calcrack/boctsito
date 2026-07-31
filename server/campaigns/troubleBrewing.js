@@ -4,114 +4,114 @@
 const roles = {
   WASHERWOMAN: {
     id: 'WASHERWOMAN', name: 'Lavandera', alignment: 'good', type: 'townfolk',
-    ability: 'Primera noche: ves 2 jugadores, uno de los cuales es un Aldeano específico.',
+    ability: 'Empiezas conociendo que 1 de 2 jugadores es un Aldeano particular.',
     firstNight: true, otherNights: false,
   },
   LIBRARIAN: {
     id: 'LIBRARIAN', name: 'Bibliotecario', alignment: 'good', type: 'townfolk',
-    ability: 'Primera noche: ves 2 jugadores, uno de los cuales es un Forastero específico.',
+    ability: 'Empiezas conociendo que 1 de 2 jugadores es un Forastero particular (o que hay 0 en juego).',
     firstNight: true, otherNights: false,
   },
   INVESTIGATOR: {
     id: 'INVESTIGATOR', name: 'Investigador', alignment: 'good', type: 'townfolk',
-    ability: 'Primera noche: ves 2 jugadores, uno de los cuales es un Esbirro específico.',
+    ability: 'Empiezas conociendo que 1 de 2 jugadores es un Esbirro particular.',
     firstNight: true, otherNights: false,
   },
   COOK: {
     id: 'COOK', name: 'Cocinero', alignment: 'good', type: 'townfolk',
-    ability: 'Primera noche: sabes cuántas parejas de jugadores malvados son vecinos.',
+    ability: 'Empiezas sabiendo cuántas parejas de jugadores malos hay.',
     firstNight: true, otherNights: false,
   },
   EMPATH: {
-    id: 'EMPATH', name: 'Empática', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche: sabes cuántos de tus 2 vecinos vivos son malvados (0, 1 o 2).',
+    id: 'EMPATH', name: 'Empático', alignment: 'good', type: 'townfolk',
+    ability: 'Cada noche sabes cuántos de tus vecinos vivos son malos.',
     firstNight: true, otherNights: true,
   },
   FORTUNE_TELLER: {
-    id: 'FORTUNE_TELLER', name: 'Adivina', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche: elige 2 jugadores y sabes si alguno es el Demonio.',
+    id: 'FORTUNE_TELLER', name: 'Pitonisa', alignment: 'good', type: 'townfolk',
+    ability: 'Cada noche elige 2 jugadores: sabes si alguno es el Demonio. Hay 1 jugador bueno que aparece como Demonio para ti.',
     firstNight: true, otherNights: true,
   },
   UNDERTAKER: {
     id: 'UNDERTAKER', name: 'Enterrador', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche (tras ejecución): sabes el rol del jugador ejecutado ese día.',
+    ability: 'Cada noche* descubres qué personaje ha muerto por ejecución hoy.',
     firstNight: false, otherNights: true,
   },
   MONK: {
     id: 'MONK', name: 'Monje', alignment: 'good', type: 'townfolk',
-    ability: 'Cada noche: elige 1 jugador (no tú mismo). Está protegido del Demonio esta noche.',
+    ability: 'Cada noche* elige 1 jugador (no a ti): está a salvo del Demonio esta noche.',
     firstNight: false, otherNights: true,
   },
   RAVENKEEPER: {
-    id: 'RAVENKEEPER', name: 'Criacuervos', alignment: 'good', type: 'townfolk',
-    ability: 'Si mueres de noche: elige 1 jugador y descubres su rol.',
+    id: 'RAVENKEEPER', name: 'Guardián de Cuervos', alignment: 'good', type: 'townfolk',
+    ability: 'Si mueres por la noche, te despiertan para que elijas 1 jugador: descubres su personaje.',
     firstNight: false, otherNights: false,
   },
   VIRGIN: {
     id: 'VIRGIN', name: 'Virgen', alignment: 'good', type: 'townfolk',
-    ability: 'La primera vez que un Aldeano te nomina, ese Aldeano es ejecutado inmediatamente.',
+    ability: 'La primera vez que te nominen, si quien nomina es Aldeano, es ejecutado inmediatamente.',
     firstNight: false, otherNights: false,
   },
   SLAYER: {
-    id: 'SLAYER', name: 'Cazador', alignment: 'good', type: 'townfolk',
-    ability: 'Una vez por partida, durante el día: elige 1 jugador. Si es el Demonio, muere.',
+    id: 'SLAYER', name: 'Exterminador', alignment: 'good', type: 'townfolk',
+    ability: 'Una vez por partida, durante el día, elige públicamente 1 jugador: si es el Demonio, muere.',
     firstNight: false, otherNights: false,
   },
   SOLDIER: {
     id: 'SOLDIER', name: 'Soldado', alignment: 'good', type: 'townfolk',
-    ability: 'No puedes morir por ataques del Demonio.',
+    ability: 'Estás a salvo del Demonio.',
     firstNight: false, otherNights: false,
   },
   MAYOR: {
     id: 'MAYOR', name: 'Alcalde', alignment: 'good', type: 'townfolk',
-    ability: 'Si solo quedan 3 jugadores vivos y no hay ejecución ese día, el equipo del Bien gana.',
+    ability: 'Si sólo quedan 3 jugadores vivos y no hay ejecución, tu bando gana. Si mueres por la noche, en vez de eso puede morir otro jugador.',
     firstNight: false, otherNights: false,
   },
   BUTLER: {
     id: 'BUTLER', name: 'Mayordomo', alignment: 'good', type: 'outsider',
-    ability: 'Cada noche: elige 1 jugador como tu Amo. Solo puedes votar si tu Amo también vota.',
+    ability: 'Cada noche elige 1 jugador (no a ti): mañana sólo puedes votar si ese jugador está votando.',
     firstNight: true, otherNights: true,
   },
   DRUNK: {
     id: 'DRUNK', name: 'Borracho', alignment: 'good', type: 'outsider',
-    ability: 'No sabes que eres el Borracho. Crees ser un Aldeano, pero tu información es falsa.',
+    ability: 'No sabes que eres el Borracho. Crees que eres un Aldeano, pero no lo eres.',
     firstNight: false, otherNights: false,
     // Capa 2: cree ser un Aldeano (drunkAs ya gestiona el detalle).
     misperception: { believes: 'unusedTownfolk' },
   },
   RECLUSE: {
     id: 'RECLUSE', name: 'Recluso', alignment: 'good', type: 'outsider',
-    ability: 'Puedes ser percibido como malvado y/o como Esbirro o Demonio, incluso si eres Bueno.',
+    ability: 'Puedes aparecer como malo y como Esbirro o Demonio, aunque estés muerto.',
     firstNight: false, otherNights: false,
   },
   SAINT: {
     id: 'SAINT', name: 'Santo', alignment: 'good', type: 'outsider',
-    ability: 'Si eres ejecutado, el equipo del Bien pierde.',
+    ability: 'Si mueres por ejecución, tu equipo pierde.',
     firstNight: false, otherNights: false,
   },
   POISONER: {
     id: 'POISONER', name: 'Envenenador', alignment: 'evil', type: 'minion',
-    ability: 'Cada noche: elige 1 jugador para envenenar. Su habilidad no funciona esa noche.',
+    ability: 'Cada noche elige 1 jugador: está envenenado esta noche y el día de mañana.',
     firstNight: true, otherNights: true,
   },
   SPY: {
     id: 'SPY', name: 'Espía', alignment: 'evil', type: 'minion',
-    ability: 'Cada noche: ves el Grimorio completo. Puedes ser percibido como Bueno.',
+    ability: 'Cada noche ves el Grimorio. Puedes aparecer como bueno y como Aldeano o Forastero, aunque estés muerto.',
     firstNight: true, otherNights: true,
   },
   SCARLET_WOMAN: {
-    id: 'SCARLET_WOMAN', name: 'Dama Escarlata', alignment: 'evil', type: 'minion',
-    ability: 'Si hay 5+ jugadores vivos y el Demonio muere, te conviertes en el nuevo Demonio.',
+    id: 'SCARLET_WOMAN', name: 'Mujer Escarlata', alignment: 'evil', type: 'minion',
+    ability: 'Si hay 5 o más jugadores vivos y el Demonio muere, te conviertes en el Demonio. (No cuentan los viajeros)',
     firstNight: false, otherNights: false,
   },
   BARON: {
     id: 'BARON', name: 'Barón', alignment: 'evil', type: 'minion',
-    ability: 'Hay 2 Forasteros adicionales en la partida en lugar de 2 Aldeanos.',
+    ability: 'Hay Forasteros extra en juego. [+2 Forasteros]',
     firstNight: false, otherNights: false,
   },
   IMP: {
     id: 'IMP', name: 'Diablillo', alignment: 'evil', type: 'demon',
-    ability: 'Cada noche: elige 1 jugador que muere. Si te eliges a ti mismo, un Esbirro vivo se convierte en Diablillo.',
+    ability: 'Cada noche* elige 1 jugador: muere. Si te matas de esta forma, un Esbirro se convierte en el Diablillo.',
     firstNight: false, otherNights: true,
   },
 };
@@ -140,7 +140,7 @@ const queueOther  = ['POISONER', 'MONK', 'IMP', 'RAVENKEEPER', 'FORTUNE_TELLER',
 //     falseIdentity            → elegir el rol bueno que CREE ser (también lo infiere role.misperception)
 //     lunaticExtras            → Demonio falso, Esbirros falsos, bluffs y "muerte" de 1ª noche
 //     demonBluffs:N            → el Demonio finge ser 1 de N roles buenos no en juego
-//     redHerring               → jugador bueno que registra como Demonio para la Adivina
+//     redHerring               → jugador bueno que registra como Demonio para la Pitonisa
 //     initialPoison            → objetivo de veneno de la 1ª noche (Envenenador/Pukka/Widow)
 //     outsiderModifier:±N      → confirma el conteo de Forasteros (Barón/Padrino/Fang Gu/Vigormortis)
 //     registersAs:'good'|'evilOptional' → registro por defecto (Espía/Recluso)

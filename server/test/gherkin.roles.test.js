@@ -114,7 +114,7 @@ t('Pregonero: detecta que un Esbirro nominó', () => {
   G.startNight(g);
   ok((by(g, 'TOWN_CRIER').nightInfo || '').includes('SÍ nominó'), by(g, 'TOWN_CRIER').nightInfo);
 });
-t('Niña de las Flores: detecta el voto del Demonio', () => {
+t('Florista: detecta el voto del Demonio', () => {
   const g = mk(['FLOWERGIRL', 'MONK', 'NO_DASHII', 'MAYOR', 'SOLDIER', 'EMPATH', 'WITCH'], 'SECTS_AND_VIOLETS');
   G.startNight(g); G.startDay(g);
   executeVote(g, by(g, 'MONK').id, by(g, 'WITCH').id);
@@ -143,7 +143,7 @@ t('Aeronauta: cada noche cambia de tipo', () => {
   G.startDay(g); G.startNight(g);
   ok(b.balloonistLastType !== t1 || g.players.filter(p => p.type !== t1).length === 0, 'debe cambiar de tipo');
 });
-t('Cultivador de Adormidera: avisa de que el Mal no se conoce', () => {
+t('Cultivador de Opio: avisa de que el Mal no se conoce', () => {
   const g = mk(['POPPY_GROWER', 'MONK', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g);
   ok((by(g, 'POPPY_GROWER').nightInfo || '').includes('NO se conocen'));
@@ -206,13 +206,13 @@ t('Hereje envenenado: NO invierte', () => {
   G.checkWinCondition(g);
   eq(g.winner, 'good');
 });
-t('Motín: en el día 3 los Esbirros pasan a ser Motín', () => {
+t('Riot: en el día 3 los Esbirros pasan a ser Riot', () => {
   const g = mk(['MONK', 'EMPATH', 'RIOT', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER']);
   for (let i = 0; i < 3; i++) { G.startNight(g); G.startDay(g); }
   eq(by(g, 'POISONER'), undefined, 'el Envenenador debería haberse convertido');
   eq(g.players.filter(p => p.role === 'RIOT').length, 2);
 });
-t('Motín: el nominado muere sin votación', () => {
+t('Riot: el nominado muere sin votación', () => {
   const g = mk(['MONK', 'EMPATH', 'RIOT', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER']);
   for (let i = 0; i < 3; i++) { G.startNight(g); G.startDay(g); }
   G.openNominations(g);
@@ -220,7 +220,7 @@ t('Motín: el nominado muere sin votación', () => {
   ok(r.riotKill);
   no(g.players[3].alive);
 });
-t('Motín: antes del día 3 la nominación es normal', () => {
+t('Riot: antes del día 3 la nominación es normal', () => {
   const g = mk(['MONK', 'EMPATH', 'RIOT', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER']);
   G.startNight(g); G.startDay(g); G.openNominations(g);
   const r = G.nominate(g, g.players[0].id, g.players[3].id);
@@ -254,7 +254,7 @@ t('Leviatán: no aparece en la cola de las otras noches', () => {
   const q = g.nightQueue.map(id => g.players.find(p => p.id === id).role);
   no(q.includes('LEVIATHAN'));
 });
-t('Sangijuela: el anfitrión queda envenenado', () => {
+t('Lleech: el anfitrión queda envenenado', () => {
   const g = mk(['MONK', 'EMPATH', 'LLEECH', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER']);
   G.startNight(g);
   const host = by(g, 'MAYOR');
@@ -262,7 +262,7 @@ t('Sangijuela: el anfitrión queda envenenado', () => {
   ok(host.poisoned, 'el anfitrión debe estar envenenado');
   eq(g.lleechHostId, host.id);
 });
-t('Sangijuela: no puede morir mientras viva su anfitrión', () => {
+t('Lleech: no puede morir mientras viva su anfitrión', () => {
   const g = mk(['MONK', 'EMPATH', 'LLEECH', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER']);
   G.startNight(g);
   G.applyNightAction(g, 'LLEECH_HOST', by(g, 'LLEECH').id, [by(g, 'MAYOR').id]);
@@ -276,14 +276,14 @@ t('Sangijuela: no puede morir mientras viva su anfitrión', () => {
   G.applyNightAction(g2, 'KILL', by(g2, 'POISONER').id, [by(g2, 'LLEECH').id]);
   ok(by(g2, 'LLEECH').alive, 'no debe morir con el anfitrión vivo');
 });
-t('Sangijuela: muere cuando muere su anfitrión', () => {
+t('Lleech: muere cuando muere su anfitrión', () => {
   const g = mk(['MONK', 'EMPATH', 'LLEECH', 'MAYOR', 'SOLDIER', 'ACROBAT', 'POISONER']);
   G.startNight(g);
   const host = by(g, 'MAYOR');
   G.applyNightAction(g, 'LLEECH_HOST', by(g, 'LLEECH').id, [host.id]);
   G.applyNightAction(g, 'KILL', by(g, 'POISONER').id, [host.id]);
   no(host.alive);
-  no(by(g, 'LLEECH').alive, 'la Sangijuela debe morir con su anfitrión');
+  no(by(g, 'LLEECH').alive, 'la Lleech debe morir con su anfitrión');
 });
 t('Dama del Té: sus vecinos buenos no pueden morir', () => {
   //  0 SOLDIER · 1 TEA_LADY · 2 MAYOR · 3 PUKKA · 4 ASSASSIN · 5 EMPATH · 6 MONK
@@ -314,7 +314,7 @@ t('Vigormortis: el Esbirro conservado sigue en la cola', () => {
   G.startDay(g); G.startNight(g);
   ok(g.nightQueue.includes(by(g, 'WITCH').id), 'la Bruja conservada debe despertar');
 });
-t('Cazador/Slayer: la Dama Escarlata hereda el personaje EXACTO del Demonio', () => {
+t('Exterminador/Slayer: la Mujer Escarlata hereda el personaje EXACTO del Demonio', () => {
   const g = mk(['SLAYER', 'MONK', 'NO_DASHII', 'MAYOR', 'SCARLET_WOMAN', 'EMPATH', 'CLOCKMAKER'], 'SECTS_AND_VIOLETS');
   G.startNight(g); G.startDay(g);
   G.slayerAction(g, by(g, 'SLAYER').id, by(g, 'NO_DASHII').id);
@@ -322,7 +322,7 @@ t('Cazador/Slayer: la Dama Escarlata hereda el personaje EXACTO del Demonio', ()
   eq(demons.length, 1, 'debe quedar un Demonio');
   eq(demons[0].role, 'NO_DASHII', 'debe heredar No Dashii, no Diablillo');
 });
-t('Cazador/Slayer: con Mente Maestra la partida no termina', () => {
+t('Exterminador/Slayer: con Mente Maestra la partida no termina', () => {
   const g = mk(['SLAYER', 'MONK', 'PUKKA', 'MAYOR', 'MASTERMIND', 'EMPATH', 'SAILOR'], 'BAD_MOON_RISING');
   G.startNight(g); G.startDay(g);
   const r = G.slayerAction(g, by(g, 'SLAYER').id, by(g, 'PUKKA').id);

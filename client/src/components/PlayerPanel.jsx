@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
-import { ALL_ROLES } from '../data/roles';
+import { ALL_ROLES, scriptRoles } from '../data/roles';
+import RoleIcon from './RoleIcon';
+
+const TYPE_LABEL = {
+  townfolk: 'Aldeano', outsider: 'Forastero', minion: 'Esbirro',
+  demon: 'Demonio', traveler: 'Viajero', fabled: 'Fabuloso',
+};
 import GameTable from './GameTable';
 import RoleReveal from './RoleReveal';
 import NightScreen from './NightScreen';
@@ -25,15 +31,22 @@ function usePhaseSound(phase) {
 }
 
 // ── Role info panel ───────────────────────────────────────────────
+// Solo los personajes del GUION en curso: mezclar las cuatro campañas hacía
+// la guía inútil (185 personajes, la mayoría fuera de la partida).
 function RoleInfoPanel() {
+  const { state } = useGame();
+  const { game } = state;
   const [open, setOpen] = useState(false);
   const [popup, setPopup] = useState(null);
+  const roles = scriptRoles(game);
   const types = [
     { key: 'townfolk', label: 'Aldeanos', color: 'var(--good)' },
     { key: 'outsider', label: 'Forasteros', color: 'var(--moon)' },
     { key: 'minion',   label: 'Esbirros', color: 'var(--blood-hi)' },
     { key: 'demon',    label: 'Demonio', color: 'var(--blood-hi)' },
-  ];
+    { key: 'traveler', label: 'Viajeros', color: 'var(--gold)' },
+    { key: 'fabled',   label: 'Fabulosos', color: 'var(--gold)' },
+  ].filter(t => roles.some(r => r.type === t.key));
   return (
     <div style={{ marginBottom: 4 }}>
       <button
@@ -44,11 +57,16 @@ function RoleInfoPanel() {
       </button>
       {open && (
         <div style={{ background: 'rgba(0,0,0,0.35)', border: 'var(--hairline)', borderRadius: 4, padding: '12px 14px', marginTop: 6, maxHeight: 380, overflowY: 'auto' }}>
+          {game?.campaignName && (
+            <p style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--bone-400)', marginBottom: 10 }}>
+              Guion: {game.campaignName} · {roles.length} personajes
+            </p>
+          )}
           {types.map(t => (
             <div key={t.key} style={{ marginBottom: 10 }}>
               <p style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.color, marginBottom: 5 }}>{t.label}</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {ALL_ROLES.filter(r => r.type === t.key).map(r => (
+                {roles.filter(r => r.type === t.key).map(r => (
                   <button key={r.id}
                     onClick={() => setPopup(r)}
                     style={{
@@ -57,7 +75,7 @@ function RoleInfoPanel() {
                       border: 'var(--hairline-bone)',
                       borderRadius: 3, padding: '5px 8px', cursor: 'pointer',
                     }}>
-                    {r.img && <img src={r.img} style={{ width: 20, height: 20, borderRadius: 2, objectFit: 'cover' }} />}
+                    <RoleIcon role={r} size={20} radius={2} />
                     <span style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)' }}>{r.name}</span>
                   </button>
                 ))}
@@ -72,12 +90,10 @@ function RoleInfoPanel() {
         <div className="modal-overlay" onClick={() => setPopup(null)}>
           <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, textAlign: 'center' }}>
             <button className="modal-close" onClick={() => setPopup(null)}>✕</button>
-            {popup.img && (
-              <img src={popup.img} alt={popup.name}
-                style={{ width: 96, height: 96, borderRadius: 10, objectFit: 'cover', marginBottom: 16, border: popup.alignment === 'evil' ? '2px solid var(--blood-hi)' : '2px solid var(--good)' }} />
-            )}
+            <RoleIcon role={popup} size={96} radius={10}
+              style={{ marginBottom: 16, border: popup.alignment === 'evil' ? '2px solid var(--blood-hi)' : '2px solid var(--good)' }} />
             <p style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 600, color: 'var(--bone-50)', margin: '0 0 6px' }}>{popup.name}</p>
-            <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: popup.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)', margin: '0 0 18px' }}>{popup.type}</p>
+            <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: popup.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)', margin: '0 0 18px' }}>{TYPE_LABEL[popup.type] || popup.type}</p>
             <p style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-200)', lineHeight: 1.7, textAlign: 'left' }}>{popup.ability}</p>
           </div>
         </div>
@@ -337,10 +353,7 @@ export default function PlayerPanel() {
           }}>
             <p className="panel-label" style={{ color: myRole.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--gold)' }}>Tu rol</p>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              {myRole.img && (
-                <img src={myRole.img} alt={myRole.name}
-                  style={{ width: 52, height: 52, borderRadius: 4, objectFit: 'cover', border: 'var(--hairline)', flexShrink: 0 }} />
-              )}
+              <RoleIcon role={myRole} size={52} radius={4} style={{ border: 'var(--hairline)' }} />
               <div>
                 <h3 style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600, color: 'var(--bone-50)', margin: '0 0 5px' }}>{myRole.name}</h3>
                 <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-300)', lineHeight: 1.5 }}>{myRole.ability}</p>

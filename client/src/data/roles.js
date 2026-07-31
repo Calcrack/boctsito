@@ -10,6 +10,7 @@ export {
   DEFAULT_CAMPAIGN,
   getCampaign,
   campaignRoles,
+  scriptRoles,
   statusTokens,
   remindersForRolesInPlay,
 } from './campaigns';

@@ -61,7 +61,7 @@ t('Tahúr: avisa solo a partir de la noche 2', () => {
   eq(hintsOf(g, 'GAMBLER').length, 1);
   ok(hintsOf(g, 'GAMBLER')[0].text.includes('FALLA'));
 });
-t('Torpe: solo avisa cuando ya está muerto, y es urgente', () => {
+t('Patoso: solo avisa cuando ya está muerto, y es urgente', () => {
   const g = mk(['KLUTZ', 'MONK', 'NO_DASHII', 'MAYOR', 'SOLDIER', 'EMPATH', 'WITCH'], 'SECTS_AND_VIOLETS');
   G.startNight(g); G.startDay(g);
   eq(hintsOf(g, 'KLUTZ').length, 0, 'vivo: nada que decidir');
@@ -70,7 +70,7 @@ t('Torpe: solo avisa cuando ya está muerto, y es urgente', () => {
   eq(h.length, 1);
   eq(h[0].severity, 'danger');
 });
-t('Hijo de la Luna: igual, solo al morir', () => {
+t('Niña de la Luna: igual, solo al morir', () => {
   const g = mk(['MOONCHILD', 'MONK', 'PUKKA', 'MAYOR', 'SOLDIER', 'EMPATH', 'SAILOR'], 'BAD_MOON_RISING');
   G.startNight(g);
   eq(hintsOf(g, 'MOONCHILD').length, 0);
@@ -99,7 +99,7 @@ t('Damisela: aviso a los Esbirros la n1, y aviso de acierto de día', () => {
   G.startDay(g);
   ok(hintsOf(g, 'DAMSEL').some(h => h.text.includes('ganan los malvados')));
 });
-t('Mezefeles: palabra secreta la n1, «alguien la dijo» después', () => {
+t('Mezepheles: palabra secreta la n1, «alguien la dijo» después', () => {
   const g = mk(['MEZEPHELES', 'MONK', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'ACROBAT']);
   G.startNight(g);
   ok(hintsOf(g, 'MEZEPHELES')[0].text.includes('palabra secreta'));

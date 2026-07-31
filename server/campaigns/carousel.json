@@ -66,14 +66,14 @@
       {
         "id": "choirboy",
         "name_en": "Choirboy",
-        "name_es": "Niño Coro",
+        "name_es": "Niño del Coro",
         "ability_en": "If the Demon kills the King, you learn which player is the Demon.",
         "ability_es": "Si el Demonio mata al Rey, aprendes cuál es el Demonio."
       },
       {
         "id": "cult-leader",
         "name_en": "Cult Leader",
-        "name_es": "Líder Cultista",
+        "name_es": "Líder de Culto",
         "ability_en": "Each night, you become the alignment of an alive neighbor. If all good players join your cult, your team wins.",
         "ability_es": "Cada noche, tomas la alineación de un vecino vivo. Si todos los buenos se unen a tu culto, tu equipo gana."
       },
@@ -108,7 +108,7 @@
       {
         "id": "high-priestess",
         "name_en": "High Priestess",
-        "name_es": "Sacerdotisa Mayor",
+        "name_es": "Suma Sacerdotisa",
         "ability_en": "Each night, learn which player the Storyteller believes you should talk to most.",
         "ability_es": "Cada noche, aprende cuál jugador cree el Narrador que deberías conocer."
       },
@@ -150,9 +150,9 @@
       {
         "id": "nightwatchman",
         "name_en": "Nightwatchman",
-        "name_es": "Guardián Nocturno",
+        "name_es": "Sereno",
         "ability_en": "Once per game, at night, choose a player: they learn you are the Nightwatchman.",
-        "ability_es": "Una vez por partida, elige un jugador: aprenden que eres el Guardián Nocturno."
+        "ability_es": "Una vez por partida, elige un jugador: aprenden que eres el Sereno."
       },
       {
         "id": "noble",
@@ -164,7 +164,7 @@
       {
         "id": "poppy-grower",
         "name_en": "Poppy Grower",
-        "name_es": "Cultivador de Adormidera",
+        "name_es": "Cultivador de Opio",
         "ability_en": "Minions & Demons do not know each other. If you die, they learn who each other are that night.",
         "ability_es": "Los Esbirros y Demonios no se conocen. Si mueres, se conocen esa noche."
       },
@@ -208,7 +208,7 @@
       {
         "id": "plague-doctor",
         "name_en": "Plague Doctor",
-        "name_es": "Doctor de la Peste",
+        "name_es": "Doctor de Plaga",
         "ability_en": "When you die, the Storyteller gains a Minion ability.",
         "ability_es": "Cuando mueres, el Narrador gana una habilidad de Esbirro."
       },
@@ -222,7 +222,7 @@
       {
         "id": "puzzlemaster",
         "name_en": "Puzzlemaster",
-        "name_es": "Maestro Acertijos",
+        "name_es": "Maestro del Puzle",
         "ability_en": "1 player is drunk. If you guess who, learn the Demon player.",
         "ability_es": "1 jugador está borracho. Si adivinas quién, aprendes al Demonio."
       },
@@ -238,14 +238,14 @@
       {
         "id": "boomdandy",
         "name_en": "Boomdandy",
-        "name_es": "Pólvora",
+        "name_es": "Boomdandy",
         "ability_en": "If you are executed, all but 3 players die.",
         "ability_es": "Si eres ejecutado, todos excepto 3 mueren."
       },
       {
         "id": "fearmonger",
         "name_en": "Fearmonger",
-        "name_es": "Sembrador de Miedo",
+        "name_es": "Fearmonger",
         "ability_en": "Each night, choose a player: if you nominate & execute them, your team loses.",
         "ability_es": "Cada noche, elige un jugador: si lo nominas y ejecutas, tu equipo pierde."
       },
@@ -273,7 +273,7 @@
       {
         "id": "mezepheles",
         "name_en": "Mezepheles",
-        "name_es": "Mezefeles",
+        "name_es": "Mezepheles",
         "ability_en": "You start knowing a secret word. The 1st good player to say this word becomes evil.",
         "ability_es": "Comienzas sabiendo una palabra secreta. El primer jugador bueno que la diga se vuelve malo."
       },
@@ -366,14 +366,14 @@
       {
         "id": "lil-monsta",
         "name_en": "Lil' Monsta",
-        "name_es": "Pequeña Monsta",
+        "name_es": "Lil’ Monsta",
         "ability_en": "Each night, Minions choose who babysits & 'is the Demon'.",
         "ability_es": "Cada noche, los Esbirros eligen quién cuida y es el 'Demonio'."
       },
       {
         "id": "lleech",
         "name_en": "Lleech",
-        "name_es": "Sangijuela",
+        "name_es": "Lleech",
         "ability_en": "Each night*, choose a player: they die. You die if your poisoned host is dead.",
         "ability_es": "Cada noche*: elige un jugador que muere. Mueres si tu anfitrión envenenado está muerto."
       },
@@ -387,9 +387,9 @@
       {
         "id": "riot",
         "name_en": "Riot",
-        "name_es": "Motín",
+        "name_es": "Riot",
         "ability_en": "On day 3, Minions become Riot & nominees die immediately.",
-        "ability_es": "En el día 3, los Esbirros se vuelven Motín y los nominados mueren inmediatamente."
+        "ability_es": "En el día 3, los Esbirros se vuelven Riot y los nominados mueren inmediatamente."
       }
     ]
   }

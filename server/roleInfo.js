@@ -156,12 +156,12 @@ const GENERATORS = {
     return `🔮 Oráculo\nHay ${value} jugador(es) muerto(s) malvado(s).`;
   }},
 
-  // ── Niña de las Flores: ¿votó hoy el Demonio? ─────────────────────
+  // ── Florista: ¿votó hoy el Demonio? ─────────────────────
   FLOWERGIRL: { when: 'other', gen(game, p) {
     const demonIds = new Set(game.players.filter(x => x.type === 'demon').map(x => x.id));
     const real = (game.nominations || []).some(n => (n.votes || []).some(v => demonIds.has(v)));
     const value = isImpaired(game, p) ? !real : real;
-    return `🌸 Niña de las Flores\nEl Demonio ${value ? 'SÍ' : 'NO'} votó hoy.`;
+    return `🌸 Florista\nEl Demonio ${value ? 'SÍ' : 'NO'} votó hoy.`;
   }},
 
   // ── Pregonero: ¿nominó hoy algún Esbirro? ─────────────────────────
@@ -207,10 +207,10 @@ const GENERATORS = {
     return `👑 Rey\nUn personaje vivo: ${roleName(shown)}.`;
   }},
 
-  // ── Cultivador de Adormidera: sabe cuándo el Mal se reconoce ──────
+  // ── Cultivador de Opio: sabe cuándo el Mal se reconoce ──────
   POPPY_GROWER: { when: 'always', gen(game, p) {
     if (!p.alive) return null;
-    return '🌺 Cultivador de Adormidera\nLos Esbirros y el Demonio NO se conocen mientras vivas.';
+    return '🌺 Cultivador de Opio\nLos Esbirros y el Demonio NO se conocen mientras vivas.';
   }},
 
   // ── Mago: el Demonio y los Esbirros lo perciben al revés ─────────
@@ -218,10 +218,10 @@ const GENERATORS = {
     return '🎩 Mago\nEl Demonio cree que eres un Esbirro; los Esbirros creen que eres el Demonio.';
   }},
 
-  // ── Guardián Nocturno: se revela a un jugador (una vez) ──────────
+  // ── Sereno: se revela a un jugador (una vez) ──────────
   NIGHTWATCHMAN: { when: 'always', gen(game, p) {
     if (p.nightwatchmanUsed) return null;
-    return '🔦 Guardián Nocturno\nPuedes elegir un jugador: aprende que eres el Guardián Nocturno.';
+    return '🔦 Sereno\nPuedes elegir un jugador: aprende que eres el Sereno.';
   }},
 };
 

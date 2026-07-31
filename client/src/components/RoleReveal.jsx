@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
+import RoleIcon from './RoleIcon';
 
 const TYPE_LABELS = { townfolk: 'Aldeano', outsider: 'Forastero', minion: 'Esbirro', demon: 'Demonio' };
 
@@ -34,9 +35,8 @@ export default function RoleReveal({ player }) {
         boxShadow: 'var(--shadow-deep)',
       }}>
         {role.img ? (
-          <img src={role.img} alt={role.name}
-            style={{ width: 140, height: 140, objectFit: 'contain', margin: '0 auto 24px', borderRadius: 8, display: 'block' }}
-            onError={e => { e.target.style.display = 'none'; }} />
+          <RoleIcon role={role} size={140} radius={8}
+            style={{ objectFit: 'contain', margin: '0 auto 24px', display: 'block' }} />
         ) : (
           <div style={{ fontSize: 72, marginBottom: 24 }}>
             {role.type === 'demon' ? '☠' : role.type === 'minion' ? '◆' : '✦'}

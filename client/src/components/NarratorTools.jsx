@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { ALL_ROLES, ROLE_BY_ID } from '../data/roles';
+import { ALL_ROLES, ROLE_BY_ID, scriptRoles } from '../data/roles';
 import { panelForRole, ABILITY_PANELS } from '../data/abilityPanels';
 import StatusChips from './StatusChips';
+import RoleIcon from './RoleIcon';
 
 const label = { fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 };
 const hint  = { fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-300)', fontStyle: 'italic', margin: '4px 0 0' };
@@ -19,7 +20,7 @@ const TOKEN_EXPLAIN = {
   EXECUTED_TODAY:'Ejecutado hoy: el Enterrador aprende su personaje esta noche.',
   BARBER_TONIGHT:'El Barbero murió: esta noche el Demonio puede intercambiar 2 personajes.',
   BOFFIN_ABILITY:'Este Demonio tiene además una habilidad buena (Rata de Laboratorio).',
-  LIL_MONSTA_KEEPER:'Cuida a la Pequeña Monsta: cuenta como Demonio vivo.',
+  LIL_MONSTA_KEEPER:'Cuida a la Lil’ Monsta: cuenta como Demonio vivo.',
 };
 
 function expiryLabel(t) {
@@ -48,9 +49,9 @@ function InfoTab({ target, game }) {
 
   return (
     <div>
-      {role?.img && (
+      {role && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.2)', borderRadius: 4, padding: '9px 12px', marginBottom: 8 }}>
-          <img src={role.img} alt={role.name} style={{ width: 42, height: 42, borderRadius: 4, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+          <RoleIcon role={role} size={42} radius={4} />
           <div>
             <p style={{ fontFamily: 'var(--serif)', fontSize: 17, fontWeight: 600, color: 'var(--bone-100)', margin: 0 }}>{role.name}</p>
             <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: role.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)', margin: '3px 0 0' }}>{role.type}</p>
@@ -90,7 +91,7 @@ function InfoTab({ target, game }) {
             const tRole = ROLE_BY_ID[t.roleId];
             return (
               <div key={t.instanceId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(0,0,0,0.25)', borderRadius: 4, padding: '6px 8px' }}>
-                {tRole?.img && <img src={tRole.img} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />}
+                <RoleIcon role={tRole} size={26} radius="50%" alt="" />
                 <div>
                   <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', margin: 0, fontWeight: 600 }}>
                     {t.label} <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>· {expiryLabel(t)}</span>
@@ -143,7 +144,7 @@ function ActionsTab({ target, send, onClose }) {
   if (target.role === 'FOOL' && target.foolUsed === false && !target.poisoned) killWarnings.push('🃏 Bufón: primera muerte anulada (se consumirá)');
   if (target.role === 'SAILOR' && !target.poisoned) killWarnings.push('⚓ Marinero: no puede morir');
   if (target.role === 'VIZIER' && !target.poisoned) killWarnings.push('👑 Visir: no puede morir durante el día');
-  if (target.type === 'demon') killWarnings.push('👹 Es el Demonio: al morir se aplica la cadena de sucesión (Dama Escarlata, Mente Maestra…)');
+  if (target.type === 'demon') killWarnings.push('👹 Es el Demonio: al morir se aplica la cadena de sucesión (Mujer Escarlata, Mente Maestra…)');
 
   const act = (type, payload) => send(type, payload);
   const nightAct = (actionType) => send('NIGHT_NARRATOR_ACTION', { actorId: target.id, actionType, targetIds: [target.id] });
@@ -225,7 +226,7 @@ function RoleTab({ target, send, onClose }) {
           </button>
         ))}
       </div>
-      {mode === 'believed' && <p style={hint}>Para Descerebrado, Marioneta y Lunático: el personaje real no se toca.</p>}
+      {mode === 'believed' && <p style={hint}>Para Cerenovus, Marioneta y Lunático: el personaje real no se toca.</p>}
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0', cursor: 'pointer' }}>
         <input type="checkbox" checked={notify} onChange={e => setNotify(e.target.checked)} />
@@ -340,7 +341,7 @@ export function AbilityTab({ target, game, send, onClose }) {
           <p style={label}>Personaje</p>
           <select value={pickedRole} onChange={e => setPickedRole(e.target.value)} style={{ ...input, marginBottom: 10 }}>
             <option value="">— Elige personaje —</option>
-            {ALL_ROLES
+            {scriptRoles(game)
               .filter(r => cfg.demonOnly ? r.type === 'demon' : cfg.anyRole ? true : true)
               .map(r => <option key={r.id} value={r.id}>{r.name} ({r.type})</option>)}
           </select>
@@ -474,7 +475,7 @@ export function AbilityTab({ target, game, send, onClose }) {
           Generar información de {role.name}
         </button>
       )}
-      {/* Segunda acción del mismo personaje (Sangijuela: marcar anfitrión) */}
+      {/* Segunda acción del mismo personaje (Lleech: marcar anfitrión) */}
       {cfg?.altAction && targets.length === 1 && (
         <button className="btn-night" style={{ width: '100%', marginTop: 6, fontSize: 11 }}
           onClick={() => run(cfg.altAction.action)}>
@@ -488,11 +489,11 @@ export function AbilityTab({ target, game, send, onClose }) {
         </button>
       )}
 
-      {/* Cazador: disparo único */}
+      {/* Exterminador: disparo único */}
       {cfg?.send === 'SLAYER_ACTION' && targets.length === 1 && (
         <button className="btn-action primary" style={{ width: '100%' }}
           onClick={() => { send('SLAYER_ACTION', { slayerId: target.id, targetId: targets[0] }); onClose(); }}>
-          🏹 Disparo del Cazador → {game.players.find(p => p.id === targets[0])?.name}
+          🏹 Disparo del Exterminador → {game.players.find(p => p.id === targets[0])?.name}
         </button>
       )}
 
@@ -650,7 +651,7 @@ function WishNarratorPanel({ game, send }) {
                   </select>
                   <select value={roleId} onChange={e => setRoleId(e.target.value)} style={input}>
                     <option value="">— Personaje —</option>
-                    {ALL_ROLES.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {scriptRoles(game).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
               )}

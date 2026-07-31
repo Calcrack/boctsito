@@ -95,6 +95,117 @@ const by = (g, r) => g.players.find(p => p.role === r);
 const act = (g, type, actorId, targets = []) => G.applyNightAction(g, type, actorId, targets);
 const BASE = ['MONK', 'MAYOR', 'SOLDIER', 'EMPATH', 'RECLUSE'];
 
+// ── Cola de noche: quién despierta y cuándo ──────────────────────────
+const NIGHT_ORDER = require(path.join(ROOT, 'nightOrder'));
+const queueRoles = g => (g.nightQueue || []).map(id => g.players.find(p => p.id === id)?.role);
+
+G_('Orden de noche');
+t('los órdenes globales del servidor y de la guía son el mismo', () => {
+  eq(NIGHT_ORDER.GLOBAL_FIRST_NIGHT_ORDER.join(','), FIRST.join(','), '1ª noche:');
+  eq(NIGHT_ORDER.GLOBAL_OTHER_NIGHT_ORDER.join(','), OTHER.join(','), 'noches*:');
+});
+t('sin asterisco en la habilidad → también actúa la primera noche', () => {
+  // «Cada noche elige 1 jugador…» (sin *) ⇒ firstNight
+  for (const id of ['FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'PREACHER',
+                    'CULT_LEADER', 'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS',
+                    'HUNTSMAN', 'NIGHTWATCHMAN', 'ENGINEER', 'DEVILS_ADVOCATE']) {
+    ok(ALL_ROLES[id]?.firstNight, `${id} debería despertar la 1ª noche`);
+  }
+});
+t('con asterisco en la habilidad → NO actúa la primera noche', () => {
+  for (const id of ['ASSASSIN', 'IMP', 'ACROBAT', 'LYCANTHROPE', 'SHABALOTH', 'PO']) {
+    eq(!!ALL_ROLES[id]?.firstNight, false, `${id} no debería despertar la 1ª noche`);
+  }
+});
+t('el Fearmonger entra en la cola de la primera noche', () => {
+  const g = mk(['FEARMONGER', 'IMP', ...BASE]);
+  G.startNight(g);
+  ok(queueRoles(g).includes('FEARMONGER'), 'no está en la cola de la 1ª noche');
+});
+t('un personaje de otra campaña entra igualmente en la cola', () => {
+  // Abogado del Diablo (Bad Moon Rising) repartido en una partida de Carousel:
+  // no está en queueFirst/queueOther de Carousel, pero debe despertar.
+  const g = mk(['DEVILS_ADVOCATE', 'IMP', ...BASE]);
+  G.startNight(g);
+  ok(queueRoles(g).includes('DEVILS_ADVOCATE'), 'falta en la cola de la 1ª noche');
+  G.startDay(g); G.startNight(g);
+  ok(queueRoles(g).includes('DEVILS_ADVOCATE'), 'falta en la cola de noches siguientes');
+});
+
+G_('Guiones personalizados');
+const CI = require(path.join(ROOT, 'campaignImport'));
+t('un guion escrito en castellano resuelve los personajes', () => {
+  const script = ['Abogado del Diablo', 'Fearmonger', 'Espía', 'Mujer Escarlata',
+                  'Suma Sacerdotisa', 'Rata de laboratorio', 'Niña de la Luna', 'Exterminador'];
+  const parsed = CI.parseScript(JSON.stringify(script), 'Prueba');
+  const ids = Object.keys(parsed.roles);
+  for (const want of ['DEVILS_ADVOCATE', 'FEARMONGER', 'SPY', 'SCARLET_WOMAN',
+                      'HIGH_PRIESTESS', 'BOFFIN', 'MOONCHILD', 'SLAYER']) {
+    ok(ids.includes(want), `${want} no se resolvió (ids: ${ids.join(',')})`);
+  }
+  eq(parsed.warnings.filter(w => w.includes('desconocido')).join(''), '', 'no debe haber stubs:');
+});
+t('el Abogado del Diablo entra en el orden de noche del guion', () => {
+  const parsed = CI.parseScript(JSON.stringify(['Abogado del Diablo', 'Diablillo', 'Envenenador']), 'Prueba');
+  ok(parsed.firstNightOrder.includes('DEVILS_ADVOCATE'), 'falta en la 1ª noche');
+  ok(parsed.otherNightOrder.includes('DEVILS_ADVOCATE'), 'falta en noches siguientes');
+});
+
+G_('Decisiones del Narrador');
+t('el salto de estrella deja elegir qué Esbirro hereda el Diablillo', () => {
+  const g = mk(['IMP', 'POISONER', 'BARON', ...BASE], 'TROUBLE_BREWING');
+  G.startNight(g); G.startDay(g); G.startNight(g);
+  const imp = by(g, 'IMP');
+  act(g, 'IMP_KILL', imp.id, [imp.id]);
+  const ch = (g.pendingChoices || []).find(c => c.key === 'DEMON_SUCCESSOR');
+  ok(ch, 'no se abrió la decisión del salto de estrella');
+  eq(ch.options.length, 2, 'debe poder elegir entre los 2 Esbirros vivos:');
+  const provisional = g.players.find(p => p.id === ch.picked);
+  eq(provisional.role, 'IMP', 'el provisional debe ser Diablillo ya');
+
+  const otro = ch.options.find(o => o.id !== ch.picked).id;
+  G.resolveChoice(g, ch.id, otro);
+  eq(g.players.find(p => p.id === otro).role, 'IMP', 'el elegido debe ser el Diablillo');
+  eq(provisional.role !== 'IMP', true, 'el provisional debe volver a su personaje');
+  eq(g.players.filter(p => p.type === 'demon' && p.alive).length, 1, 'debe haber 1 Demonio vivo:');
+});
+t('el ataque al Alcalde deja elegir quién muere en su lugar', () => {
+  const g = mk(['IMP', 'POISONER', 'MAYOR', ...BASE], 'TROUBLE_BREWING');
+  G.startNight(g); G.startDay(g); G.startNight(g);
+  act(g, 'IMP_KILL', by(g, 'IMP').id, [by(g, 'MAYOR').id]);
+  eq(by(g, 'MAYOR').alive, true, 'el Alcalde no muere');
+  const ch = (g.pendingChoices || []).find(c => c.key === 'DEATH_INSTEAD');
+  ok(ch, 'no se abrió la decisión de muerte redirigida');
+  const antes = g.players.find(p => p.id === ch.picked);
+  eq(antes.alive, false, 'la víctima provisional muere');
+
+  const otro = ch.options.find(o => o.id !== ch.picked).id;
+  G.resolveChoice(g, ch.id, otro);
+  eq(g.players.find(p => p.id === otro).alive, false, 'el elegido muere');
+  eq(antes.alive, true, 'la víctima provisional revive');
+  eq(g.nightDeaths.length, 1, 'solo debe haber 1 muerte:');
+});
+t('las decisiones quedan fijadas al amanecer', () => {
+  const g = mk(['IMP', 'POISONER', 'MAYOR', ...BASE], 'TROUBLE_BREWING');
+  G.startNight(g); G.startDay(g); G.startNight(g);
+  act(g, 'IMP_KILL', by(g, 'IMP').id, [by(g, 'MAYOR').id]);
+  ok((g.pendingChoices || []).length > 0, 'debería haber una decisión abierta');
+  G.startDay(g);
+  eq((g.pendingChoices || []).length, 0, 'tras amanecer no quedan decisiones abiertas:');
+});
+t('el Cazador deja elegir en qué Aldeano se convierte la Damisela', () => {
+  const g = mk(['HUNTSMAN', 'DAMSEL', 'IMP', 'POISONER', ...BASE]);
+  G.startNight(g);
+  act(g, 'HUNTSMAN', by(g, 'HUNTSMAN').id, [by(g, 'DAMSEL').id]);
+  const ch = (g.pendingChoices || []).find(c => c.key === 'BECOMES_ROLE');
+  ok(ch, 'no se abrió la decisión del Aldeano nuevo');
+  ok(ch.options.length > 1, 'debe ofrecer varios Aldeanos');
+  const otro = ch.options.find(o => o.id !== ch.picked).id;
+  G.resolveChoice(g, ch.id, otro);
+  const damsel = g.players.find(p => p.id === ch.subjectId);
+  eq(damsel.role, otro, 'la ex-Damisela debe tener el personaje elegido');
+});
+
 G_('Señor de Typhon');
 t('mata al objetivo elegido', () => {
   const g = mk(['LORD_OF_TYPHON', 'POISONER', ...BASE]);
@@ -217,7 +328,7 @@ t('el Duendecillo aprende un Aldeano concreto', () => {
   G.startNight(g);
   const px = by(g, 'PIXIE');
   act(g, 'PIXIE_INFO', px.id, [by(g, 'EMPATH').id]);
-  ok(px.nightInfo.includes('Empático') || px.nightInfo.includes('Empática'), `info inesperada: ${px.nightInfo}`);
+  ok(px.nightInfo.includes('Empático') || px.nightInfo.includes('Empático'), `info inesperada: ${px.nightInfo}`);
   eq(px.pixieKnownRole, 'EMPATH');
 });
 t('el Gnomo marca al jugador que todos conocen', () => {

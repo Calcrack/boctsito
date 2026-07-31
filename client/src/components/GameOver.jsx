@@ -2,6 +2,7 @@ import React from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
+import RoleIcon from './RoleIcon';
 
 export default function GameOver() {
   const { state, send } = useGame();
@@ -33,7 +34,7 @@ export default function GameOver() {
           const role = p.role ? ROLE_BY_ID[p.role] : null;
           return (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: p.alive ? 1 : 0.55 }}>
-              {role?.img && <img src={role.img} style={{ width: 30, height: 30, borderRadius: 4, objectFit: 'cover' }} />}
+              <RoleIcon role={role} size={30} radius={4} />
               <PlayerChip name={p.name} avatar={p.avatar} size="lg" />
               <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-400)', display: 'block' }}>

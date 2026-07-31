@@ -14,7 +14,7 @@ const {
   checkWinCondition, resolveDemonDeath, roshamboThrow, psychopathDayKill,
   barberSwap, closeBarberStep, applyWish,
   assignBelievedRoles, applySetup, regenDemonNightInfo,
-  placeToken, syncStatusFlags,
+  placeToken, syncStatusFlags, resolveChoice,
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
@@ -783,14 +783,14 @@ function handleMessage(type, payload, session) {
           broadcastGame();
         }
       } else if (result.needsRavenkeeper) {
-        broadcastToAll('NOTIFICATION', { message: '🦅 Esperando al Criacuervos...', type: 'info' });
+        broadcastToAll('NOTIFICATION', { message: '🦅 Esperando al Guardián de Cuervos...', type: 'info' });
       }
       break;
     }
 
     case 'SLAYER_ACTION': {
-      // Solo el narrador ejecuta el disparo del Cazador (cuando el jugador se lo pide).
-      if (!session.isNarrator) throw new Error('El disparo del Cazador lo ejecuta el narrador — pídeselo');
+      // Solo el narrador ejecuta el disparo del Exterminador (cuando el jugador se lo pide).
+      if (!session.isNarrator) throw new Error('El disparo del Exterminador lo ejecuta el narrador — pídeselo');
       const game = requireGame(session);
       const slayerId = payload.slayerId;
       const slayer = game.players.find(p => p.id === slayerId);
@@ -799,20 +799,20 @@ function handleMessage(type, payload, session) {
       broadcastGame();
       if (result.poisoned) {
         broadcastToAll('BROADCAST_EVENT', {
-          title: '🏹 Cazador disparó',
+          title: '🏹 Exterminador disparó',
           message: `${slayer?.name} disparó a ${targetName}... No hubo efecto.`,
           type: 'warning',
         });
       } else if (result.hit) {
         broadcastToAll('BROADCAST_EVENT', {
-          title: '🏹 ¡Cazador acertó!',
+          title: '🏹 ¡Exterminador acertó!',
           message: `${slayer?.name} disparó a ${targetName}. ¡Era el Demonio! ${targetName} muere.`,
           type: 'execution',
         });
         if (result.gameOver) { recordGameWin(game, 'good'); broadcastToAll('GAME_OVER', { winner: 'good' }); }
       } else {
         broadcastToAll('BROADCAST_EVENT', {
-          title: '🏹 Cazador falló',
+          title: '🏹 Exterminador falló',
           message: `${slayer?.name} disparó a ${targetName}. No era el Demonio.`,
           type: 'warning',
         });
@@ -1255,6 +1255,17 @@ function handleMessage(type, payload, session) {
     // ── Cambio de rol a media partida ──────────────────────────────
     // A diferencia de ASSIGN_ROLES_MANUAL, no toca vida, fichas ni fase.
     // mode: 'real' (por defecto) | 'believed' (solo lo que el jugador cree) | 'both'
+    // El Narrador cambia una decisión que la regla le deja a él (qué Esbirro
+    // hereda el Diablillo, quién muere en lugar del Alcalde…).
+    case 'RESOLVE_CHOICE': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const { choiceId, pickedId } = payload;
+      const choice = resolveChoice(game, choiceId, pickedId);
+      broadcastGame(game);
+      return { ok: true, choice: choice.id };
+    }
+
     case 'SET_PLAYER_ROLE': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
@@ -1267,7 +1278,7 @@ function handleMessage(type, payload, session) {
       const previousName = ROLES[player.role]?.name || player.role;
 
       if (mode === 'believed') {
-        // Descerebrado / Marioneta / Lunático: solo cambia lo que el jugador cree ser.
+        // Cerenovus / Marioneta / Lunático: solo cambia lo que el jugador cree ser.
         player.believedRole = role.id;
       } else {
         player.role = role.id;
@@ -1588,7 +1599,7 @@ function handleMessage(type, payload, session) {
       shooter.impShotUsed = true;
       broadcastGame();
       broadcastToAll('BROADCAST_EVENT', {
-        title: '🏹 Cazador disparó',
+        title: '🏹 Exterminador disparó',
         message: `${shooter.name} disparó a ${target?.name || '?'}. No era el Demonio.`,
         type: 'warning',
       });

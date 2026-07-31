@@ -103,7 +103,7 @@ t('Licántropo: si elige a un malvado, el Demonio mata normal', () => {
   act(g, 'KAZALI_KILL', by(g, 'KAZALI').id, [by(g, 'SOLDIER').id]);
   no(by(g, 'SOLDIER').alive, 'el Demonio sí mata');
 });
-t('Cazador de Damiselas: acierta → la Damisela pasa a Aldeano fuera de juego', () => {
+t('Cazador: acierta → la Damisela pasa a Aldeano fuera de juego', () => {
   const g = mk(['HUNTSMAN', 'DAMSEL', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g);
   const h = by(g, 'HUNTSMAN'), d = by(g, 'DAMSEL');
@@ -114,7 +114,7 @@ t('Cazador de Damiselas: acierta → la Damisela pasa a Aldeano fuera de juego',
   ok(h.huntsmanUsed);
   ok(h.nightInfo.includes('Acertaste'));
 });
-t('Cazador de Damiselas: falla → nada cambia, pero el uso se gasta', () => {
+t('Cazador: falla → nada cambia, pero el uso se gasta', () => {
   const g = mk(['HUNTSMAN', 'DAMSEL', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'POISONER']);
   G.startNight(g);
   const h = by(g, 'HUNTSMAN');
@@ -122,14 +122,14 @@ t('Cazador de Damiselas: falla → nada cambia, pero el uso se gasta', () => {
   eq(by(g, 'DAMSEL').role, 'DAMSEL');
   ok(h.huntsmanUsed);
 });
-t('Sacerdotisa Mayor: recibe el jugador que elige el narrador', () => {
+t('Suma Sacerdotisa: recibe el jugador que elige el narrador', () => {
   const g = mk(['HIGH_PRIESTESS', 'MONK', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'ACROBAT']);
   G.startNight(g);
   const hp = by(g, 'HIGH_PRIESTESS');
   act(g, 'HIGH_PRIESTESS', hp.id, [by(g, 'MAYOR').id]);
   ok(hp.nightInfo.includes(by(g, 'MAYOR').name), hp.nightInfo);
 });
-t('Guardián Nocturno: el elegido aprende quién es', () => {
+t('Sereno: el elegido aprende quién es', () => {
   const g = mk(['NIGHTWATCHMAN', 'MONK', 'KAZALI', 'MAYOR', 'SOLDIER', 'EMPATH', 'ACROBAT']);
   G.startNight(g);
   const nw = by(g, 'NIGHTWATCHMAN'), t2 = by(g, 'MAYOR');

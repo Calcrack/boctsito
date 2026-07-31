@@ -186,7 +186,7 @@ export const ABILITY_PANELS = {
   MAGICIAN: { phases: '*', targets: 0,
     note: 'El Demonio lo ve como Esbirro; los Esbirros lo ven como Demonio. Señala en orden aleatorio.' },
   NIGHTWATCHMAN: { phases: NIGHT, targets: 1, once: 'nightwatchmanUsed',
-    note: 'El elegido aprende quién es el Guardián Nocturno.' },
+    note: 'El elegido aprende quién es el Sereno.' },
   POPPY_GROWER: { phases: '*', targets: 0,
     note: 'Mientras viva, los Esbirros y el Demonio NO se conocen. Al morir, se conocen esa noche.' },
   PREACHER: { phases: NIGHT, targets: 1, action: 'POISON',
@@ -249,11 +249,11 @@ export const ABILITY_PANELS = {
     note: 'Elige qué Esbirro la cuida: ese cuenta como Demonio.' },
   LLEECH: { phases: NIGHT, targets: 1, action: 'LLEECH_KILL',
     altAction: { action: 'LLEECH_HOST', label: '🩸 Marcar anfitrión (1ª noche)' },
-    note: 'Elige anfitrión la primera noche: queda envenenado y si muere, la Sangijuela muere. Mientras el anfitrión viva, la Sangijuela es inmune.' },
+    note: 'Elige anfitrión la primera noche: queda envenenado y si muere, la Lleech muere. Mientras el anfitrión viva, la Lleech es inmune.' },
   OJO: { phases: NIGHT, targets: 0, pickRole: true, action: 'OJO_KILL',
     note: 'Nombra un PERSONAJE. Si no está en juego, eliges tú quién muere.' },
   RIOT: { phases: '*', targets: 0,
-    note: 'En el día 3 los Esbirros pasan a ser Motín y los nominados mueren al instante.' },
+    note: 'En el día 3 los Esbirros pasan a ser Riot y los nominados mueren al instante.' },
 
   // ── Viajeros ───────────────────────────────────────────────────────
   APPRENTICE: { phases: NIGHT, targets: 0, pickRole: true,

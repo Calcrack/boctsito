@@ -11,6 +11,7 @@ import NightWalkthrough from './NightWalkthrough';
 import StatusChips from './StatusChips';
 import GameTable from './GameTable';
 import ActionModal from './ActionModal';
+import RoleIcon from './RoleIcon';
 
 function MiniAvatar({ player, size = 20 }) {
   return (
@@ -438,7 +439,7 @@ export default function NarratorPanel() {
                     <div className="nx-avatar">
                       {p.avatar ? <img src={p.avatar} /> : p.name[0]}
                     </div>
-                    {role?.img && <img src={role.img} style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover' }} />}
+                    <RoleIcon role={role} size={20} radius={4} />
                     <span className="nx-sub">{p.name}{role ? ` · ${role.name}` : ''}</span>
                   </div>
                 ) : null;
@@ -482,7 +483,7 @@ function RosterList({ players, send, searchRef, onOpen }) {
               <div key={p.id} className={`nx-row${p.alive ? '' : ' dead'}`} onClick={() => onOpen(p.id)}>
                 <span className="nx-seat-num">{players.indexOf(p) + 1}</span>
                 <div className="nx-avatar">
-                  {role?.img ? <img src={role.img} /> : p.avatar ? <img src={p.avatar} /> : p.name[0]}
+                  {role ? <RoleIcon role={role} size={null} style={{ width: '100%', height: '100%' }} /> : p.avatar ? <img src={p.avatar} /> : p.name[0]}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>

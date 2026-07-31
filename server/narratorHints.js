@@ -25,7 +25,7 @@ const HINTS = {
 
   GOSSIP: [{
     when: anyNight,
-    text: '¿Su afirmación pública de hoy era VERDADERA? Si sí, elige tú quién muere esta noche. Si el Cotilla está borracho o envenenado, no muere nadie.',
+    text: '¿Su afirmación pública de hoy era VERDADERA? Si sí, elige tú quién muere esta noche. Si el Chismoso está borracho o envenenado, no muere nadie.',
     needs: 'Botón de confirmación + "Matar" sobre la víctima que elijas.',
     severity: 'warn',
   }],
@@ -39,7 +39,7 @@ const HINTS = {
 
   MOONCHILD: [{
     when: c => !c.p.alive && !c.p.moonchildResolved,
-    text: 'Ha muerto: debe elegir EN PÚBLICO a un jugador vivo. Si el elegido es bueno, mátalo esta noche. Si el Hijo de la Luna estaba envenenado, no muere nadie.',
+    text: 'Ha muerto: debe elegir EN PÚBLICO a un jugador vivo. Si el elegido es bueno, mátalo esta noche. Si el Niña de la Luna estaba envenenado, no muere nadie.',
     needs: 'Selector de objetivo + "Matar" si el elegido es bueno.',
     severity: 'warn',
   }],
@@ -68,7 +68,7 @@ const HINTS = {
 
   KLUTZ: [{
     when: c => !c.p.alive && !c.p.klutzResolved,
-    text: 'Ha muerto: debe elegir EN PÚBLICO a un jugador vivo. Si señala a un MALVADO, su equipo pierde de inmediato — salvo que el Torpe estuviera envenenado. El aviso sigue aquí hasta que lo resuelvas.',
+    text: 'Ha muerto: debe elegir EN PÚBLICO a un jugador vivo. Si señala a un MALVADO, su equipo pierde de inmediato — salvo que el Patoso estuviera envenenado. El aviso sigue aquí hasta que lo resuelvas.',
     needs: 'Si acierta: "Terminar partida" declarando ganador al bando contrario.',
     severity: 'danger',
   }],

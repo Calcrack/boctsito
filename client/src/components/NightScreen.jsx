@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID, ALL_ROLES } from '../data/roles';
+import RoleIcon from './RoleIcon';
 
 const SORTED_ROLES_FOR_PARSE = [...ALL_ROLES].sort((a, b) => b.name.length - a.name.length);
 
@@ -36,7 +37,7 @@ function RichNightInfo({ text, players = [] }) {
         parts.push(
           <span key={key++} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, verticalAlign: 'middle', margin: '0 5px' }}>
             <span>{bestRole.name}</span>
-            {bestRole.img && <img src={bestRole.img} alt="" style={{ width: 38, height: 38, borderRadius: 4, objectFit: 'cover' }} />}
+            <RoleIcon role={bestRole} size={38} radius={4} alt="" />
           </span>
         );
         remaining = remaining.slice(bestRoleIdx + bestRole.name.length);
@@ -362,7 +363,7 @@ export default function NightScreen({ player }) {
           </p>
           {role && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 20, background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '16px 20px' }}>
-              {role.img && <img src={role.img} style={{ width: 56, height: 56, borderRadius: 6, objectFit: 'cover' }} />}
+              <RoleIcon role={role} size={56} radius={6} />
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-200)' }}>{role.name}</div>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 4, lineHeight: 1.5 }}>{role.ability}</div>
@@ -396,7 +397,7 @@ export default function NightScreen({ player }) {
           </p>
           {role && (
             <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              {role.img && <img src={role.img} style={{ width: 48, height: 48, borderRadius: 6, objectFit: 'cover' }} />}
+              <RoleIcon role={role} size={48} radius={6} />
               <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-400)' }}>{role.name}</span>
             </div>
           )}
@@ -447,7 +448,7 @@ export default function NightScreen({ player }) {
         <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
           {role && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 24 }}>
-              {role.img && <img src={role.img} style={{ width: 60, height: 60, borderRadius: 6, objectFit: 'cover' }} />}
+              <RoleIcon role={role} size={60} radius={6} />
               <span style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--bone-100)' }}>{role.name}</span>
             </div>
           )}
@@ -472,7 +473,7 @@ export default function NightScreen({ player }) {
         <ExitBtn />
         {role && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 24 }}>
-            {role.img && <img src={role.img} style={{ width: 60, height: 60, borderRadius: 6, objectFit: 'cover' }} />}
+            <RoleIcon role={role} size={60} radius={6} />
             <span style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--bone-100)' }}>{role.name}</span>
           </div>
         )}
@@ -515,7 +516,7 @@ export default function NightScreen({ player }) {
           </p>
           {role && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'var(--bone-400)', marginBottom: 24, background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '16px 20px' }}>
-              {role.img && <img src={role.img} style={{ width: 56, height: 56, borderRadius: 6, objectFit: 'cover', opacity: 0.85 }} />}
+              <RoleIcon role={role} size={56} radius={6} style={{ opacity: 0.85 }} />
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-200)' }}>{role.name}</div>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 5, lineHeight: 1.5 }}>{role.ability}</div>
@@ -555,7 +556,7 @@ export default function NightScreen({ player }) {
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         {role && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 18 }}>
-            {role.img && <img src={role.img} style={{ width: 58, height: 58, borderRadius: 6, objectFit: 'cover' }} />}
+            <RoleIcon role={role} size={58} radius={6} />
             <span style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--bone-100)' }}>{role.name}</span>
           </div>
         )}

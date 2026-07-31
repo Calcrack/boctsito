@@ -5,7 +5,7 @@ import { useGame } from '../context/GameContext';
 // Decisiones del narrador que no son un paso del orden de noche, sino un
 // interruptor que dura toda la partida o toda la noche: cómo registran el
 // Recluso y el Espía, a quién redirige el Alcalde su muerte y quién es el
-// falso positivo de la Adivina.
+// falso positivo de la Pitonisa.
 // Cada bloque solo aparece si su personaje está en juego.
 
 function Choice({ options, value, onPick }) {
@@ -59,7 +59,7 @@ export default function NightSettings() {
         <div className="nx-card-body">
           {hasFortuneTeller && (
             <Setting
-              title="Falso positivo de la Adivina"
+              title="Falso positivo de la Pitonisa"
               help={redHerring ? `Ahora: ${redHerring.name} le aparece como Demonio.` : 'Un jugador bueno que siempre le sale como Demonio.'}>
               <Choice
                 value={game.smokeScreenPlayerId || null}

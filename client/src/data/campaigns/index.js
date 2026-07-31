@@ -44,6 +44,26 @@ export const ALL_ROLES = (() => {
   return out;
 })();
 
+// Personajes del GUION en curso: los de la campaña activa, más los que el
+// Narrador haya repartido desde otra campaña en el montaje (esos extras solo
+// viajan al Narrador, así que los jugadores ven exactamente el guion).
+// Sin partida cargada todavía → catálogo completo, para no dejar la vista vacía.
+export function scriptRoles(game) {
+  const ids = (game?.campaignRoles || []).map(r => r.id);
+  for (const roleId of Object.values(game?.setup?.assignments || {})) {
+    if (roleId) ids.push(roleId);
+  }
+  const seen = new Set();
+  const out = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const r = ROLE_BY_ID[id];
+    if (r) out.push(r);
+  }
+  return out.length ? out : ALL_ROLES;
+}
+
 export const ROLE_BY_ID = Object.fromEntries(ALL_ROLES.map(r => [r.id, r]));
 export const ROLE_NAMES = Object.fromEntries(ALL_ROLES.map(r => [r.id, r.name]));
 export const ROLE_TYPES = Object.fromEntries(ALL_ROLES.map(r => [r.id, r.type]));

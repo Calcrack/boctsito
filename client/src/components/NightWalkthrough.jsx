@@ -4,6 +4,7 @@ import { ROLE_BY_ID, getCampaign } from '../data/roles';
 import { typeLabel, MASK } from '../utils/identity';
 import StatusChips from './StatusChips';
 import { AbilityTab } from './NarratorTools';
+import RoleIcon from './RoleIcon';
 
 const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 
@@ -19,9 +20,12 @@ const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 // Usado para insertar roles cross-edition en el lugar correcto.
 const GLOBAL_FIRST_NIGHT_ORDER = [
   'STORM_CATCHER',
-  'POPPY_GROWER','MAGICIAN',
+  'POPPY_GROWER','MAGICIAN','PREACHER','ENGINEER',
   'KAZALI','LEGION','LIL_MONSTA','RIOT','LEVIATHAN','YAGGABABBLE','LLEECH',
-  'LUNATIC','MARIONETTE','GNOME','WRAITH','MEZEPHELES','WIDOW','XAAN','SUMMONER','SHUGENJA','STEWARD',
+  'LUNATIC','MARIONETTE','GNOME','WRAITH',
+  // Sin asterisco en su habilidad → también despiertan la primera noche.
+  'MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER',
+  'WIDOW','XAAN','SUMMONER','SHUGENJA','STEWARD',
   'PHILOSOPHER',
   'BARISTA','BUREAUCRAT','THIEF',
   'SAILOR','COURTIER','GODFATHER','DEVILS_ADVOCATE',
@@ -31,7 +35,7 @@ const GLOBAL_FIRST_NIGHT_ORDER = [
   'PIXIE','CLOCKMAKER','DREAMER','SEAMSTRESS','MATHEMATICIAN',
   'WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','FORTUNE_TELLER','VILLAGE_IDIOT',
   'BUTLER','SPY','OGRE','HERMIT',
-  'BOUNTY_HUNTER','KNIGHT','BOFFIN','NOBLE','DAMSEL','SNITCH',
+  'BOUNTY_HUNTER','CULT_LEADER','NIGHTWATCHMAN','KNIGHT','BOFFIN','NOBLE','DAMSEL','SNITCH',
   'GRANDMOTHER','CHAMBERMAID',
   'BALLOONIST','GENERAL','HIGH_PRIESTESS','KING',
   'JUGGLER',
@@ -67,13 +71,55 @@ const GLOBAL_OTHER_NIGHT_ORDER = [
   'AMNESIAC','DAMSEL','POLITICIAN','FISHERMAN','ARTIST','SAVANT','WIZARD',
 ];
 
+// ── Decisiones que la regla te deja a ti ────────────────────────────
+// El motor aplica una opción provisional para no bloquear la partida y la
+// deja abierta hasta el amanecer: aquí puedes cambiarla.
+function PendingChoices({ game, send }) {
+  const choices = game.pendingChoices || [];
+  if (!choices.length) return null;
+  return (
+    <div style={{ padding: '10px 14px 0' }}>
+      {choices.map(c => (
+        <div key={c.id} style={{
+          background: 'rgba(201,162,74,0.10)',
+          border: '1px solid var(--gold)',
+          borderRadius: 6, padding: '10px 12px', marginBottom: 8,
+        }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--gold-hot)', margin: '0 0 8px', lineHeight: 1.4 }}>
+            ❓ {c.prompt}
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {c.options.map(o => (
+              <button key={o.id}
+                onClick={() => send('RESOLVE_CHOICE', { choiceId: c.id, pickedId: o.id })}
+                className="nx-btn sm"
+                style={c.picked === o.id
+                  ? { borderColor: 'var(--gold)', color: 'var(--gold-hot)' }
+                  : undefined}>
+                {c.picked === o.id ? '✓ ' : ''}{o.label}
+              </button>
+            ))}
+          </div>
+          <p className="nx-hint" style={{ marginTop: 6 }}>
+            Se aplica al instante. Queda fijado al amanecer.
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function buildSteps(game) {
   const campaign    = getCampaign(game.campaignId);
   const isFirstNight = game.nightNumber <= 1;
   const players     = game.players;
   const pendingRaven = players.find(p => p.role === 'RAVENKEEPER' && p.pendingRavenkeeper);
 
-  const campaignOrder = isFirstNight ? campaign.firstNightOrder : campaign.otherNightOrder;
+  // El servidor manda el orden real de la campaña activa (incluidos guiones
+  // importados, que el cliente no tiene). Si no llega, el de la campaña base.
+  const campaignOrder = (isFirstNight
+    ? (game.campaignFirstNightOrder || campaign.firstNightOrder)
+    : (game.campaignOtherNightOrder || campaign.otherNightOrder)) || [];
   const globalOrder   = isFirstNight ? GLOBAL_FIRST_NIGHT_ORDER : GLOBAL_OTHER_NIGHT_ORDER;
 
   // All role IDs carried by players (role + believedRole + drunkAs)
@@ -257,7 +303,7 @@ const NIGHT_ROLE_PATTERN = {
   MAGICIAN:        { kind: 'P_INFO', emoji: '🎩',
                      note: 'Pasivo. El Demonio ve al Mago como Esbirro. Los Esbirros ven al Mago como Demonio (ajustado en info del mal).' },
   NIGHTWATCHMAN:   { kind: 'P3',     effect: 'NIGHTWATCHMAN',             emoji: '🔦', label: 'Elegir a',            notSelf: true,
-                     note: 'Una sola vez. El elegido se despierta y aprende que eres el Guardián Nocturno. Marcar "usado".' },
+                     note: 'Una sola vez. El elegido se despierta y aprende que eres el Sereno. Marcar "usado".' },
   NOBLE:           { kind: 'P_NOBLE', emoji: '🎭', firstNightOnly: true },
   POPPY_GROWER:    { kind: 'P_INFO', emoji: '🌺',
                      note: 'Pasivo. Info mutua del mal suprimida mientras viva. Al morir: activar sesión de info del mal esa misma noche.' },
@@ -478,6 +524,8 @@ export default function NightWalkthrough({ onActiveActor, onProgress, controlsRe
         </div>
       )}
 
+      <PendingChoices game={game} send={send} />
+
       <div style={{ padding: '14px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {!step ? (
           <p className="nx-hint" style={{ textAlign: 'center' }}>
@@ -604,7 +652,7 @@ function RoleStepView({ step, game, send }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        {shown.img && <img src={shown.img} style={{ width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+        <RoleIcon role={shown} size={68} radius="50%" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: 'var(--serif)', fontSize: 26, lineHeight: 1.15, color: evil ? 'var(--blood-hi)' : 'var(--bone-50)' }}>{shown.name}</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--bone-200)' }}>
@@ -767,7 +815,7 @@ function P2Panel({ actor, pattern, game, send, roleName }) {
   );
 }
 
-// P1 — número calculado + override (Empática, Cocinero, Sepulturero, Oráculo, Relojero, Niña de las Flores…)
+// P1 — número calculado + override (Empático, Cocinero, Sepulturero, Oráculo, Relojero, Florista…)
 function P1Panel({ actor, pattern, game, send, roleName }) {
   const [val, setVal] = useState('');
   const [ok,  setOk]  = useState(actor.nightInfo != null);
@@ -907,11 +955,11 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
     HUNTSMAN:                 n => `🏹 Cazador\nEligió a ${n} esta noche.`,
     LYCANTHROPE_KILL:         n => `🐺 Licántropo\nEligió a ${n} esta noche.`,
     ACROBAT_CHECK:            n => `🤸 Acróbata\nEligió a ${n} esta noche.`,
-    FEARMONGER:               n => `😨 Sembrador de Miedo\nObjetivo: ${n}.`,
+    FEARMONGER:               n => `😨 Fearmonger\nObjetivo: ${n}.`,
     WIDOW_POISON:             n => `🕷️ Viuda\nEnvenenó permanentemente a ${n}.`,
     PREACHER:                 n => `⛪ Predicador\nEligió a ${n} esta noche.`,
-    NIGHTWATCHMAN:            n => `🔦 Guardián Nocturno\nInformó a ${n} de su identidad.`,
-    HIGH_PRIESTESS:           n => `🌙 Alta Sacerdotisa\nJugador a mostrar al Rey esta noche: ${n}.`,
+    NIGHTWATCHMAN:            n => `🔦 Sereno\nInformó a ${n} de su identidad.`,
+    HIGH_PRIESTESS:           n => `🌙 Suma Sacerdotisa\nJugador a mostrar al Rey esta noche: ${n}.`,
     BOUNTY_HUNTER_REVEAL:     n => `💰 Cazarrecompensas\nRevela a ${n} como jugador malvado.`,
     LORD_OF_TYPHON_KILL:      n => `🐍 Señor de Typhon\nAtacó a ${n} esta noche.`,
     FIDDLER_DUEL:             n => `🎻 Violinista\nDuelo contra ${n}: mañana todos votan cuál de los 2 gana la partida.`,
@@ -1003,7 +1051,7 @@ function P3x2Panel({ actor, pattern, game, send, roleName }) {
   );
 }
 
-// P4 — 2 jugadores + sí/no (Adivina, Costurera)
+// P4 — 2 jugadores + sí/no (Pitonisa, Costurera)
 function P4Panel({ actor, pattern, game, send, roleName }) {
   const isFirstNight = game.nightNumber === 1;
   const isSameAlign = !!pattern.sameAlignment;
@@ -1026,7 +1074,7 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
     : null;
 
   const can = p1 && p2 && p1 !== p2;
-  const label = roleName || (isSameAlign ? 'Costurera' : 'Adivina');
+  const label = roleName || (isSameAlign ? 'Costurera' : 'Pitonisa');
 
   const buildInfo = () => {
     const n1 = p1d?.name, n2 = p2d?.name;
@@ -1423,7 +1471,7 @@ function GamblerPanel({ actor, pattern, game, send, roleName }) {
   );
 }
 
-// P_GOSSIP — Cotilla: ¿declaración verdadera? → si sí, elige quién muere
+// P_GOSSIP — Chismoso: ¿declaración verdadera? → si sí, elige quién muere
 function GossipPanel({ actor, pattern, game, send, roleName }) {
   const [triggered, setTriggered] = useState(null);
   const [targetId, setTargetId] = useState('');
@@ -1433,15 +1481,15 @@ function GossipPanel({ actor, pattern, game, send, roleName }) {
 
   const buildInfo = () => {
     if (!triggered) return null;
-    if (triggered === 'no') return `💬 Cotilla\nDeclaración pública no verdadera (o Cotilla envenenada). No hay muerte.`;
+    if (triggered === 'no') return `💬 Chismoso\nDeclaración pública no verdadera (o Chismoso envenenada). No hay muerte.`;
     const tname = game.players.find(p => p.id === targetId)?.name;
-    return `💬 Cotilla\nDeclaración verdadera — muere ${tname} esta noche.`;
+    return `💬 Chismoso\nDeclaración verdadera — muere ${tname} esta noche.`;
   };
   const can = triggered === 'no' || (triggered === 'yes' && targetId);
   const info = buildInfo();
   return (
     <div style={panelStyle}>
-      <p style={labelStyle}>{ok ? '✓ Anotado' : 'Cotilla — ¿se activa hoy?'}</p>
+      <p style={labelStyle}>{ok ? '✓ Anotado' : 'Chismoso — ¿se activa hoy?'}</p>
       {actor.poisoned && poisonNote}
       <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '0 0 6px', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
         ¿Algún jugador hizo una declaración pública verdadera hoy?
@@ -1806,7 +1854,7 @@ function StewardPanel({ actor, game, send }) {
   );
 }
 
-// P_CERENOVUS — Descerebrado: jugador + personaje bueno → locura temporal
+// P_CERENOVUS — Cerenovus: jugador + personaje bueno → locura temporal
 function CerenovusPanel({ actor, game, send }) {
   const [targetId, setTargetId] = useState('');
   const [charId, setCharId] = useState('');
@@ -1843,7 +1891,7 @@ function CerenovusPanel({ actor, game, send }) {
   );
 }
 
-// P_PITHAG — Brujo del Caldero: jugador + cualquier rol (agrupado)
+// P_PITHAG — Pit-Hag: jugador + cualquier rol (agrupado)
 function PitHagPanel({ actor, game, send }) {
   const [targetId, setTargetId] = useState('');
   const [charId, setCharId] = useState('');
@@ -2021,7 +2069,7 @@ function SummonerPanel({ actor, game, send }) {
   );
 }
 
-// P_LIL_MONSTA — Pequeña Monsta: esbirros eligen quién porta al bebé
+// P_LIL_MONSTA — Lil’ Monsta: esbirros eligen quién porta al bebé
 function LilMonstaPanel({ actor, game, send }) {
   const [chosen, setChosen] = useState('');
   const [ok, setOk] = useState(actor.nightInfo != null);

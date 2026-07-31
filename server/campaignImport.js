@@ -146,18 +146,38 @@ const NIGHT_PRIORITY = {
   // SCAPEGOAT, DOOMSAYER, BEGGAR, BIG_WIG y el resto de fabulados.
 };
 
+// Quita acentos antes de limpiar: si no, «Espía» acababa en "espa" y
+// «Pitonisa»/«Alquimista» no casaban con nada.
 function normalize(id) {
-  return String(id).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return String(id)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase();
 }
 
 // Lookup de nuestros roles por id normalizado.
 const NORM_LOOKUP = {};
 for (const id of Object.keys(ALL_ROLES)) NORM_LOOKUP[normalize(id)] = id;
 
+// Lookup por NOMBRE en castellano. Un guion escrito a mano trae «Abogado del
+// Diablo», no «devilsadvocate»: antes entraba como stub sin habilidad ni paso
+// de noche, así que el personaje no salía por ninguna parte.
+const NAME_LOOKUP = {};
+for (const [id, role] of Object.entries(ALL_ROLES)) {
+  if (!role?.name) continue;
+  const key = normalize(role.name);
+  if (!NAME_LOOKUP[key]) NAME_LOOKUP[key] = id;
+}
+for (const [id, role] of Object.entries(HOMEBREW)) {
+  const key = normalize(role.name);
+  if (!NAME_LOOKUP[key]) NAME_LOOKUP[key] = id;
+}
+
 function resolveId(rawId) {
   const norm = normalize(rawId);
   if (ID_ALIASES[norm]) return ID_ALIASES[norm];
   if (NORM_LOOKUP[norm]) return NORM_LOOKUP[norm];
+  if (NAME_LOOKUP[norm]) return NAME_LOOKUP[norm];
   // homebrew por id en MAYÚSCULAS
   const upper = norm.toUpperCase();
   if (HOMEBREW[upper]) return upper;

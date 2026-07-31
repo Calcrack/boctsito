@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { ALL_ROLES, ROLE_BY_ID } from '../data/roles';
+import { ALL_ROLES, ROLE_BY_ID, scriptRoles } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import StatusChips from './StatusChips';
 import NarratorTabs from './NarratorTools';
@@ -57,13 +57,13 @@ export default function ActionModal({ target, onClose, isNarrator }) {
 
   const role   = target.role ? ROLE_BY_ID[target.role] : null;
   const myRole = me?.role ? ROLE_BY_ID[me.role] : null;
-  // El disparo del Cazador lo ejecuta SOLO el narrador (cuando el jugador se lo pide).
+  // El disparo del Exterminador lo ejecuta SOLO el narrador (cuando el jugador se lo pide).
   const slayerInGame = isNarrator
     ? game.players.find(p => (p.role === 'SLAYER' || p.drunkAs === 'SLAYER') && p.alive && !p.slayerUsed)
     : null;
   const canNarratorSlayer = !!slayerInGame && target.alive && target.id !== slayerInGame.id && ['day', 'nominations'].includes(phase);
   const isSelfEvil = target.id === playerId && me?.alignment === 'evil';
-  // El disparo fingido (malvado que finge ser Cazador) también lo ejecuta SOLO el narrador.
+  // El disparo fingido (malvado que finge ser Exterminador) también lo ejecuta SOLO el narrador.
   const fakeShooters = isNarrator
     ? game.players.filter(p => p.alignment === 'evil' && p.alive && !p.impShotUsed && p.id !== target.id)
     : [];
@@ -128,7 +128,7 @@ export default function ActionModal({ target, onClose, isNarrator }) {
               <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--blood-hi)', marginBottom: 8 }}>Rol que finges ser</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
                 <button onClick={() => handleBluff(null)} className="btn-night" style={{ fontSize: 9 }}>Ninguno</button>
-                {ALL_ROLES.filter(r => r.alignment === 'good').map(r => (
+                {scriptRoles(game).filter(r => r.alignment === 'good').map(r => (
                   <button key={r.id} onClick={() => handleBluff(r.id)}
                     className="btn-night"
                     style={{ fontSize: 9, borderColor: me.bluffRole === r.id ? 'var(--blood-hi)' : undefined, color: me.bluffRole === r.id ? 'var(--blood-hi)' : undefined }}>
@@ -152,7 +152,7 @@ export default function ActionModal({ target, onClose, isNarrator }) {
                 <select value={accusedRole} onChange={e => setAccusedRole(e.target.value)}
                   style={{ flex: 1, background: 'var(--ink-700)', border: 'var(--hairline)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)' }}>
                   <option value="">— Creo que es... —</option>
-                  {ALL_ROLES.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  {scriptRoles(game).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
                 <button onClick={handleSuspect} disabled={!accusedRole} className="btn-action" style={{ opacity: accusedRole ? 1 : 0.4 }}>
                   Sospecha
@@ -201,19 +201,19 @@ export default function ActionModal({ target, onClose, isNarrator }) {
             </div>
           )}
 
-          {/* Disparo del Cazador — solo el narrador, cuando el jugador se lo pide */}
+          {/* Disparo del Exterminador — solo el narrador, cuando el jugador se lo pide */}
           {isNarrator && canNarratorSlayer && (
             <div style={{ borderBottom: 'var(--hairline-bone)', paddingBottom: 12 }}>
               <button onClick={handleNarratorSlayer} className="btn-action primary" style={{ width: '100%' }}>
-                🏹 Disparo del Cazador ({slayerInGame.name}) → {target.name}
+                🏹 Disparo del Exterminador ({slayerInGame.name}) → {target.name}
               </button>
               <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', marginTop: 4, textAlign: 'center' }}>
-                Ejecuta el tiro único del Cazador en nombre de {slayerInGame.name} — gasta su habilidad
+                Ejecuta el tiro único del Exterminador en nombre de {slayerInGame.name} — gasta su habilidad
               </p>
             </div>
           )}
 
-          {/* Disparo fingido (malvado que finge ser Cazador) — solo el narrador, cuando el jugador se lo pide */}
+          {/* Disparo fingido (malvado que finge ser Exterminador) — solo el narrador, cuando el jugador se lo pide */}
           {isNarrator && canNarratorFakeShot && (
             <div style={{ borderBottom: 'var(--hairline-bone)', paddingBottom: 12 }}>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -227,7 +227,7 @@ export default function ActionModal({ target, onClose, isNarrator }) {
                 </button>
               </div>
               <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', fontStyle: 'italic', marginTop: 4, textAlign: 'center' }}>
-                Anuncia el disparo fallido de un malvado que finge ser el Cazador — una vez por jugador
+                Anuncia el disparo fallido de un malvado que finge ser el Exterminador — una vez por jugador
               </p>
             </div>
           )}

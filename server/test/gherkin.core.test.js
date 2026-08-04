@@ -869,6 +869,139 @@ t('un jugador nunca ve el rol de otro', () => {
   no(other.role, 'no debe filtrarse el rol ajeno: ' + other.role);
 });
 
+// ── Reemplazar jugador ───────────────────────────────────────────────
+G_('Reemplazar jugador');
+t('el asiento conserva personaje, fichas y estado', () => {
+  const g = mk(['POISONER', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g);
+  const p = by(g, 'EMPATH');
+  G.applyNightAction(g, 'POISON', by(g, 'POISONER').id, [p.id]);
+  p.alive = false;
+  const fichas = p.tokens.length;
+  G.replacePlayer(g, p.id, { name: 'Sustituta' });
+  eq(p.name, 'Sustituta');
+  eq(p.role, 'EMPATH', 'debe conservar el personaje');
+  eq(p.tokens.length, fichas, 'debe conservar las fichas');
+  eq(p.alive, false, 'debe conservar vivo/muerto');
+});
+t('actualiza el nombre en las nominaciones ya registradas', () => {
+  const g = mk(['POISONER', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g); G.startDay(g); G.openNominations(g);
+  const a = by(g, 'MONK'), b = by(g, 'MAYOR');
+  G.nominate(g, a.id, b.id);
+  G.replacePlayer(g, b.id, { name: 'Nuevo' });
+  const nom = g.nominations[0];
+  eq(nom.nomineeName, 'Nuevo');
+});
+t('no toca a los demás jugadores ni relanza el montaje', () => {
+  const g = mk(['POISONER', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g);
+  const antes = g.players.length;
+  G.replacePlayer(g, by(g, 'MONK').id, { name: 'Otro' });
+  eq(g.players.length, antes);
+  eq(by(g, 'IMP').role, 'IMP');
+});
+t('reemplazar a alguien inexistente da error', () => {
+  const g = mk(['POISONER', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  let err = null;
+  try { G.replacePlayer(g, 'no-existe', { name: 'X' }); } catch (e) { err = e; }
+  ok(err, 'debería lanzar');
+});
+
+// ── Gemela Malvada ───────────────────────────────────────────────────
+G_('Gemela Malvada');
+function twins() {
+  const g = mk(['EVIL_TWIN', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE'], 'SECTS_AND_VIOLETS');
+  const evil = by(g, 'EVIL_TWIN');
+  const good = by(g, 'MAYOR');
+  g.setup.decisions = [{ id: 'x', kind: 'otroSecreto', secret: 'evilTwin', seat: evil.id, targetSeat: good.id }];
+  G.applySetup(g);
+  return { g, evil, good };
+}
+t('los dos gemelos se conocen', () => {
+  const { g, evil, good } = twins();
+  eq(evil.evilTwinOf, good.id);
+  eq(good.evilTwinOf, evil.id);
+  const view = G.getPublicState(g, good.id, false);
+  eq(view.players.find(p => p.id === good.id).evilTwinName, evil.name);
+});
+t('cada gemelo lleva su ficha en el grimorio', () => {
+  const { evil, good } = twins();
+  ok((evil.tokens || []).some(t => t.type === 'TWIN'), 'la gemela sin ficha');
+  ok((good.tokens || []).some(t => t.type === 'TWIN'), 'el gemelo bueno sin ficha');
+});
+t('el Bien no gana mientras los dos gemelos vivan', () => {
+  const { g } = twins();
+  by(g, 'IMP').alive = false;
+  G.checkWinCondition(g);
+  no(g.winner, 'no debería terminar: ' + g.winReason);
+});
+t('muerto el gemelo bueno, el Bien ya puede ganar', () => {
+  const { g, good } = twins();
+  by(g, 'IMP').alive = false;
+  good.alive = false;
+  G.checkWinCondition(g);
+  eq(g.winner, 'good');
+});
+t('avisa al narrador de que hay un gemelo bueno', () => {
+  const { g } = twins();
+  const view = G.getPublicState(g, null, true);
+  ok(view.advice.some(a => /gemelo bueno/i.test(a.text)), 'sin aviso');
+});
+
+// ── Legión ───────────────────────────────────────────────────────────
+G_('Legión');
+t('el montaje convierte en Legión a los asientos marcados', () => {
+  const g = mk(['LEGION', 'BARON', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE'], 'CAROUSEL');
+  const ids = g.players.slice(0, 4).map(p => p.id);
+  g.setup.decisions = [{ id: 'l', kind: 'legionSeats', seat: g.players[0].id, min: 4, chosen: ids }];
+  G.applySetup(g);
+  eq(g.players.filter(p => p.role === 'LEGION').length, 4);
+  ok(g.players.filter(p => p.role === 'LEGION').every(p => p.alignment === 'evil'), 'deberían ser malvados');
+});
+
+// ── Grimorio del Espía / la Viuda ────────────────────────────────────
+G_('Grimorio (Espía y Viuda)');
+t('el Espía ve el personaje de todos los asientos de noche', () => {
+  const g = mk(['SPY', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g);
+  const spy = by(g, 'SPY');
+  const view = G.getPublicState(g, spy.id, false);
+  ok(view.viewerSeesGrimoire, 'debería marcarse como lector del Grimorio');
+  const sinRol = view.players.filter(p => !p.role).map(p => p.name);
+  eq(sinRol.join(','), '', 'asientos sin personaje visible');
+});
+t('el Espía NO ve conexión ni fichas', () => {
+  const g = mk(['SPY', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g);
+  const spy = by(g, 'SPY');
+  const view = G.getPublicState(g, spy.id, false, { [spy.id]: 'online' });
+  ok(view.players.every(p => p.presence === undefined), 'no debe viajar la conexión');
+  ok(view.players.every(p => p.tokens === undefined), 'no deben viajar las fichas');
+});
+t('de día el Espía no ve el Grimorio', () => {
+  const g = mk(['SPY', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g); G.startDay(g);
+  const spy = by(g, 'SPY');
+  const view = G.getPublicState(g, spy.id, false);
+  no(view.viewerSeesGrimoire, 'de día no lee el Grimorio');
+  no(view.players.find(p => p.role === 'IMP'), 'no debe filtrarse el Demonio de día');
+});
+t('la Viuda ve el Grimorio su noche y no las siguientes', () => {
+  const g = mk(['WIDOW', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE'], 'CAROUSEL');
+  G.startNight(g);
+  const widow = by(g, 'WIDOW');
+  ok(G.getPublicState(g, widow.id, false).viewerSeesGrimoire, 'noche 1: debería verlo');
+  G.startDay(g); G.startNight(g);
+  no(G.getPublicState(g, widow.id, false).viewerSeesGrimoire, 'noche 2: ya no');
+});
+t('un Espía muerto no lee el Grimorio', () => {
+  const g = mk(['SPY', 'IMP', 'MONK', 'EMPATH', 'SOLDIER', 'MAYOR', 'RECLUSE']);
+  G.startNight(g);
+  by(g, 'SPY').alive = false;
+  no(G.getPublicState(g, by(g, 'SPY').id, false).viewerSeesGrimoire);
+});
+
 // ════════════════════════════════════════════════════════════════════
 console.log('\n' + '═'.repeat(70));
 console.log(`RESULTADO:  ${pass} OK   ${fail} FALLOS   (${pass + fail} pruebas)`);

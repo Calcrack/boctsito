@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { ALL_ROLES, ROLE_BY_ID, scriptRoles } from '../data/roles';
 import { panelForRole, ABILITY_PANELS } from '../data/abilityPanels';
@@ -88,13 +88,19 @@ function InfoTab({ target, game }) {
       {(target.tokens && target.tokens.length > 0) ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
           {target.tokens.map(t => {
-            const tRole = ROLE_BY_ID[t.roleId];
+            // `t.img` viene resuelto del servidor (arte de estado o del rol
+            // dueño); ROLE_BY_ID es solo el respaldo.
+            const tRole = t.img ? { img: t.img, name: t.label } : ROLE_BY_ID[t.roleId];
+            const owner = ROLE_BY_ID[t.roleId]?.name;
             return (
-              <div key={t.instanceId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(0,0,0,0.25)', borderRadius: 4, padding: '6px 8px' }}>
+              <div key={t.uid || t.instanceId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(0,0,0,0.25)', borderRadius: 4, padding: '6px 8px' }}>
                 <RoleIcon role={tRole} size={26} radius="50%" alt="" />
                 <div>
                   <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-50)', margin: 0, fontWeight: 600 }}>
-                    {t.label} <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>· {expiryLabel(t)}</span>
+                    {t.label}{t.ordinalOf > 1 ? ` ${t.ordinal}/${t.ordinalOf}` : ''}
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-500)' }}>
+                      {' · '}{expiryLabel(t)}{owner ? ` · ${owner}` : ''}
+                    </span>
                   </p>
                   {TOKEN_EXPLAIN[t.type] && <p style={hint}>{TOKEN_EXPLAIN[t.type]}</p>}
                 </div>
@@ -137,6 +143,8 @@ function Fact({ k, v, color }) {
 // ── Pestaña: Acciones ────────────────────────────────────────────────
 function ActionsTab({ target, send, onClose }) {
   const [confirmKill, setConfirmKill] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const [newName, setNewName] = useState('');
 
   const killWarnings = [];
   if (target.protected) killWarnings.push('🛡 Protegido esta noche (Monje / Posadero / Marinero)');
@@ -147,7 +155,10 @@ function ActionsTab({ target, send, onClose }) {
   if (target.type === 'demon') killWarnings.push('👹 Es el Demonio: al morir se aplica la cadena de sucesión (Mujer Escarlata, Mente Maestra…)');
 
   const act = (type, payload) => send(type, payload);
-  const nightAct = (actionType) => send('NIGHT_NARRATOR_ACTION', { actorId: target.id, actionType, targetIds: [target.id] });
+  // actorId: null → la ficha se atribuye al NARRADOR. Antes se mandaba
+  // `target.id` y salía con la cara de la propia víctima, además de convivir
+  // con la ficha del Envenenador real como si fueran dos venenos distintos.
+  const nightAct = (actionType) => send('NIGHT_NARRATOR_ACTION', { actorId: null, actionType, targetIds: [target.id] });
 
   return (
     <div>
@@ -183,19 +194,68 @@ function ActionsTab({ target, send, onClose }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <button onClick={() => act('MOVE_TO_SECRET', { targetPlayerId: target.id })} className="btn-night" style={{ fontSize: 10 }}>🚪 Confesionario</button>
         <button onClick={() => act('MOVE_NARRATOR_TO_ROOM', { playerId: target.id })} className="btn-night" style={{ fontSize: 10 }}>🚶 Ir a su habitación</button>
-        <button onClick={() => act('KICK_PLAYER_SESSION', { playerId: target.id })} className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }}>⏏ Expulsar sesión</button>
       </div>
+
+      <p style={{ ...label, marginTop: 12 }}>Quién ocupa el asiento</p>
+      <p style={{ ...hint, marginTop: 0, marginBottom: 6 }}>
+        Conexión: <b style={{ color: (PRESENCE[target.presence] || PRESENCE.offline).color }}>
+          {(PRESENCE[target.presence] || PRESENCE.offline).text}
+        </b>
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        <button
+          onClick={() => { if (confirm(`¿Desconectar a ${target.name}? Su asiento queda libre para volver a entrar; conserva personaje y fichas.`)) act('KICK_PLAYER_SESSION', { playerId: target.id }); }}
+          className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }}>
+          ⏏ Desconectar
+        </button>
+        <button onClick={() => setReplacing(r => !r)} className="btn-night"
+          style={{ fontSize: 10, borderColor: replacing ? 'var(--gold)' : undefined, color: replacing ? 'var(--gold)' : undefined }}>
+          🔄 Reemplazar jugador
+        </button>
+      </div>
+
+      {replacing && (
+        <div style={{ background: 'rgba(0,0,0,0.25)', border: 'var(--hairline)', borderRadius: 4, padding: 8 }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre del sustituto"
+            style={{ ...input, marginBottom: 6 }} />
+          <p style={hint}>
+            El asiento conserva personaje, fichas, vivo/muerto y votos. Se cierra la sesión
+            de {target.name} y el sustituto entra con el nombre nuevo.
+          </p>
+          <button
+            onClick={() => {
+              if (!newName.trim()) return;
+              act('REPLACE_PLAYER', { playerId: target.id, newName: newName.trim(), discordId: null, discordTag: null, avatar: null });
+              setNewName(''); setReplacing(false); onClose();
+            }}
+            disabled={!newName.trim()}
+            className="btn-action primary" style={{ width: '100%', marginTop: 8, opacity: newName.trim() ? 1 : 0.4 }}>
+            Ceder el asiento a {newName.trim() || '…'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Pestaña: Rol ─────────────────────────────────────────────────────
-function RoleTab({ target, send, onClose }) {
+function RoleTab({ target, game, send, onClose }) {
   const [roleId, setRoleId] = useState(target.role || '');
   const [notify, setNotify] = useState(true);
   const [mode, setMode] = useState('real');
+  const [all, setAll] = useState(false);
 
-  const chosen = ROLE_BY_ID[roleId];
+  // Solo los personajes del guion en curso. El compendio completo queda tras
+  // una casilla, porque repartir fuera de guion es la excepción, no la norma.
+  const pool = useMemo(() => {
+    const script = scriptRoles(game);
+    if (!all) return script;
+    const ids = new Set(script.map(r => r.id));
+    return [...script, ...ALL_ROLES.filter(r => !ids.has(r.id))];
+  }, [game, all]);
+  const inScript = useMemo(() => new Set(scriptRoles(game).map(r => r.id)), [game]);
+
+  const chosen = pool.find(r => r.id === roleId) || ROLE_BY_ID[roleId];
   const createsDemon = chosen?.type === 'demon' && target.type !== 'demon';
   const removesDemon = target.type === 'demon' && chosen && chosen.type !== 'demon';
 
@@ -208,10 +268,20 @@ function RoleTab({ target, send, onClose }) {
   return (
     <div>
       <p style={label}>Cambiar personaje a media partida</p>
-      <select value={roleId} onChange={e => setRoleId(e.target.value)} style={{ ...input, marginBottom: 8 }}>
+      <select value={roleId} onChange={e => setRoleId(e.target.value)} style={{ ...input, marginBottom: 6 }}>
         <option value="">— Elige personaje —</option>
-        {ALL_ROLES.map(r => <option key={r.id} value={r.id}>{r.name} ({r.type})</option>)}
+        {pool.map(r => (
+          <option key={r.id} value={r.id}>
+            {inScript.has(r.id) ? '' : '✦ '}{r.name} ({r.type})
+          </option>
+        ))}
       </select>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, cursor: 'pointer' }}>
+        <input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} />
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-400)' }}>
+          Buscar en todo el compendio (✦ = fuera del guion)
+        </span>
+      </label>
 
       <p style={label}>Qué se cambia</p>
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -255,6 +325,30 @@ function RoleTab({ target, send, onClose }) {
   );
 }
 
+// ── Contador del narrador (estado de servidor) ───────────────────────
+// El del Yaggababble se lleva durante el DÍA (cada vez que dice su frase) y la
+// noche mata a tantos jugadores como marque. Por eso no puede ser useState:
+// tiene que sobrevivir al cierre del panel y al cambio de fase.
+export function NarratorCounter({ cfg, game, send, compact = false }) {
+  const value = game.counters?.[cfg.key] ?? 0;
+  const max = cfg.max ?? 9;
+  const set = (n) => send('SET_COUNTER', { key: cfg.key, value: Math.max(0, Math.min(max, n)) });
+  return (
+    <>
+      <p style={label}>{cfg.label}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <button className="btn-night" style={{ fontSize: 14, padding: '2px 10px' }} onClick={() => set(value - 1)}>−</button>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: compact ? 16 : 20, color: 'var(--gold-hot)', minWidth: 28, textAlign: 'center' }}>{value}</span>
+        <button className="btn-night" style={{ fontSize: 14, padding: '2px 10px' }} onClick={() => set(value + 1)}>+</button>
+        <button className="btn-night" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => set(0)}>Reiniciar</button>
+        <span style={{ ...hint, margin: 0 }}>
+          {value === 0 ? 'no mata a nadie esta noche' : `esta noche elige ${value} víctima${value > 1 ? 's' : ''}`}
+        </span>
+      </div>
+    </>
+  );
+}
+
 // ── Pestaña: Habilidad ───────────────────────────────────────────────
 export function AbilityTab({ target, game, send, onClose }) {
   const role = target.role ? ROLE_BY_ID[target.role] : null;
@@ -264,7 +358,9 @@ export function AbilityTab({ target, game, send, onClose }) {
   const [targets, setTargets] = useState([]);
   const [text, setText] = useState('');
   const [pickedRole, setPickedRole] = useState('');
-  const [count, setCount] = useState(0);   // contador del Yaggababble
+  // El contador del Yaggababble vive en el servidor: se lleva durante el DÍA
+  // y la noche lo consume, así que no puede ser estado local de React.
+  const count = game.counters?.[ABILITY_PANELS[target.role]?.counter?.key] ?? 0;
 
   const living = game.players.filter(p => p.alive && p.id !== target.id);
   const pool = cfg?.deadOnly ? game.players.filter(p => !p.alive)
@@ -371,20 +467,10 @@ export function AbilityTab({ target, game, send, onClose }) {
       {/* Contador (Yaggababble: veces que dijo su frase hoy) */}
       {cfg?.counter && (
         <>
-          <p style={label}>{cfg.counter.label}</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <button className="btn-night" style={{ fontSize: 14, padding: '2px 10px' }}
-              onClick={() => setCount(c => Math.max(0, c - 1))}>−</button>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 20, color: 'var(--gold-hot)', minWidth: 28, textAlign: 'center' }}>{count}</span>
-            <button className="btn-night" style={{ fontSize: 14, padding: '2px 10px' }}
-              onClick={() => setCount(c => Math.min(cfg.counter.max ?? 9, c + 1))}>+</button>
-            <span style={{ ...hint, margin: 0 }}>
-              {count === 0 ? 'no mata a nadie esta noche' : `elige ${count} víctima${count > 1 ? 's' : ''}`}
-            </span>
-          </div>
+          <NarratorCounter cfg={cfg.counter} game={game} send={send} />
           {count > 0 && targets.length === count && (
             <button className="btn-action danger" style={{ width: '100%', marginBottom: 10 }}
-              onClick={() => { run(cfg.action); setCount(0); }}>
+              onClick={() => run(cfg.action)}>
               💀 Matar a {targets.map(id => game.players.find(p => p.id === id)?.name).join(', ')}
             </button>
           )}
@@ -882,7 +968,7 @@ export default function NarratorTabs({ target, game, send, onClose }) {
 
       {tab === 'info'    && <InfoTab    target={target} game={game} />}
       {tab === 'actions' && <ActionsTab target={target} send={send} onClose={onClose} />}
-      {tab === 'role'    && <RoleTab    target={target} send={send} onClose={onClose} />}
+      {tab === 'role'    && <RoleTab    target={target} game={game} send={send} onClose={onClose} />}
       {tab === 'ability' && <AbilityTab target={target} game={game} send={send} onClose={onClose} />}
     </div>
   );

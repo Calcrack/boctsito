@@ -257,9 +257,60 @@ input, textarea { font-family: inherit; color: inherit; }
   transform: translateX(-50%);
   z-index: 12;
   display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: calc(var(--sz) * 1.9);
   justify-content: center;
   align-items: center;
 }
+
+/* Ficha legible: arte + etiqueta corta. Sin el texto, dos fichas "A salvo"
+   de roles distintos eran el mismo círculo y había que ir al tooltip. */
+.seat-token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 78px;
+  padding: 1px 5px 1px 2px;
+  border-radius: 9px;
+  background: rgba(8,6,10,0.88);
+  border: 1px solid rgba(201,162,74,0.55);
+  box-shadow: 0 2px 7px rgba(0,0,0,0.8);
+  font-family: var(--mono);
+  font-size: 8px;
+  line-height: 1.35;
+  color: var(--bone-100);
+  white-space: nowrap;
+  cursor: help;
+  flex-shrink: 0;
+}
+.seat-token-chip img {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.seat-token-chip b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.seat-token-chip i {
+  font-style: normal;
+  opacity: 0.65;
+  font-size: 7px;
+  padding-left: 1px;
+}
+.seat-token-chip.type-poisoned,
+.seat-token-chip.type-poisoned1,
+.seat-token-chip.type-poisoned2   { border-color: #4ade80; color: #bbf7d0; }
+.seat-token-chip.type-protected,
+.seat-token-chip.type-safe,
+.seat-token-chip.type-safe1,
+.seat-token-chip.type-safe2,
+.seat-token-chip.type-safe_tonight { border-color: #93c5fd; color: #dbeafe; }
+.seat-token-chip.type-drunk_night,
+.seat-token-chip.type-drunk,
+.seat-token-chip.type-is_drunk    { border-color: #f59e0b; color: #fde68a; }
+.seat-token-chip.type-dies,
+.seat-token-chip.type-executed,
+.seat-token-chip.type-executed_today { border-color: #dc2626; color: #fecaca; }
 .seat-token-icon {
   width: 26px;
   height: 26px;

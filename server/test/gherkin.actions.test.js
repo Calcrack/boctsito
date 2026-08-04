@@ -172,11 +172,53 @@ t('PO_KILL ya no es una acción muerta', () => {
 G_('Controles nuevos del narrador');
 t('Yaggababble: mata tantos como veces dijo su frase', () => {
   const g = mk(['MONK', 'EMPATH', 'YAGGABABBLE', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL']);
-  G.startNight(g); G.startDay(g); G.startNight(g);
+  G.startNight(g); G.startDay(g);
+  g.counters.yaggaSaidToday = 2;   // el narrador la contó 2 veces durante el día
+  G.startNight(g);
   const y = by(g, 'YAGGABABBLE');
   act(g, 'YAGGABABBLE_KILL', y.id, [by(g, 'MAYOR').id, by(g, 'ACROBAT').id]);
   no(by(g, 'MAYOR').alive);
   no(by(g, 'ACROBAT').alive);
+});
+t('Yaggababble: el contador del día sobrevive al anochecer', () => {
+  const g = mk(['MONK', 'EMPATH', 'YAGGABABBLE', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL']);
+  G.startNight(g); G.startDay(g);
+  g.counters.yaggaSaidToday = 1;
+  G.startNight(g);
+  eq(g.counters.yaggaSaidToday, 1, 'no debe reiniciarse al anochecer');
+});
+t('Yaggababble: si no dijo la frase no mata a nadie', () => {
+  const g = mk(['MONK', 'EMPATH', 'YAGGABABBLE', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL']);
+  G.startNight(g); G.startDay(g); G.startNight(g);
+  eq(g.counters.yaggaSaidToday, 0, 'el amanecer lo reinicia');
+  act(g, 'YAGGABABBLE_KILL', by(g, 'YAGGABABBLE').id, [by(g, 'MAYOR').id]);
+  ok(by(g, 'MAYOR').alive, 'no debería morir nadie');
+});
+t("Lil' Monsta: el canguro cuenta como Demonio vivo", () => {
+  const g = mk(['LIL_MONSTA', 'BARON', 'POISONER', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL']);
+  G.startNight(g);
+  const keeper = by(g, 'BARON');
+  act(g, 'LIL_MONSTA_ASSIGN', by(g, 'LIL_MONSTA').id, [keeper.id]);
+  ok((keeper.tokens || []).some(t => t.type === 'LIL_MONSTA_KEEPER'), 'sin ficha de canguro');
+});
+t("Lil' Monsta: solo hay un canguro a la vez", () => {
+  const g = mk(['LIL_MONSTA', 'BARON', 'POISONER', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL']);
+  G.startNight(g);
+  const lm = by(g, 'LIL_MONSTA').id;
+  act(g, 'LIL_MONSTA_ASSIGN', lm, [by(g, 'BARON').id]);
+  act(g, 'LIL_MONSTA_ASSIGN', lm, [by(g, 'POISONER').id]);
+  const conFicha = g.players.filter(p => (p.tokens || []).some(t => t.type === 'LIL_MONSTA_KEEPER'));
+  eq(conFicha.length, 1);
+  eq(conFicha[0].role, 'POISONER');
+});
+t('Adorable: al morir deja borracho a 1 jugador de forma permanente', () => {
+  const g = mk(['SWEETHEART', 'IMP', 'MONK', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL'], 'SECTS_AND_VIOLETS');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  act(g, 'SWEETHEART_DRUNK', by(g, 'SWEETHEART').id, [victim.id]);
+  ok(victim.poisoned, 'debería quedar inhabilitado');
+  G.startDay(g); G.startNight(g);
+  ok(victim.poisoned, 'y seguir estándolo el resto de la partida');
 });
 t('Yaggababble envenenado: no mata a nadie', () => {
   const g = mk(['MONK', 'EMPATH', 'YAGGABABBLE', 'MAYOR', 'SOLDIER', 'ACROBAT', 'CANNIBAL']);
@@ -243,6 +285,130 @@ t('SEND_INFO: el texto libre del narrador llega al jugador', () => {
   const m = by(g, 'MONK');
   act(g, 'SEND_INFO', m.id, ['Mensaje del narrador']);
   eq(m.nightInfo, 'Mensaje del narrador');
+});
+
+// ── Fichas del grimorio ──────────────────────────────────────────────
+G_('Fichas del grimorio');
+const TB = ['POISONER', 'IMP', 'MONK', 'SOLDIER', 'EMPATH', 'MAYOR', 'RECLUSE'];
+
+t('el veneno del motor y la ficha manual del Envenenador comparten identidad', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'EMPATH');
+  const ficha = { tokenId: 'POISONED', roleId: 'POISONER', label: 'Envenenado', duration: 'night' };
+  act(g, 'POISON', by(g, 'POISONER').id, [victim.id]);
+  const venenos = () => victim.tokens.filter(x => x.type === 'POISONED').length;
+  eq(venenos(), 1, 'tras envenenar el motor');
+  // Colocar la ficha del mismo rol NO añade una segunda idéntica.
+  G.placeManualToken(g, victim.id, ficha);
+  eq(venenos(), 1, 'colocar sobre la del motor no duplica');
+  // Desde el selector (toggle) sí se puede quitar.
+  G.placeManualToken(g, victim.id, ficha, true);
+  eq(venenos(), 0, 'toggle la quita');
+  G.placeManualToken(g, victim.id, ficha, true);
+  eq(venenos(), 1, 'y la vuelve a poner, nunca dos');
+});
+
+t('dos fuentes distintas de "A salvo" sí son dos fichas', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'MONK', label: 'A salvo', duration: 'night' });
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'SOLDIER', label: 'A salvo', duration: 'permanent' });
+  eq(victim.tokens.length, 2, 'deberían convivir');
+  eq(new Set(victim.tokens.map(x => x.key)).size, 2, 'claves distintas');
+});
+
+t('las fichas con la misma etiqueta se numeran', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'MONK', label: 'A salvo' });
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'SOLDIER', label: 'A salvo' });
+  eq(victim.tokens.map(x => `${x.ordinal}/${x.ordinalOf}`).join(' '), '1/2 2/2');
+});
+
+t('una ficha sola no lleva número', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'MONK', label: 'A salvo' });
+  eq(victim.tokens[0].ordinalOf, null);
+});
+
+t('colocar dos veces la misma ficha manual la quita solo con toggle', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  const ficha = { tokenId: 'SAFE', roleId: 'MONK', label: 'A salvo' };
+  G.placeManualToken(g, victim.id, ficha);
+  G.placeManualToken(g, victim.id, ficha);
+  eq(victim.tokens.length, 1, 'sin toggle es idempotente');
+  G.placeManualToken(g, victim.id, ficha, true);
+  eq(victim.tokens.length, 0, 'con toggle se quita');
+});
+
+t('cada ficha tiene uid único', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'MONK', label: 'A salvo' });
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'SOLDIER', label: 'A salvo' });
+  const uids = victim.tokens.map(x => x.uid);
+  ok(uids.every(Boolean), 'falta uid');
+  eq(new Set(uids).size, uids.length, 'uids repetidos');
+});
+
+t('REMOVE_TOKEN por uid quita exactamente una', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'MAYOR');
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'MONK', label: 'A salvo' });
+  G.placeManualToken(g, victim.id, { tokenId: 'SAFE', roleId: 'SOLDIER', label: 'A salvo' });
+  G.removePlayerToken(g, victim.id, victim.tokens[0].uid);
+  eq(victim.tokens.length, 1);
+  eq(victim.tokens[0].ordinalOf, null, 'debe renumerarse');
+});
+
+t('un cadáver solo lleva UNA ficha "Muere" aunque le ataquen dos', () => {
+  const g = mk(['IMP', 'ASSASSIN', 'MONK', 'SOLDIER', 'EMPATH', 'MAYOR', 'RECLUSE'], 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'EMPATH');
+  act(g, 'IMP_KILL', by(g, 'IMP').id, [victim.id]);
+  act(g, 'ASSASSIN_KILL', by(g, 'ASSASSIN').id, [victim.id]);
+  eq(victim.tokens.filter(x => x.type === 'DIES').length, 1, 'fichas "Muere"');
+});
+
+t('el veneno del narrador no lleva la cara de la víctima', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'EMPATH');
+  act(g, 'POISON', null, [victim.id]);
+  const tok = victim.tokens.find(x => x.type === 'POISONED');
+  eq(tok.roleId, 'NARRATOR', 'debería atribuirse al narrador');
+  ok(tok.icon && /estados/.test(tok.icon), 'debería usar el arte de estado: ' + tok.icon);
+});
+
+t('el veneno del narrador y el del Envenenador conviven sin confundirse', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  const victim = by(g, 'EMPATH');
+  act(g, 'POISON', null, [victim.id]);
+  act(g, 'POISON', by(g, 'POISONER').id, [victim.id]);
+  const venenos = victim.tokens.filter(x => x.type === 'POISONED');
+  eq(venenos.length, 2, 'son dos fuentes distintas');
+  eq(new Set(venenos.map(x => x.roleId)).size, 2, 'con dueños distintos');
+});
+
+t('toda ficha viaja al cliente con etiqueta corta e imagen resuelta', () => {
+  const g = mk(TB, 'TROUBLE_BREWING');
+  G.startNight(g);
+  act(g, 'POISON', by(g, 'POISONER').id, [by(g, 'EMPATH').id]);
+  const view = G.getPublicState(g, null, true);
+  const tok = view.players.flatMap(p => p.tokens || []).find(x => x.type === 'POISONED');
+  ok(tok.uid, 'sin uid');
+  eq(tok.short, 'Veneno');
+  ok(tok.img, 'sin imagen resuelta');
 });
 
 console.log('\n' + '═'.repeat(70));

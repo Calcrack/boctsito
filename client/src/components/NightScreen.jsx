@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID, ALL_ROLES } from '../data/roles';
 import RoleIcon from './RoleIcon';
+import SheetLink from './SheetLink';
 
 const SORTED_ROLES_FOR_PARSE = [...ALL_ROLES].sort((a, b) => b.name.length - a.name.length);
 
@@ -210,7 +211,10 @@ export default function NightScreen({ player }) {
   const displayRoleId = player.displayRole || player.role;
   const role = displayRoleId ? ROLE_BY_ID[displayRoleId] : null;
   const phase = game?.phase;
-  const isSpy = player.role === 'SPY';
+  // Lo decide el servidor (Espía todas las noches, Viuda la suya). Antes se
+  // comprobaba `role === 'SPY'` aquí y además el Grimorio colgaba de
+  // `player.nightInfo`, que en modo manual nunca llega al jugador.
+  const seesGrimoire = !!game?.viewerSeesGrimoire;
   const isMyTurn = player.id === game?.currentNightActor;
   const iNightReady = game?.iNightReady;
 
@@ -343,12 +347,23 @@ export default function NightScreen({ player }) {
     </button>
   );
 
+  // De noche no hay barra superior: la hoja de campaña va flotando arriba a
+  // la derecha, para poder consultar los personajes del guion mientras esperas.
+  const SheetBtn = () => (
+    <div style={{
+      position: 'fixed', top: 16, right: 16, zIndex: 300,
+      background: 'rgba(10,11,20,0.7)', backdropFilter: 'blur(6px)', borderRadius: 4,
+    }}>
+      <SheetLink game={game} compact />
+    </div>
+  );
+
   // ── Modo manual (con narrador): el jugador NO elige nada ─────────────
   const narratorDriven = ['first_night', 'night'].includes(phase) && !game?.autoMode;
   if (narratorDriven) {
     return (
       <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 }}>
-        <ExitBtn />
+        <ExitBtn /><SheetBtn />
         <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
           {!player.alive ? (
             <div style={{ fontSize: 64, color: 'var(--bone-400)', marginBottom: 16 }}>☠</div>
@@ -375,8 +390,8 @@ export default function NightScreen({ player }) {
             <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)', lineHeight: 2.4 }}>
               <RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} />
             </p>
-            {isSpy && game?.players && <SpyGrimoire players={game.players} />}
           </>)}
+          {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
         </div>
       </div>
     );
@@ -386,7 +401,7 @@ export default function NightScreen({ player }) {
   if (!player.alive && !player.pendingRavenkeeper) {
     return (
       <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <ExitBtn />
+        <ExitBtn /><SheetBtn />
         <div style={{ textAlign: 'center', maxWidth: 420, width: '100%' }}>
           <div style={{ fontSize: 80, color: 'var(--bone-400)', marginBottom: 24 }}>☠</div>
           <h2 style={{ fontFamily: 'var(--title)', fontSize: 28, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
@@ -419,7 +434,7 @@ export default function NightScreen({ player }) {
   if (isEvilWithPendingInfo) {
     return (
       <div style={{ minHeight: '100vh', background: 'radial-gradient(ellipse at center top, #160608 0%, var(--ink-900) 70%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <ExitBtn />
+        <ExitBtn /><SheetBtn />
         <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
           <div style={{ fontSize: 60, marginBottom: 20 }}>◆</div>
           <p style={{ fontFamily: 'var(--mono)', fontSize: 13, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--blood-hi)', marginBottom: 24 }}>
@@ -444,7 +459,7 @@ export default function NightScreen({ player }) {
   if (isPassiveTurn) {
     return (
       <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <ExitBtn />
+        <ExitBtn /><SheetBtn />
         <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
           {role && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 24 }}>
@@ -455,8 +470,8 @@ export default function NightScreen({ player }) {
           {infoBox(<>
             {infoLabel}
             <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)', lineHeight: 2.4 }}><RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} /></p>
-            {isSpy && game?.players && <SpyGrimoire players={game.players} />}
           </>)}
+          {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
           <button onClick={handleAcknowledge} className="btn-action primary" style={{ width: '100%', padding: '22px 0', fontSize: 22 }}>
             ✓ Hecho
           </button>
@@ -470,7 +485,7 @@ export default function NightScreen({ player }) {
   if (actionSent) {
     return (
       <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <ExitBtn />
+        <ExitBtn /><SheetBtn />
         {role && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 24 }}>
             <RoleIcon role={role} size={60} radius={6} />
@@ -505,7 +520,7 @@ export default function NightScreen({ player }) {
   if (!interactiveConfig) {
     return (
       <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 24 }}>
-        <ExitBtn />
+        <ExitBtn /><SheetBtn />
         <div style={{ textAlign: 'center', maxWidth: 460 }}>
           <div style={{ fontSize: 76, color: 'var(--moon)', marginBottom: 24, opacity: 0.8 }}>☾</div>
           <h2 style={{ fontFamily: 'var(--title)', fontSize: 26, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
@@ -526,8 +541,8 @@ export default function NightScreen({ player }) {
           {player.nightInfo && submitted && infoBox(<>
             {infoLabel}
             <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)', lineHeight: 2.4 }}><RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} /></p>
-            {isSpy && game?.players && <SpyGrimoire players={game.players} />}
           </>)}
+          {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
         </div>
         {!waitingForTurn && (
           <div style={{ width: '100%', maxWidth: 460 }}>
@@ -552,7 +567,7 @@ export default function NightScreen({ player }) {
 
   return (
     <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', padding: '32px 24px' }}>
-      <ExitBtn />
+      <ExitBtn /><SheetBtn />
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         {role && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 18 }}>

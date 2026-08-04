@@ -241,8 +241,10 @@ export const ABILITY_PANELS = {
     note: 'Cada uno elige vivir o morir en silencio. Si los TRES eligen vivir, los tres mueren.' },
   KAZALI: { phases: NIGHT, targets: 1, action: 'KAZALI_KILL',
     note: 'En el montaje él elige qué jugadores son Esbirros.' },
-  LEGION: { phases: NIGHT, targets: 1, allowNone: true, action: 'LEGION_KILL',
-    note: 'Varios jugadores son Legión. Las ejecuciones fallan si solo votaron malvados.' },
+  // Sin allowNone: el ataque es obligatorio y el patrón P3 de la guía exige
+  // objetivo, así que la casilla solo generaba una contradicción.
+  LEGION: { phases: NIGHT, targets: 1, action: 'LEGION_KILL',
+    note: 'La mayoría de jugadores son Legión (asígnalos en el montaje). Las ejecuciones fallan si solo votaron malvados.' },
   LEVIATHAN: { phases: '*', targets: 0,
     note: 'No mata de noche. 2 buenos ejecutados o pasar del día 5 = ganan los malvados.' },
   LIL_MONSTA: { phases: NIGHT, targets: 1,

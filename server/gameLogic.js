@@ -7,6 +7,7 @@ const SETUP = require('./setup');
 const { withSupplements } = require('./nightOrder');
 const ROLE_INFO = require('./roleInfo');
 const HINTS = require('./narratorHints');
+const { tokenKey, shortLabel, iconFor } = require('./tokenMeta');
 
 // ── In-memory store ────────────────────────────────────────────────
 const games = new Map();
@@ -39,6 +40,10 @@ function createGame(narratorId, gameId) {
     recluseRegistersAs: null,
     spyRegistersAs: null,
     mayorKillTarget: null,
+    // Contadores que el narrador lleva a mano durante el DÍA y la noche
+    // consume. Viven en el servidor (antes eran useState de React y se
+    // perdían al cerrar el panel).
+    counters: { yaggaSaidToday: 0 },
     createdAt: Date.now(),
     autoMode: false,
     autoPhaseInfo: null,
@@ -112,6 +117,32 @@ function addPlayer(game, { name, discordId, discordTag, avatar }) {
 
 function removePlayer(game, playerId) {
   game.players = game.players.filter(p => p.id !== playerId);
+}
+
+// Ceder el asiento a otra persona a media partida. Cambia SOLO la identidad
+// humana: personaje, fichas, estados, vivo/muerto, voto de fantasma y
+// nominaciones siguen intactos. No llama a ensureSetup (eso es lo que hace
+// removePlayer y por lo que no se puede reutilizar aquí).
+function replacePlayer(game, playerId, { name, discordId, discordTag, avatar } = {}) {
+  const p = game.players.find(x => x.id === playerId);
+  if (!p) throw new Error('Jugador no encontrado');
+  const old = p.name;
+  const clean = typeof name === 'string' ? name.trim().slice(0, 40) : '';
+  if (clean) p.name = clean;
+  if (discordId  !== undefined) p.discordId  = discordId || null;
+  if (discordTag !== undefined) p.discordTag = discordTag || null;
+  if (avatar     !== undefined) p.avatar     = avatar || null;
+  // El nombre está copiado en las nominaciones ya registradas.
+  for (const n of game.nominations || []) {
+    if (n.nominatorId === playerId) n.nominatorName = p.name;
+    if (n.nomineeId   === playerId) n.nomineeName   = p.name;
+  }
+  if (Array.isArray(game.daySnapshot)) {
+    const s = game.daySnapshot.find(x => x.id === playerId);
+    if (s) s.name = p.name;
+  }
+  logStatus(game, `🔄 ${old} → ${p.name} (mismo asiento, mismo personaje)`);
+  return p;
 }
 
 // ── Role Distribution ──────────────────────────────────────────────
@@ -248,11 +279,31 @@ function applySetup(game) {
         if (seatP?.role === 'RECLUSE') game.recluseRegistersAs = (d.registersAs === 'minion' || d.registersAs === 'demon') ? d.registersAs : null;
         break;
       case 'otroSecreto':
-        // Gemela Malvada: guarda la pareja (gemela ↔ gemelo bueno) para el fin de partida.
+        // Gemela Malvada: guarda la pareja (gemela ↔ gemelo bueno) para el fin
+        // de partida, marca a ambos y les deja su ficha, para que la guía pueda
+        // hacer la presentación mutua y avisar al nominarlos.
         if (d.secret === 'evilTwin' && seatP && d.targetSeat) {
           game.evilTwinPair = { evilId: seatP.id, goodId: d.targetSeat };
+          const twin = game.players.find(p => p.id === d.targetSeat);
+          if (twin) {
+            seatP.evilTwinOf = twin.id;
+            twin.evilTwinOf  = seatP.id;
+            placeToken(seatP, { type: 'TWIN', roleId: 'EVIL_TWIN', label: 'Gemela malvada',
+              expiry: ['PERMANENT'], sourceRole: 'EVIL_TWIN', sourcePlayerId: seatP.id }, game);
+            placeToken(twin,  { type: 'TWIN', roleId: 'EVIL_TWIN', label: 'Gemelo bueno',
+              expiry: ['PERMANENT'], sourceRole: 'EVIL_TWIN', sourcePlayerId: twin.id }, game);
+          }
         }
         break;
+      // Legión: los asientos marcados pasan a ser Legión (malvados).
+      case 'legionSeats': {
+        for (const seatId of d.chosen || []) {
+          const p = game.players.find(x => x.id === seatId);
+          if (!p) continue;
+          p.role = 'LEGION'; p.type = 'demon'; p.alignment = 'evil';
+        }
+        break;
+      }
       // Alquimista: lleva la habilidad de un Esbirro. Sin ficha, la decisión
       // quedaba sólo en el panel nocturno y no se veía en el grimorio.
       case 'alchemistAbility': {
@@ -727,7 +778,14 @@ function buildNightQueue(game) {
       wakesTonight(p, game) &&
       (p.role === roleId || (p.role === 'DRUNK' && p.drunkAs === roleId))
     );
-    for (const player of matched) queue.push(player.id);
+    for (const player of matched) {
+      // La Viuda ve el Grimorio la noche en la que despierta (normalmente la
+      // primera, pero puede aparecer más tarde por la Bruja de la Colina).
+      if (player.role === 'WIDOW' && player.widowGrimoireNight == null) {
+        player.widowGrimoireNight = game.nightNumber;
+      }
+      queue.push(player.id);
+    }
   }
   return queue;
 }
@@ -947,33 +1005,121 @@ function countEvilNeighborPairs(living, game = null) {
 //                       'ONE_DAY' | 'ON_REPLACE' | 'ON_BEARER_DEATH'
 const DUSK_EXPIRY = new Set(['UNTIL_NEXT_DUSK', 'ONE_DAY']);
 
+// Identificador único e irrepetible de cada ficha colocada. Sirve de key en
+// React y de handle para quitarla: antes se reusaba `instanceId`, que dos
+// fichas distintas podían compartir.
+let TOKEN_SEQ = 0;
+function nextTokenUid(game) {
+  if (game) { game._tokenSeq = (game._tokenSeq || 0) + 1; return `tk${game._tokenSeq}`; }
+  return `tk_${++TOKEN_SEQ}`;
+}
+
+// Numera las fichas que comparten etiqueta sobre un mismo jugador, para que
+// "A salvo" del Posadero 1 y del Posadero 2 se distingan en pantalla.
+function renumberTokens(player) {
+  if (!Array.isArray(player?.tokens)) return;
+  const groups = new Map();
+  for (const t of player.tokens) {
+    const k = t.label || t.type;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  }
+  for (const list of groups.values()) {
+    list.forEach((t, i) => {
+      t.ordinal   = list.length > 1 ? i + 1 : null;
+      t.ordinalOf = list.length > 1 ? list.length : null;
+    });
+  }
+}
+
 // Coloca una ficha sobre el portador. Aplica ON_REPLACE (una por fuente,
 // incluso si la fuente la tenía sobre OTRO jugador). Registra en el log.
 function placeToken(target, opts, game = null) {
   if (!target) return;
-  const { type, roleId, label, expiry = ['PERMANENT'], sourceRole = null, sourcePlayerId = null, manual = false } = opts;
+  const {
+    type, roleId, label, expiry = ['PERMANENT'],
+    sourceRole = null, sourcePlayerId = null, manual = false,
+    tokenId = null, duration = null,
+  } = opts;
   if (!Array.isArray(target.tokens)) target.tokens = [];
 
   if (expiry.includes('ON_REPLACE') && sourcePlayerId) {
     // La misma fuente solo mantiene 1 ficha de este tipo: quítala de cualquier portador.
     const players = game ? game.players : [target];
     for (const p of players) {
-      if (Array.isArray(p.tokens)) p.tokens = p.tokens.filter(t => !(t.type === type && t.sourcePlayerId === sourcePlayerId));
+      if (Array.isArray(p.tokens)) {
+        const before = p.tokens.length;
+        p.tokens = p.tokens.filter(t => !(t.type === type && t.sourcePlayerId === sourcePlayerId));
+        if (p.tokens.length !== before) renumberTokens(p);
+      }
     }
   }
 
   const temp = !manual && !expiry.includes('PERMANENT');
-  const instanceId = `${type}:${sourcePlayerId || roleId || 'x'}:${manual ? 'm' : 'a'}`;
-  if (!target.tokens.some(t => t.instanceId === instanceId)) {
+  const key = tokenKey({ type, tokenId, sourceRole, roleId, sourcePlayerId });
+  // Clave única SIN distinguir motor/manual: colocar a mano la misma ficha
+  // que ya puso el motor no crea un duplicado, simplemente no hace nada.
+  if (!target.tokens.some(t => t.key === key)) {
     target.tokens.push({
-      instanceId, type, tokenId: type,
+      uid: nextTokenUid(game),
+      key,
+      instanceId: key, // compatibilidad con partidas guardadas
+      type, tokenId: tokenId || type,
       roleId: roleId || sourceRole || null,
-      label, expiry, sourceRole, sourcePlayerId, manual, temp,
+      label,
+      short: shortLabel(type, label),
+      icon: iconFor(type),
+      expiry, duration, sourceRole, sourcePlayerId, manual, temp,
+      ordinal: null, ordinalOf: null,
       nightApplied: game?.nightNumber ?? null,
       dayApplied: game?.dayNumber ?? null,
     });
-    if (game) logStatus(game, `🟡 ${label} → ${target.name}${sourceRole ? ` (por ${ROLES[sourceRole]?.name || sourceRole})` : ''}`);
+    renumberTokens(target);
+    const byWhom = sourceRole === 'NARRATOR' ? 'el Narrador' : (ROLES[sourceRole]?.name || sourceRole);
+    if (game) logStatus(game, `🟡 ${label} → ${target.name}${sourceRole ? ` (por ${byWhom})` : ''}`);
   }
+}
+
+// Ficha colocada a mano por el narrador desde el catálogo de la campaña.
+// `toggle` solo lo manda el selector de fichas (segundo clic = quitarla). Los
+// paneles de la guía nocturna colocan sin alternar: si no, la ficha que acaba
+// de poner el motor con esa misma identidad se borraría sola.
+function placeManualToken(game, playerId, t, toggle = false) {
+  const p = game.players.find(x => x.id === playerId);
+  if (!p || !t) return;
+  if (!Array.isArray(p.tokens)) p.tokens = [];
+  const type = t.tokenId;
+  // Si el rol dueño está en juego con un único portador, la ficha manual
+  // comparte identidad con la que coloca el motor: colocar "Envenenado
+  // (Envenenador)" sobre quien el Envenenador ya envenenó no duplica nada.
+  const owners = game.players.filter(x => x.role === t.roleId);
+  const sourcePlayerId = owners.length === 1 ? owners[0].id : null;
+  const ident = { type, tokenId: type, roleId: t.roleId, sourceRole: t.roleId, sourcePlayerId };
+  const key = tokenKey(ident);
+  const idx = p.tokens.findIndex(x => x.key === key);
+  if (idx >= 0) {
+    if (!toggle) return;              // ya está puesta: no duplicar ni borrar
+    p.tokens.splice(idx, 1); renumberTokens(p); return;
+  }
+  placeToken(p, {
+    ...ident, label: t.label,
+    // manual:true → el motor de caducidad NUNCA la auto-borra.
+    manual: true, expiry: ['PERMANENT'],
+    duration: t.duration || 'permanent',
+  }, game);
+  // Si la ficha ya estaba puesta por el motor, placeToken no añade nada:
+  // no tocamos su caducidad.
+  const placed = p.tokens.find(x => x.key === key);
+  if (placed && placed.manual) placed.temp = t.duration === 'night' || t.duration === 'day';
+}
+
+// Quita una ficha concreta. Acepta el `uid` nuevo o el `instanceId`/`key`
+// antiguo, para no romper partidas ya en curso.
+function removePlayerToken(game, playerId, handle) {
+  const p = game.players.find(x => x.id === playerId);
+  if (!p || !Array.isArray(p.tokens)) return;
+  p.tokens = p.tokens.filter(t => t.uid !== handle && t.key !== handle && t.instanceId !== handle);
+  renumberTokens(p);
 }
 
 // Limpia fichas que caducan en este momento de fase. Nunca toca las manuales.
@@ -988,7 +1134,10 @@ function clearExpiringTokens(game, when) {
       if (when === 'dusk') return !exp.some(e => DUSK_EXPIRY.has(e));
       return true;
     });
-    if (p.tokens.length !== before) logStatus(game, `🧹 ${when === 'dawn' ? 'Amanecer' : 'Anochecer'}: fichas caducadas de ${p.name}`);
+    if (p.tokens.length !== before) {
+      renumberTokens(p);
+      logStatus(game, `🧹 ${when === 'dawn' ? 'Amanecer' : 'Anochecer'}: fichas caducadas de ${p.name}`);
+    }
   }
 }
 
@@ -996,6 +1145,7 @@ function clearExpiringTokens(game, when) {
 function clearBearerDeathTokens(player) {
   if (!Array.isArray(player.tokens)) return;
   player.tokens = player.tokens.filter(t => t.manual || !(t.expiry || []).includes('ON_BEARER_DEATH'));
+  renumberTokens(player);
 }
 
 // Recalcula banderas derivadas que el resto del motor consulta.
@@ -1103,6 +1253,21 @@ function computeAdvice(game) {
   // 3 vivos → aviso victoria del mal.
   if (alive.length === 3) advice.push({ severity: 'info', text: 'Quedan 3 jugadores vivos: si baja a 2, gana el Mal (los viajeros no cuentan).' });
 
+  // Gemela Malvada: aviso al nominar al gemelo bueno (gherkin.md: «si lo
+  // ejecutan, ganan los malos»). Antes la pareja ni siquiera salía del servidor.
+  if (game.evilTwinPair) {
+    const evil = game.players.find(p => p.id === game.evilTwinPair.evilId);
+    const good = game.players.find(p => p.id === game.evilTwinPair.goodId);
+    if (evil?.alive && !evil.poisoned && good?.alive) {
+      const nom = (game.nominations || []).find(n => n.id === game.activeNomination);
+      if (nom && nom.nomineeId === good.id) {
+        advice.push({ severity: 'danger', text: `⚠ Gemelo bueno: si ejecutáis a ${good.name}, GANAN LOS MALOS (Gemela Malvada viva y sana).` });
+      } else {
+        advice.push({ severity: 'warn', text: `👯 ${good.name} es el gemelo bueno de ${evil.name}: ejecutarlo hace ganar al Mal, y el Bien no puede ganar mientras ambos vivan.` });
+      }
+    }
+  }
+
   // Espía despierto esta noche.
   if (isNight && game.players.some(p => p.alive && p.role === 'SPY')) {
     advice.push({ severity: 'info', text: '🕵️ El Espía ve el Grimorio esta noche: recuerda mostrarle tu pantalla.' });
@@ -1130,7 +1295,11 @@ function applyNightAction(game, actionType, actorId, targetIds) {
   const actor   = game.players.find(p => p.id === actorId);
   const targets = targetIds.map(id => game.players.find(p => p.id === id)).filter(Boolean);
   // Rol cuyo arte se muestra en la ficha (el del actor; fallback por tipo de acción).
-  const artRole = actor?.role || null;
+  // Sin actor = el narrador actuando por su cuenta (botones rápidos del panel):
+  // la ficha se atribuye al NARRADOR, no al propio afectado. Antes el cliente
+  // mandaba `actorId = target.id` y salía una ficha con la cara de la víctima
+  // que además chocaba con la del Envenenador real.
+  const artRole = actor?.role || (actorId ? null : 'NARRATOR');
 
   switch (actionType) {
     case 'POISON':
@@ -1231,6 +1400,41 @@ function applyNightAction(game, actionType, actorId, targetIds) {
           actor.nightInfo = `🦅 Guardián de Cuervos\nEl rol de ${targets[0].name} es: ${ROLES[targets[0].role]?.name || targets[0].role}.`;
         }
         actor.pendingRavenkeeper = false;
+      }
+      break;
+
+    // Canguro de la Lil' Monsta: cuenta como Demonio vivo mientras la cuida.
+    // El panel de la guía colocaba una ficha suelta 'ES_EL_DEMONIO' que
+    // countsAsLivingDemon() no reconocía, así que el canguro nocturno no
+    // contaba como Demonio y la partida podía terminar antes de tiempo.
+    case 'LIL_MONSTA_ASSIGN': {
+      const keeper = targets[0];
+      if (!keeper) break;
+      for (const p of game.players) {
+        if (Array.isArray(p.tokens)) {
+          const before = p.tokens.length;
+          p.tokens = p.tokens.filter(t => t.type !== 'LIL_MONSTA_KEEPER');
+          if (p.tokens.length !== before) renumberTokens(p);
+        }
+      }
+      placeToken(keeper, {
+        type: 'LIL_MONSTA_KEEPER', roleId: 'LIL_MONSTA', label: 'Cuida a la Lil’ Monsta',
+        expiry: ['PERMANENT', 'ON_REPLACE'], sourceRole: 'LIL_MONSTA',
+        sourcePlayerId: actor?.id ?? null,
+      }, game);
+      break;
+    }
+
+    // La Adorable, al morir, deja a 1 jugador borracho el RESTO de la partida
+    // (gherkin.md: «Cuando mueras, 1 jugador está borracho»). No existía
+    // handler: el paso salía sin controles.
+    case 'SWEETHEART_DRUNK':
+      if (targets[0]) {
+        placeToken(targets[0], {
+          type: 'DRUNK_NIGHT', roleId: 'SWEETHEART', label: 'Borracho (Adorable)',
+          expiry: ['PERMANENT', 'ON_REPLACE'], sourceRole: 'SWEETHEART',
+          sourcePlayerId: actorId || (actor?.id ?? null),
+        }, game);
       }
       break;
 
@@ -1459,6 +1663,14 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       if (targets[0] && isActorEffective(actor)) {
         placeToken(targets[0], { type: 'EXORCISED', roleId: 'EXORCIST', label: 'Exorcizado', expiry: ['AT_DAWN', 'ON_REPLACE'], sourceRole: 'EXORCIST', sourcePlayerId: actorId }, game);
         if (targets[0].type === 'demon') targets[0].safeTonight = true;
+      }
+      // Marca a quién eligió esta noche: el Exorcista NO puede repetir objetivo
+      // la noche siguiente (gherkin.md). Antes era solo una nota en la guía.
+      if (targets[0] && actor) {
+        placeToken(targets[0], {
+          type: 'EXORCIST_LAST', roleId: 'EXORCIST', label: 'Exorcizado anoche',
+          expiry: ['UNTIL_NEXT_DUSK', 'ON_REPLACE'], sourceRole: 'EXORCIST', sourcePlayerId: actor.id,
+        }, game);
       }
       break;
     }
@@ -1700,7 +1912,10 @@ function applyNightAction(game, actionType, actorId, targetIds) {
     // ── Yaggababble: muere 1 jugador por cada vez que dijo su frase ────
     case 'YAGGABABBLE_KILL': {
       if (!actor || !isActorEffective(actor)) break;
-      for (const t of targets) {
+      // Mata tantos como veces dijo su frase HOY: el contador lo lleva el
+      // narrador durante el día y se guarda en el servidor.
+      const said = game.counters?.yaggaSaidToday ?? targets.length;
+      for (const t of targets.slice(0, said)) {
         if (!t || !t.alive) continue;
         if (t.protected || t.safeTonight || isDeathBlocked(game, t)) continue;
         if (checkFoolProtection(game, t, actorId, 'YAGGABABBLE')) continue;
@@ -1999,7 +2214,12 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       break;
 
     case 'CLEAR_STATUS':
-      for (const t of targets) { if (t) { t.safeTonight = false; t.tokens = (t.tokens || []).filter(x => x.manual); } }
+      for (const t of targets) {
+        if (!t) continue;
+        t.safeTonight = false;
+        t.tokens = (t.tokens || []).filter(x => x.manual);
+        renumberTokens(t);
+      }
       break;
   }
   syncStatusFlags(game);
@@ -3104,6 +3324,10 @@ function startDay(game) {
   game.activeNomination = null;
   game.executedToday = null;
   game.executionAttemptToday = false;
+  // El contador del Yaggababble se pone a cero al AMANECER, nunca al
+  // anochecer: la noche tiene que leer las veces que dijo su frase HOY.
+  if (!game.counters) game.counters = {};
+  game.counters.yaggaSaidToday = 0;
   // Mente Maestra: el día extra empieza el primer día tras la muerte del Demonio.
   if (game.mastermindPending && !game.mastermindDone) {
     game.mastermindPending = false;
@@ -3228,6 +3452,15 @@ function openNominations(game) {
   return game;
 }
 
+// Con la Gemela Malvada sana y su gemelo bueno vivos, el Bien no puede ganar.
+function evilTwinBlocksGoodWin(game) {
+  const pair = game.evilTwinPair;
+  if (!pair) return false;
+  const evil = game.players.find(p => p.id === pair.evilId);
+  const good = game.players.find(p => p.id === pair.goodId);
+  return !!(evil?.alive && !evil.poisoned && good?.alive);
+}
+
 function checkWinCondition(game) {
   if (game.phase === 'game_over') return true;
   if (game.players.some(p => p.role === 'ATHEIST')) return false;
@@ -3241,6 +3474,9 @@ function checkWinCondition(game) {
     const lastDeadDemon = game.players.filter(p => p.type === 'demon' && !p.alive).pop();
     if (lastDeadDemon && resolveDemonDeath(game, lastDeadDemon)) return false;
     if (tryMastermindDefer(game)) return false;
+    // Gemela Malvada: «los buenos no pueden ganar mientras los dos gemelos
+    // sigan vivos» (gherkin.md, Gemela Malvada). La partida continúa.
+    if (evilTwinBlocksGoodWin(game)) return false;
     endGame(game, 'good', 'Sin Demonios vivos');
     return true;
   }
@@ -3301,13 +3537,46 @@ function shuffle(arr) {
   return a;
 }
 
+// Proyección de una ficha hacia el cliente. Tolera fichas de partidas
+// guardadas antes del rediseño (sin uid/key/short/icon).
+function publicToken(t) {
+  const type = t.type;
+  return {
+    uid: t.uid || t.key || t.instanceId,
+    key: t.key || t.instanceId,
+    type, tokenId: t.tokenId || type,
+    roleId: t.roleId || null,
+    label: t.label,
+    short: t.short || shortLabel(type, t.label),
+    ordinal: t.ordinal ?? null,
+    ordinalOf: t.ordinalOf ?? null,
+    duration: t.duration || (t.temp ? 'night' : 'permanent'),
+    manual: !!t.manual,
+    temp: !!t.temp,
+    expiry: t.expiry || [],
+    img: (t.icon !== undefined ? t.icon : iconFor(type)) || ROLES[t.roleId]?.image || null,
+  };
+}
+
+// ¿Este jugador ve el Grimorio esta noche? El Espía todas las noches; la Viuda
+// solo la noche en la que despierta (gherkin.md:1333-1337 y :3107-3119).
+// Envenenado/borracho SÍ lo ve: el narrador miente en la información que da,
+// no en el Grimorio (gherkin.md:1343-1346, criterio del narrador).
+function seesGrimoire(viewer, game, phase) {
+  if (!viewer || !viewer.alive) return false;
+  if (!['first_night', 'night'].includes(phase)) return false;
+  if (viewer.role === 'SPY') return true;
+  if (viewer.role === 'WIDOW') return viewer.widowGrimoireNight === game.nightNumber;
+  return false;
+}
+
 // `presence` = { playerId: 'online' | 'away' }. Ausente del mapa = desconectado.
 // Solo el narrador la recibe: los jugadores nunca saben quién está conectado.
 function getPublicState(game, viewerId, isNarrator, presence = {}) {
   const { players, phase, dayNumber, nightNumber, nominations, activeNomination, winner, smokeScreenPlayerId } = game;
 
   const viewer = players.find(p => p.id === viewerId);
-  const viewerIsSpy = !isNarrator && viewer?.role === 'SPY' && ['first_night','night'].includes(phase);
+  const viewerIsSpy = !isNarrator && seesGrimoire(viewer, game, phase);
   const currentNightActor = game.nightQueue?.[game.nightQueueIndex] || null;
 
   const nightTargets = new Set(
@@ -3370,8 +3639,17 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
       // Congelado: de noche un jugador no debe ver a quién están eligiendo los demás.
       isNightTarget: frozen ? false : nightTargets.has(p.id),
       bluffRole: (isMe || isNarrator) ? p.bluffRole : null,
+      // Los dos gemelos se conocen: cada uno ve el nombre del otro en su
+      // propio panel, sin que el narrador tenga que decirlo de viva voz.
+      evilTwinName: (isMe && p.evilTwinOf)
+        ? (players.find(x => x.id === p.evilTwinOf)?.name || null)
+        : null,
+      isEvilTwinGood: isNarrator ? (game.evilTwinPair?.goodId === p.id) : undefined,
       statuses: isNarrator ? (p.statuses || []) : undefined,
-      tokens: isNarrator ? (p.tokens || []) : undefined,
+      // El arte se resuelve AQUÍ: el icono de estado si lo hay, si no el del
+      // rol dueño. Así las fichas de roles homebrew (que el cliente no tiene
+      // en su catálogo) también se ven.
+      tokens: isNarrator ? (p.tokens || []).map(t => publicToken(t)) : undefined,
       // 'online' | 'away' | 'offline' — información exclusiva del narrador.
       presence: isNarrator ? (presence[p.id] || 'offline') : undefined,
     };
@@ -3386,12 +3664,19 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
   const activeCampaign = getCampaign(game.campaignId);
   return {
     id: game.id, phase, dayNumber, nightNumber,
+    // El Espía (y la Viuda en su noche) ven los personajes reales en la mesa.
+    // NO viaja la conexión ni las fichas: gherkin.md:3718-3721.
+    viewerSeesGrimoire: isNarrator ? undefined : viewerIsSpy,
     campaignId: game.campaignId,
     campaignName: activeCampaign.name,
     campaignIsCustom: !!activeCampaign.isCustom,
     campaignRoles: Object.values(activeCampaign.roles || {}).map(r => ({
       id: r.id, name: r.name, type: r.type, alignment: r.alignment,
       ability: r.ability, image: r.image || null, homebrew: !!r.homebrew,
+      // Nombres de fichas recordatorias. El catálogo con `id`/`duration` vive
+      // en el cliente para las 4 campañas base; esto cubre a los personajes
+      // extra y a los de guiones importados, que allí no existen.
+      reminders: Array.isArray(r.reminders) ? r.reminders : undefined,
     })),
     // Catálogo COMPLETO (todas las campañas + viajeros + extras). El asistente
     // de montaje lo usa para que el Narrador pueda repartir cualquier personaje
@@ -3409,8 +3694,17 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
     // Orden de noche real de la campaña activa. El cliente solo conoce las 4
     // campañas base; sin esto, un guion importado caía al orden de Trouble
     // Brewing y sus personajes no salían en la guía.
+    // Solo para guiones importados: las campañas base exportan queueFirst/
+    // queueOther SIN los marcadores de información (EVIL_INFO…), así que
+    // mandarlas aquí borraría ese paso de la guía. Para ellas el cliente usa
+    // su propia lista, que un test mantiene sincronizada con la del servidor.
     campaignFirstNightOrder: isNarrator ? (activeCampaign.firstNightOrder || null) : undefined,
     campaignOtherNightOrder: isNarrator ? (activeCampaign.otherNightOrder || null) : undefined,
+    // Contadores del narrador (Yaggababble). Solo a él.
+    counters: isNarrator ? { ...(game.counters || {}) } : undefined,
+    // Pareja de gemelos: la guía la necesita para presentarlos y para avisar
+    // al nominar al gemelo bueno.
+    evilTwinPair: isNarrator ? (game.evilTwinPair || null) : undefined,
     campaignSetupNotes: isNarrator ? (activeCampaign.setupNotes || []) : undefined,
     campaignWarnings: isNarrator ? (activeCampaign.warnings || []) : undefined,
     campaignDistribution: isNarrator ? (activeCampaign.distribution || {}) : undefined,
@@ -3553,7 +3847,7 @@ function getPublicState(game, viewerId, isNarrator, presence = {}) {
 }
 
 module.exports = {
-  createGame, getGame, addPlayer, removePlayer,
+  createGame, getGame, addPlayer, removePlayer, replacePlayer,
   distributeRoles, generateNightInfo,
   nominate, vote, resolveVote, executeNominationWinner, slayerAction,
   roshamboThrow, psychopathDayKill, barberSwap, closeBarberStep, syncBarberState,
@@ -3568,4 +3862,5 @@ module.exports = {
   applySetup, regenDemonNightInfo,
   getPublicState,
   placeToken, syncStatusFlags,
+  placeManualToken, removePlayerToken, renumberTokens,
 };

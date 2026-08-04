@@ -13,6 +13,7 @@ import NightScreen from './NightScreen';
 import { RoshamboBox, WishRequestBox } from './NarratorTools';
 import DiscordChannels from './DiscordChannels';
 import PlayerChip from './PlayerChip';
+import SheetLink from './SheetLink';
 import { playDaySound, playNightSound } from '../utils/sounds';
 
 // ── Phase sound hook ──────────────────────────────────────────────
@@ -327,6 +328,7 @@ export default function PlayerPanel() {
             <PlayerChip name={me.name} avatar={me.avatar} size="sm" color={me.alive ? 'var(--gold-hot)' : 'var(--blood-hi)'} />
             {!me.alive && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--blood-hi)' }}>☠ Muerto</span>}
           </div>
+          <SheetLink game={game} />
           <button onClick={logout} style={{ background: 'none', border: 'var(--hairline-bone)', borderRadius: 2, padding: '4px 10px', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-400)', cursor: 'pointer' }}>
             Salir
           </button>
@@ -363,6 +365,14 @@ export default function PlayerPanel() {
               <div style={{ marginTop: 10, background: 'rgba(168,58,45,0.1)', borderRadius: 3, padding: '7px 10px' }}>
                 <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--blood-hi)', fontStyle: 'italic' }}>
                   Fingiendo ser: {ALL_ROLES.find(r => r.id === me.bluffRole)?.name}
+                </p>
+              </div>
+            )}
+            {/* Los dos gemelos se conocen desde la primera noche. */}
+            {me.evilTwinName && (
+              <div style={{ marginTop: 10, background: 'rgba(168,58,45,0.1)', border: '1px solid var(--blood-dim)', borderRadius: 3, padding: '7px 10px' }}>
+                <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-100)' }}>
+                  👯 Tu gemelo es <b>{me.evilTwinName}</b>.
                 </p>
               </div>
             )}

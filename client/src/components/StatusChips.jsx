@@ -15,11 +15,17 @@ export default function StatusChips({ player, compact = false }) {
   const tokens = player.tokens || [];
   const genericTokens = statusTokens(game?.campaignId);
   const rolesInPlay = (game?.players || []).map(p => p.role).filter(Boolean);
-  const reminders = remindersForRolesInPlay(game?.campaignId, rolesInPlay);
+  const reminders = remindersForRolesInPlay(game?.campaignId, rolesInPlay, game);
+  // (type, roleId) identifica la ficha con independencia de quién la puso:
+  // el servidor fusiona la manual con la automática del mismo rol.
+  const placedPairs = new Set(tokens.map(t => `${t.tokenId || t.type}::${t.roleId}`));
 
   const toggleStatus = (s) => send('TOGGLE_STATUS', { playerId: player.id, status: s });
-  const placeToken = (t) => send('ADD_TOKEN', { playerId: player.id, token: t });
-  const removeToken = (instanceId) => send('REMOVE_TOKEN', { playerId: player.id, instanceId });
+  // toggle: en el selector, volver a pulsar una ficha ya puesta la quita.
+  const placeToken = (t) => send('ADD_TOKEN', { playerId: player.id, token: t, toggle: true });
+  const removeToken = (uid) => send('REMOVE_TOKEN', { playerId: player.id, uid });
+  const pairOf = (t) => `${t.tokenId}::${t.roleId}`;
+  const fullLabel = (t) => `${t.label}${t.ordinalOf > 1 ? ` ${t.ordinal}/${t.ordinalOf}` : ''}`;
 
   const durColor = (d) => d === 'night' ? 'var(--moon)' : d === 'oneShot' ? 'var(--blood-hi)' : d === 'day' ? 'var(--gold)' : 'var(--good)';
 
@@ -27,13 +33,16 @@ export default function StatusChips({ player, compact = false }) {
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
       {/* Fichas colocadas (con arte de rol) */}
       {tokens.map(t => {
-        const role = ROLE_BY_ID[t.roleId];
+        // `t.img` lo resuelve el servidor (arte de estado, o el del rol dueño,
+        // incluidos los roles homebrew que el catálogo local no conoce).
+        const img = t.img || ROLE_BY_ID[t.roleId]?.img;
         const dur = t.duration || (t.temp ? 'night' : 'permanent');
         return (
-          <button key={t.instanceId} onClick={() => removeToken(t.instanceId)} title={`${t.label}${t.manual ? ' (manual)' : ''} — quitar`}
+          <button key={t.uid || t.instanceId} onClick={() => removeToken(t.uid || t.instanceId)}
+            title={`${fullLabel(t)}${t.manual ? ' (manual)' : ''} — quitar`}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontFamily: 'var(--serif)', fontSize: compact ? 9 : 11, background: 'rgba(0,0,0,0.3)', border: `1px solid ${durColor(dur)}`, color: 'var(--bone-100)', borderRadius: 10, padding: '1px 6px 1px 2px', cursor: 'pointer' }}>
-            {role?.img && <img src={role.img} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />}
-            {t.label} ✕
+            {img && <img src={img} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.target.remove(); }} />}
+            {fullLabel(t)} ✕
           </button>
         );
       })}
@@ -58,13 +67,18 @@ export default function StatusChips({ player, compact = false }) {
                 <p style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--bone-400)', margin: '0 0 5px' }}>Fichas de rol</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 180, overflowY: 'auto', marginBottom: 8 }}>
                   {reminders.map(t => {
-                    const on = tokens.some(x => x.instanceId === `${t.roleId}:${t.tokenId}`);
+                    // Antes se comparaba con `roleId:tokenId` mientras el
+                    // servidor escribía `manual:roleId:tokenId`: el resaltado
+                    // no se activaba nunca y el narrador volvía a pulsar,
+                    // quitando la ficha sin darse cuenta.
+                    const on = placedPairs.has(pairOf(t));
                     return (
-                      <button key={`${t.roleId}:${t.tokenId}`} onClick={() => placeToken(t)} title={`${t.roleName}: ${t.label}`}
+                      <button key={`${t.roleId}:${t.tokenId}`} onClick={() => placeToken(t)}
+                        title={`${t.roleName}: ${t.label}${on ? ' — ya colocada (pulsa para quitar)' : ''}`}
                         className="btn-night"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, padding: '2px 6px 2px 2px', borderColor: on ? durColor(t.duration) : undefined, color: on ? 'var(--bone-50)' : undefined }}>
-                        {t.img && <img src={t.img} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />}
-                        {t.label}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, padding: '2px 6px 2px 2px', borderColor: on ? durColor(t.duration) : undefined, color: on ? 'var(--bone-50)' : undefined, background: on ? 'rgba(201,162,74,0.18)' : undefined }}>
+                        {t.img && <img src={t.img} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} onError={e => { e.target.remove(); }} />}
+                        {on ? '✓ ' : ''}{t.label}
                       </button>
                     );
                   })}

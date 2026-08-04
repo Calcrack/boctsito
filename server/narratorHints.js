@@ -331,6 +331,64 @@ const HINTS = {
     needs: 'Campo de misión por jugador + botón "misión completada".',
     severity: 'info',
   }],
+
+  // ── Grimorio y demonios especiales ─────────────────────────────────
+  SPY: [{
+    when: anyNight,
+    text: 'Muéstrale el Grimorio completo. También lo ve en su propia ruleta. Si está borracho o envenenado, enséñale uno FALSO o nada: tú decides.',
+    needs: 'Nada que pulsar: es una mirada. Recuerda que registra como bueno.',
+    severity: 'info',
+  }],
+
+  WIDOW: [{
+    when: c => c.isNight && c.p.widowGrimoireNight === c.game.nightNumber,
+    text: 'Esta noche ve el Grimorio completo y envenena a 1 jugador para el resto de la partida. Después, avisa a 1 jugador BUENO al azar de que hay una Viuda en juego.',
+    needs: 'Selector de objetivo + aviso diferido al jugador bueno.',
+    severity: 'warn',
+  }],
+
+  LEGION: [{
+    when: c => c.isFirstNight,
+    text: 'La mayoría de la mesa es Legión. Comprueba en el montaje que marcaste todos esos asientos: todos son malvados y comparten el personaje.',
+    needs: 'Decisión de montaje «asientos de Legión».',
+    severity: 'warn',
+  }, {
+    when: nightStar,
+    text: 'Ataca un jugador cada noche. Recuerda: una ejecución falla si SOLO votaron malvados, y la partida sigue mientras quede una Legión viva.',
+    needs: 'Selector de víctima.',
+    severity: 'info',
+  }],
+
+  LIL_MONSTA: [{
+    when: anyNight,
+    text: 'Los Esbirros eligen en silencio quién cuida al bebé; si no hay unanimidad, decides tú. El canguro cuenta como Demonio vivo. Cada noche puede morir 1 jugador.',
+    needs: 'Panel «canguro» + selector de víctima.',
+    severity: 'warn',
+  }],
+
+  YAGGABABBLE: [{
+    when: c => c.isDay,
+    text: 'Cuenta cada vez que diga su frase secreta en público: esta noche matará a tantos jugadores como veces la haya dicho.',
+    needs: 'Contador «Yaggababble» del panel derecho.',
+    severity: 'warn',
+  }, {
+    when: anyNight,
+    text: c => `Dijo su frase ${c.game.counters?.yaggaSaidToday ?? 0} vez/veces hoy: elige exactamente esa cantidad de víctimas.`,
+    needs: 'Selector múltiple de víctimas.',
+    severity: 'warn',
+  }],
+
+  EVIL_TWIN: [{
+    when: c => c.isFirstNight,
+    text: 'Despierta a la Gemela Malvada y a su gemelo bueno a la vez: se muestran mutuamente. Ambos ya tienen su ficha en el grimorio.',
+    needs: 'Confirmar el paso tras la presentación.',
+    severity: 'warn',
+  }, {
+    when: c => c.isDay && c.p.alive && !c.p.poisoned,
+    text: 'Mientras los dos gemelos sigan vivos el Bien NO puede ganar, y ejecutar al gemelo bueno hace ganar al Mal directamente.',
+    needs: 'Nada: la página bloquea la victoria del Bien y avisa al nominarlo.',
+    severity: 'info',
+  }],
 };
 
 // Devuelve los avisos activos ahora mismo, uno por jugador afectado.

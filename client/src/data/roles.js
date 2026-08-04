@@ -7,10 +7,13 @@ export {
   ROLE_TYPES,
   CAMPAIGNS,
   CAMPAIGN_LIST,
+  SELECTABLE_CAMPAIGNS,
+  HIDDEN_CAMPAIGN_IDS,
   DEFAULT_CAMPAIGN,
   getCampaign,
   campaignRoles,
   scriptRoles,
+  scriptRoleById,
   statusTokens,
   remindersForRolesInPlay,
 } from './campaigns';

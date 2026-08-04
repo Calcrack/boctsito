@@ -327,12 +327,14 @@ const queueFirst = [
   // 'MARIONETTE' NO entra en la cola interactiva: es pasiva y no despierta con el mal.
   // Sin asterisco en su habilidad → estos Esbirros SÍ actúan la primera noche.
   'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
+  // La Viuda envenena ANTES que los personajes de información: si actuaba al
+  // final, todos ellos ya habían recibido información verdadera.
+  'WIDOW',
   'SHUGENJA', 'STEWARD',
   'PUZZLEMASTER', 'ALCHEMIST',
   'HUNTSMAN',     // salva a la Damisela antes de que los Esbirros la busquen
   'BOUNTY_HUNTER', 'CULT_LEADER', 'NIGHTWATCHMAN', 'KNIGHT', 'NOBLE', 'DAMSEL', 'SNITCH',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
-  'WIDOW',        // al final: mira el Grimorio completo tras todos los tokens colocados
 ];
 
 const queueOther = [
@@ -341,8 +343,10 @@ const queueOther = [
   'LYCANTHROPE', // antes de demonios: si mata a bueno, bloquea ataque del demonio
   'ENGINEER',    // antes de demonios: cambia qué roles están en juego antes de que actúen
   'HUNTSMAN',    // antes de demonios: salva Damisela antes que actúe demonio (canónico)
-  'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'OJO', 'AL_HADIKHIA',
-  'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER', 'YAGGABABBLE',
+  // Esbirros que inhabilitan: antes de los demonios y de la información.
+  'MEZEPHELES', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'SUMMONER',
+  // Ataques demoníacos: después de todo lo que protege o inhabilita.
+  'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA', 'OJO', 'AL_HADIKHIA', 'YAGGABABBLE',
   'ACROBAT', 'CANNIBAL', 'BOUNTY_HUNTER', 'CULT_LEADER', 'NIGHTWATCHMAN',
   'BALLOONIST', 'GENERAL', 'HIGH_PRIESTESS', 'KING',
 ];
@@ -352,7 +356,9 @@ const queueOther = [
 // (identidad falsa, bluffs, veneno inicial); la info bespoke de roles exóticos
 // se completa de forma incremental (P6).
 const SETUP = {
-  AL_HADIKHIA: { demonBluffs: 3 }, KAZALI: { demonBluffs: 3 }, LEGION: { demonBluffs: 3 },
+  AL_HADIKHIA: { demonBluffs: 3 }, KAZALI: { demonBluffs: 3 },
+  // «La mayoría de jugadores son Legión»: el narrador marca los asientos.
+  LEGION: { demonBluffs: 3, legionMajority: true },
   LEVIATHAN: { demonBluffs: 3 }, LIL_MONSTA: { demonBluffs: 3 }, LLEECH: { demonBluffs: 3 },
   OJO: { demonBluffs: 3 }, RIOT: { demonBluffs: 3 },
   WIDOW: { initialPoison: true }, SUMMONER: { summonerSetup: true, demonBluffs: 3 },
@@ -370,6 +376,8 @@ module.exports = {
   roles,
   distribution: BASE_DISTRIBUTION,
   outsiderModifiers: {},
+  // Lil' Monsta trae [+1 Esbirro] (los Esbirros son quienes la cuidan).
+  minionModifiers: { LIL_MONSTA: 1 },
   queueFirst,
   queueOther,
 };

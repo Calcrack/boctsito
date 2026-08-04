@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 const {
-  createGame, getGame, addPlayer, removePlayer,
+  createGame, getGame, addPlayer, removePlayer, replacePlayer,
   distributeRoles, nominate, vote, resolveVote, executeNominationWinner, slayerAction,
   applyNightAction, advanceNightQueue,
   startDay, startNight, openNominations,
@@ -15,8 +15,10 @@ const {
   barberSwap, closeBarberStep, applyWish,
   assignBelievedRoles, applySetup, regenDemonNightInfo,
   placeToken, syncStatusFlags, resolveChoice,
+  placeManualToken, removePlayerToken,
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
+const { renderCampaignSheet } = require('./campaignSheet');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
@@ -376,6 +378,11 @@ function handleMessage(type, payload, session) {
         if (payload.discordId !== undefined) player.discordId = payload.discordId;
         if (payload.discordTag !== undefined) player.discordTag = payload.discordTag;
         if (payload.avatar !== undefined) player.avatar = payload.avatar;
+        // Renombrar sin tocar nada más (para el nombre completo usa REPLACE_PLAYER,
+        // que además propaga el cambio a las nominaciones y cierra su sesión).
+        if (typeof payload.name === 'string' && payload.name.trim()) {
+          player.name = payload.name.trim().slice(0, 40);
+        }
       }
       broadcastGame();
       break;
@@ -1030,16 +1037,24 @@ function handleMessage(type, payload, session) {
     case 'ADD_TOKEN': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
-      const p = game.players.find(x => x.id === payload.playerId);
-      if (p && payload.token) {
-        if (!Array.isArray(p.tokens)) p.tokens = [];
-        const t = payload.token; // { tokenId, roleId, label, duration }
-        const instanceId = `manual:${t.roleId}:${t.tokenId}`;
-        const existing = p.tokens.findIndex(x => x.instanceId === instanceId);
-        if (existing >= 0) p.tokens.splice(existing, 1); // toggle off
-        // manual:true → el motor de caducidad NUNCA la auto-borra.
-        else p.tokens.push({ instanceId, type: t.tokenId, tokenId: t.tokenId, roleId: t.roleId, label: t.label, duration: t.duration || 'permanent', manual: true, temp: t.duration === 'night' || t.duration === 'day' });
-      }
+      // El motor comparte identidad con las fichas automáticas: colocar a mano
+      // la misma ficha que ya puso el motor no la duplica.
+      placeManualToken(game, payload.playerId, payload.token, !!payload.toggle);
+      broadcastGame();
+      break;
+    }
+
+    // Contadores que el narrador lleva a mano (Yaggababble: veces que dijo su
+    // frase hoy). Viven en el servidor para sobrevivir al cierre del panel y
+    // para que la noche pueda leer lo contado durante el DÍA.
+    case 'SET_COUNTER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const ALLOWED = { yaggaSaidToday: 5 };
+      const max = ALLOWED[payload.key];
+      if (max === undefined) throw new Error('Contador desconocido');
+      if (!game.counters) game.counters = {};
+      game.counters[payload.key] = Math.max(0, Math.min(max, Number(payload.value) || 0));
       broadcastGame();
       break;
     }
@@ -1047,10 +1062,8 @@ function handleMessage(type, payload, session) {
     case 'REMOVE_TOKEN': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
-      const p = game.players.find(x => x.id === payload.playerId);
-      if (p && Array.isArray(p.tokens)) {
-        p.tokens = p.tokens.filter(t => t.instanceId !== payload.instanceId);
-      }
+      // Acepta `uid` (nuevo) o `instanceId` (partidas ya en curso).
+      removePlayerToken(game, payload.playerId, payload.uid || payload.instanceId);
       broadcastGame();
       break;
     }
@@ -1104,26 +1117,35 @@ function handleMessage(type, payload, session) {
     case 'KICK_PLAYER_SESSION': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
-      const targetId = payload.playerId;
-      const target = game?.players.find(p => p.id === targetId);
-      let kicked = 0;
-      [...sessions.values()]
-        .filter(s => s.playerId === targetId)
-        .forEach(s => {
-          sendTo(s.ws, 'KICKED_SESSION', { reason: 'narrator_kick' });
-          s.playerId = null; s.gameId = null;
-          kicked++;
-        });
-      // Reenvía la lista de asientos libres a quienes están en la pantalla de login.
-      if (game) {
-        const joinedIds = new Set([...sessions.values()].filter(s => s.playerId).map(s => s.playerId));
-        const available = game.players.filter(p => !joinedIds.has(p.id)).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }));
-        sessions.forEach(s => { if (!s.gameId) sendTo(s.ws, 'PLAYER_LIST', { players: available }); });
-      }
+      const target = game?.players.find(p => p.id === payload.playerId);
+      const kicked = kickPlayerSession(game, payload.playerId);
       sendTo(ws, 'NOTIFICATION', {
         message: kicked > 0
           ? `🔌 Sesión de ${target?.name || '?'} expulsada (${kicked}). Ya puede volver a unirse.`
           : `🔌 ${target?.name || '?'} no tenía sesión activa — su asiento ya está libre.`,
+        type: 'info',
+      });
+      broadcastGame();
+      break;
+    }
+
+    // ── Ceder el asiento a otra persona ──────────────────────────────
+    // El asiento conserva personaje, fichas, vivo/muerto y votos: solo cambia
+    // quién lo ocupa. REMOVE_PLAYER + ADD_PLAYER no vale porque borra el
+    // asiento y vuelve a lanzar el montaje.
+    case 'REPLACE_PLAYER': {
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const game = requireGame(session);
+      const before = game.players.find(p => p.id === payload.playerId)?.name;
+      const p = replacePlayer(game, payload.playerId, {
+        name: payload.newName ?? payload.name,
+        discordId: payload.discordId,
+        discordTag: payload.discordTag,
+        avatar: payload.avatar,
+      });
+      kickPlayerSession(game, payload.playerId);
+      sendTo(ws, 'NOTIFICATION', {
+        message: `🔄 ${before} → ${p.name}. Conserva su personaje y sus fichas; ya puede entrar con ese nombre.`,
         type: 'info',
       });
       broadcastGame();
@@ -1493,8 +1515,12 @@ function handleMessage(type, payload, session) {
       if (redHerringSeatId !== undefined) {
         game.smokeScreenPlayerId = redHerringSeatId || null;
       }
-      if (actionType && actorId && Array.isArray(targetIds)) {
-        applyNightAction(game, actionType, actorId, targetIds);
+      // `actorId` puede ser null: son las acciones de estado que el narrador
+      // aplica por su cuenta desde el panel del jugador (envenenar, proteger,
+      // limpiar). La ficha se atribuye entonces al NARRADOR.
+      const NARRATOR_SELF_ACTIONS = new Set(['POISON', 'MAKE_DRUNK', 'SAFE', 'CLEAR_STATUS']);
+      if (actionType && Array.isArray(targetIds) && (actorId || NARRATOR_SELF_ACTIONS.has(actionType))) {
+        applyNightAction(game, actionType, actorId || null, targetIds);
       }
       // Maestro de Acertijos: revelar Demonio si adivinó correctamente
       if (actionType === 'PUZZLEMASTER_REVEAL' && actorId) {
@@ -1993,6 +2019,26 @@ function requireGame(session) {
   return game;
 }
 
+// Libera la SESIÓN de un asiento (no el asiento). Devuelve cuántas cerró.
+// La usan KICK_PLAYER_SESSION y REPLACE_PLAYER.
+function kickPlayerSession(game, playerId) {
+  let kicked = 0;
+  [...sessions.values()]
+    .filter(s => s.playerId === playerId)
+    .forEach(s => {
+      sendTo(s.ws, 'KICKED_SESSION', { reason: 'narrator_kick' });
+      s.playerId = null; s.gameId = null;
+      kicked++;
+    });
+  // Reenvía la lista de asientos libres a quienes están en la pantalla de login.
+  if (game) {
+    const joinedIds = new Set([...sessions.values()].filter(s => s.playerId).map(s => s.playerId));
+    const available = game.players.filter(p => !joinedIds.has(p.id)).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }));
+    sessions.forEach(s => { if (!s.gameId) sendTo(s.ws, 'PLAYER_LIST', { players: available }); });
+  }
+  return kicked;
+}
+
 // ── REST API ───────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ ok: true, discord: getBotStatus() }));
 app.get('/api/roles', (req, res) => res.json(ROLES));
@@ -2002,6 +2048,16 @@ app.get('/api/wishes', (req, res) => res.json(WISH_CATALOG));
 app.get('/api/players', (req, res) => {
   const game = getGame(MAIN_GAME_ID);
   res.json(game ? game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar })) : []);
+});
+
+// Hoja de campaña: la abren los jugadores en una pestaña nueva. Va ANTES del
+// catch-all de la SPA (más abajo), que si no se la tragaría.
+// ?campaign=<id> fuerza un guion; sin él, el de la partida en curso.
+app.get('/hoja-campana', (req, res) => {
+  const cid = req.query.campaign || getGame(req.query.game || MAIN_GAME_ID)?.campaignId;
+  const campaign = cid ? CAMPAIGNS[cid] : null;
+  if (!campaign) return res.status(404).type('html').send('<p>Campaña no encontrada.</p>');
+  res.type('html').send(renderCampaignSheet(campaign));
 });
 
 // ── Serve frontend build (for tunnel / production) ─────────────────

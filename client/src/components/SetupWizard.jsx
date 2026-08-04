@@ -504,6 +504,33 @@ function DecisionCard({ d, goodNotInPlay, demonsInCampaign, minionsInCampaign, o
         control = <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-400)' }}>{d.secret}</p>;
       }
       break;
+    // Legión: multi-selección de asientos. «La mayoría de jugadores son
+    // Legión»: sin esto había que cambiarlos de personaje uno a uno.
+    case 'legionSeats': {
+      const picked = d.chosen || [];
+      const toggle = (id) => setDec(d.id, {
+        chosen: picked.includes(id) ? picked.filter(x => x !== id) : [...picked, id],
+      });
+      control = (
+        <div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+            {seats.map(s => {
+              const on = picked.includes(s.id);
+              return (
+                <button key={s.id} onClick={() => toggle(s.id)} className="btn-night"
+                  style={{ fontSize: 10, borderColor: on ? 'var(--blood-hi)' : undefined, color: on ? 'var(--blood-hi)' : undefined }}>
+                  {on ? '☠ ' : ''}{s.name}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 9, color: picked.length >= d.min ? 'var(--good)' : 'var(--blood-hi)', margin: 0 }}>
+            {picked.length}/{seats.length} marcados · mínimo {d.min}
+          </p>
+        </div>
+      );
+      break;
+    }
     case 'puzzlemasterDrunk': {
       const puzPool = seats.filter(s => s.id !== d.seat);
       control = sel(d.chosen, v => setDec(d.id, { chosen: v }),
@@ -652,6 +679,7 @@ function isResolved(d) {
     case 'forasteros':      return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'registroInicial': return !!d.registersAs;
     case 'otroSecreto':        return d.secret !== 'evilTwin' || !!d.targetSeat;
+    case 'legionSeats':             return Array.isArray(d.chosen) && d.chosen.length >= d.min;
     case 'puzzlemasterDrunk':       return !!d.chosen;
     case 'alchemistAbility':        return !!d.chosen;
     case 'boffinAbility':           return !!d.chosen;
@@ -667,6 +695,7 @@ function titleFor(d) {
     case 'forasteros':         return `Forasteros (${d.seatName})`;
     case 'registroInicial':    return `Registro de ${d.seatName}`;
     case 'otroSecreto':        return d.secret === 'evilTwin' ? 'Gemela Malvada' : d.secret;
+    case 'legionSeats':        return `Legión — ¿qué asientos lo son?`;
     case 'puzzlemasterDrunk':  return `Maestro de Acertijos — jugador borracho`;
     case 'alchemistAbility':   return `Alquimista — habilidad de Esbirro`;
     case 'boffinAbility':            return `Rata de Laboratorio — habilidad del Demonio`;

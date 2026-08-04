@@ -72,7 +72,8 @@ t('ninguna acción de la guía queda sin handler en el servidor', () => {
   eq(dead.join(', '), '', 'acciones muertas:');
 });
 t('los roles nuevos con decisión del narrador tienen aviso en la guía', () => {
-  for (const id of ['WIZARD', 'LORD_OF_TYPHON', 'XAAN', 'FIDDLER', 'GNOME', 'OGRE', 'VILLAGE_IDIOT', 'HERMIT', 'TOYMAKER', 'DUCHESS']) {
+  for (const id of ['WIZARD', 'LORD_OF_TYPHON', 'XAAN', 'FIDDLER', 'GNOME', 'OGRE', 'VILLAGE_IDIOT', 'HERMIT', 'TOYMAKER', 'DUCHESS',
+                    'SPY', 'WIDOW', 'LEGION', 'LIL_MONSTA', 'YAGGABABBLE', 'EVIL_TWIN']) {
     ok(HINTED_ROLES.has(id), `${id} sin aviso de narrador`);
   }
 });
@@ -381,6 +382,186 @@ t('el Xaan avisa en qué noche envenena', () => {
   const hints = computeRoleHints(g).filter(h => h.roleId === 'XAAN');
   ok(hints.length > 0, 'sin aviso');
   ok(/noche \d/.test(hints[0].text), `texto inesperado: ${hints[0].text}`);
+});
+
+// ── Orden de noche ───────────────────────────────────────────────────
+// La forma ejecutable de "el exorcista va antes que cualquier demonio, igual
+// que el monje": en vez de revisar las listas a ojo, se fijan las propiedades.
+G_('Orden de noche');
+
+const { CAMPAIGNS } = require(path.join(ROOT, 'campaigns'));
+const BASE_CAMPAIGNS = ['TROUBLE_BREWING', 'BAD_MOON_RISING', 'SECTS_AND_VIOLETS', 'CAROUSEL'];
+const CLIENT_CAMPAIGN_FILE = {
+  TROUBLE_BREWING: 'troubleBrewing.js', BAD_MOON_RISING: 'badMoonRising.js',
+  SECTS_AND_VIOLETS: 'sectsViolets.js', CAROUSEL: 'carousel.js',
+};
+function clientOrder(campaignId, name) {
+  const f = path.join(ROOT, '..', 'client', 'src', 'data', 'campaigns', CLIENT_CAMPAIGN_FILE[campaignId]);
+  const body = fs.readFileSync(f, 'utf8');
+  const m = body.match(new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\];`));
+  if (!m) throw new Error(`${campaignId}: no encuentro ${name}`);
+  return [...m[1].matchAll(/'([A-Z_0-9]+)'/g)].map(x => x[1]);
+}
+// Marcadores de información: solo existen en el cliente (paso "los malvados
+// se reconocen"), el servidor no los pone en cola.
+const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
+
+t('todo id de las colas de campaña tiene patrón en la guía', () => {
+  const missing = [];
+  for (const cid of BASE_CAMPAIGNS) {
+    const c = CAMPAIGNS[cid];
+    for (const id of [...(c.queueFirst || []), ...(c.queueOther || [])]) {
+      if (!INFO_MARKERS.has(id) && !PATTERNS[id]) missing.push(`${cid}:${id}`);
+    }
+  }
+  eq([...new Set(missing)].join(', '), '', 'en cola pero sin panel:');
+});
+
+t('las colas de campaña coinciden servidor/cliente', () => {
+  const diffs = [];
+  for (const cid of BASE_CAMPAIGNS) {
+    const c = CAMPAIGNS[cid];
+    const pairs = [['queueFirst', 'firstNightOrder'], ['queueOther', 'otherNightOrder']];
+    for (const [srvKey, cliKey] of pairs) {
+      const srv = (c[srvKey] || []).filter(id => !INFO_MARKERS.has(id));
+      const cli = clientOrder(cid, cliKey).filter(id => !INFO_MARKERS.has(id));
+      if (srv.join(',') !== cli.join(',')) diffs.push(`${cid}.${srvKey}\n       servidor: ${srv.join(' > ')}\n       cliente:  ${cli.join(' > ')}`);
+    }
+  }
+  eq(diffs.join('\n     '), '', 'colas divergentes:');
+});
+
+// Clases de interacción. El orden correcto es siempre:
+//   proteger → inhabilitar → atacar → reaccionar a la muerte,
+// y la información se genera después de que se sepa quién está inhabilitado.
+// TEA_LADY queda fuera: su protección es pasiva, no un paso nocturno.
+const PROTECTORS  = ['MONK', 'INNKEEPER', 'DEVILS_ADVOCATE', 'EXORCIST', 'SAILOR'];
+const DEMON_KILLS = ['ZOMBUUL', 'PUKKA', 'SHABALOTH', 'PO', 'FANG_GU', 'NO_DASHII', 'VORTOX',
+  'VIGORMORTIS', 'IMP', 'LORD_OF_TYPHON', 'LLEECH', 'KAZALI', 'LEGION', 'LIL_MONSTA',
+  'AL_HADIKHIA', 'OJO', 'YAGGABABBLE'];
+const DISABLERS   = ['POISONER', 'WIDOW', 'FEARMONGER', 'HARPY', 'ORGAN_GRINDER', 'COURTIER',
+  'SAILOR', 'PHILOSOPHER', 'XAAN', 'WRAITH'];
+const INFO_ROLES  = ['EMPATH', 'FORTUNE_TELLER', 'CHAMBERMAID', 'DREAMER', 'ORACLE', 'FLOWERGIRL',
+  'TOWN_CRIER', 'BALLOONIST', 'UNDERTAKER', 'SPY'];
+const REACTIONS   = ['RAVENKEEPER', 'CANNIBAL', 'SWEETHEART', 'SAGE', 'BARBER', 'MOONCHILD',
+  'TINKER', 'PROFESSOR'];
+const idx = (order, ids) => ids.map(id => order.indexOf(id)).filter(i => i >= 0);
+
+t('la protección va antes que cualquier ataque demoníaco', () => {
+  const prot = idx(OTHER, PROTECTORS), kill = idx(OTHER, DEMON_KILLS);
+  ok(prot.length && kill.length, 'listas vacías');
+  const lastProt = Math.max(...prot), firstKill = Math.min(...kill);
+  ok(lastProt < firstKill,
+    `${OTHER[lastProt]} (protección) va tras ${OTHER[firstKill]} (ataque)`);
+});
+
+t('el Exorcista y el Monje van antes que todos los demonios', () => {
+  const firstKill = Math.min(...idx(OTHER, DEMON_KILLS));
+  for (const id of ['EXORCIST', 'MONK']) {
+    const i = OTHER.indexOf(id);
+    ok(i >= 0, `${id} no está en el orden de noches*`);
+    ok(i < firstKill, `${id} va tras ${OTHER[firstKill]}`);
+  }
+});
+
+t('quien inhabilita actúa antes que quien recibe información', () => {
+  for (const order of [FIRST, OTHER]) {
+    const dis = idx(order, DISABLERS), inf = idx(order, INFO_ROLES);
+    if (!dis.length || !inf.length) continue;
+    const lastDis = Math.max(...dis), firstInf = Math.min(...inf);
+    ok(lastDis < firstInf, `${order[lastDis]} va tras ${order[firstInf]}`);
+  }
+});
+
+t('las reacciones a la muerte van después de los ataques', () => {
+  const kill = idx(OTHER, DEMON_KILLS), react = idx(OTHER, REACTIONS);
+  ok(kill.length && react.length, 'listas vacías');
+  const lastKill = Math.max(...kill), firstReact = Math.min(...react);
+  ok(lastKill < firstReact, `${OTHER[firstReact]} reacciona antes de ${OTHER[lastKill]}`);
+});
+
+// Las mismas propiedades, pero en la cola real de cada campaña: es la que
+// manda en la partida, el orden global solo coloca a los invitados de fuera.
+t('cada campaña protege e inhabilita antes de que ataque su Demonio', () => {
+  const bad = [];
+  for (const cid of BASE_CAMPAIGNS) {
+    const q = CAMPAIGNS[cid].queueOther || [];
+    const kill = idx(q, DEMON_KILLS);
+    if (!kill.length) continue;
+    const firstKill = Math.min(...kill);
+    for (const id of [...PROTECTORS, ...DISABLERS]) {
+      const i = q.indexOf(id);
+      if (i >= 0 && i > firstKill) bad.push(`${cid}: ${id} tras ${q[firstKill]}`);
+    }
+  }
+  eq(bad.join(' | '), '', 'ataque antes de proteger/inhabilitar:');
+});
+
+t('cada campaña inhabilita antes de repartir información', () => {
+  const bad = [];
+  for (const cid of BASE_CAMPAIGNS) {
+    for (const key of ['queueFirst', 'queueOther']) {
+      const q = CAMPAIGNS[cid][key] || [];
+      const dis = idx(q, DISABLERS), inf = idx(q, INFO_ROLES);
+      if (!dis.length || !inf.length) continue;
+      const lastDis = Math.max(...dis), firstInf = Math.min(...inf);
+      if (lastDis > firstInf) bad.push(`${cid}.${key}: ${q[lastDis]} tras ${q[firstInf]}`);
+    }
+  }
+  eq(bad.join(' | '), '', 'información antes de inhabilitar:');
+});
+
+G_('Catálogo de personajes');
+t('ningún id tiene dos habilidades distintas entre campañas', () => {
+  // MASTERMIND está en Bad Moon Rising y en The Carousel. Compartir el id es
+  // legítimo (ALL_ROLES se queda con el primero), pero si los textos divergen
+  // el guion muestra una habilidad y el motor aplica la otra.
+  const byId = {};
+  for (const [cid, c] of Object.entries(CAMPAIGNS)) {
+    for (const [id, r] of Object.entries(c.roles || {})) {
+      (byId[id] = byId[id] || []).push({ cid, ability: r.ability });
+    }
+  }
+  const bad = Object.entries(byId)
+    .filter(([, list]) => new Set(list.map(x => x.ability)).size > 1)
+    .map(([id, list]) => `${id} (${list.map(x => x.cid).join(' vs ')})`);
+  eq(bad.join(', '), '', 'habilidades divergentes:');
+});
+t('todo id de ALL_ROLES resuelve a un personaje con nombre', () => {
+  const rotos = Object.entries(ALL_ROLES).filter(([id, r]) => !r || !r.name || r.id !== id).map(([id]) => id);
+  eq(rotos.join(', '), '', 'entradas rotas:');
+});
+
+G_('Arte de personajes');
+t('toda ruta img: del catálogo del cliente existe en disco', () => {
+  const dir = path.join(ROOT, '..', 'client', 'src', 'data', 'campaigns');
+  const pub = path.join(ROOT, '..', 'client', 'public');
+  const missing = [];
+  for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.js'))) {
+    const body = fs.readFileSync(path.join(dir, f), 'utf8');
+    for (const m of body.matchAll(/img:\s*'(\/[^']+)'/g)) {
+      if (!fs.existsSync(path.join(pub, m[1]))) missing.push(`${f}: ${m[1]}`);
+    }
+  }
+  eq(missing.join(' | '), '', 'rutas de arte inexistentes');
+});
+t('no queda arte huérfano en assets/roles', () => {
+  const dir = path.join(ROOT, '..', 'client', 'src', 'data', 'campaigns');
+  const used = new Set();
+  for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.js'))) {
+    const body = fs.readFileSync(path.join(dir, f), 'utf8');
+    for (const m of body.matchAll(/img:\s*'(\/[^']+)'/g)) used.add(m[1]);
+  }
+  const rolesDir = path.join(ROOT, '..', 'client', 'public', 'assets', 'roles');
+  const orphans = [];
+  const walk = (abs, rel) => {
+    for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(abs, e.name), `${rel}/${e.name}`);
+      else if (/\.(png|jpg|webp)$/i.test(e.name) && !used.has(`${rel}/${e.name}`)) orphans.push(`${rel}/${e.name}`);
+    }
+  };
+  walk(rolesDir, '/assets/roles');
+  eq(orphans.join(' | '), '', 'imágenes sin rol que las use');
 });
 
 const line = '═'.repeat(70);

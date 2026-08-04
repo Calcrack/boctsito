@@ -19,7 +19,7 @@ const CORNER_CHANNELS = {
   CEMENTERIO: { bottom: '8px', right: '8px',   label: 'Cementerio' },
 };
 
-function CornerGroup({ channel, players, cornerCfg, isNarrator, playerId, onClick }) {
+function CornerGroup({ channel, players, cornerCfg, isNarrator, seesGrimoire, playerId, onClick }) {
   return (
     <div style={{
       position: 'absolute',
@@ -33,6 +33,7 @@ function CornerGroup({ channel, players, cornerCfg, isNarrator, playerId, onClic
       {players.map(player => {
         const isMe = player.id === playerId;
         const isDead = !player.alive;
+        const cRole = (isNarrator || isMe || seesGrimoire) && player.role ? ROLE_BY_ID[player.role] : null;
         return (
           <div key={player.id}
             onClick={() => isNarrator && onClick(player)}
@@ -54,6 +55,12 @@ function CornerGroup({ channel, players, cornerCfg, isNarrator, playerId, onClic
             <span style={{ fontFamily: 'var(--serif)', fontSize: 9, color: 'var(--bone-300)', maxWidth: 50, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {player.name}
             </span>
+            {cRole && (
+              <span style={{ fontFamily: 'var(--serif)', fontSize: 8, maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                color: cRole.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)' }}>
+                {cRole.name}
+              </span>
+            )}
           </div>
         );
       })}
@@ -88,9 +95,12 @@ function Celestials({ isNight }) {
   );
 }
 
-function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTurn, seatSize, posX, posY, onClick }) {
+function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activeActor, voteTurn, seatSize, posX, posY, onClick }) {
   const role = player.role ? ROLE_BY_ID[player.role] : null;
   const isDead = !player.alive;
+  // El Espía (y la Viuda en su noche) leen el Grimorio: ven el personaje real
+  // de cada asiento. El servidor solo manda `role` cuando lo permite.
+  const canSeeRoles = isNarrator || isMe || seesGrimoire;
   const sz = seatSize;
   // Contadores discretos (la capa limpia no vuelca contenido sobre el círculo).
   const tokenCount = isNarrator
@@ -164,18 +174,25 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
       </div>
 
       {/* Fichas de efecto: íconos superpuestos sobre la foto (solo narrador) */}
+      {/* Chip con TEXTO: dos fichas "A salvo" ya no son indistinguibles.
+          key = t.uid (estable): con key={i} React reciclaba nodos ya ocultos
+          por onError y quedaban huecos en blanco. */}
       {isNarrator && (player.tokens || []).length > 0 && (
         <div className="seat-token-row">
-          {(player.tokens || []).slice(0, 3).map((t, i) => {
+          {(player.tokens || []).slice(0, 4).map(t => {
             const tImg = t.img || ROLE_BY_ID[t.roleId]?.img;
             const typeClass = `type-${(t.type || '').toLowerCase()}`;
-            return tImg
-              ? <img key={i} src={tImg} className={`seat-token-icon ${typeClass}`}
-                     title={t.label} onError={e => { e.target.style.display = 'none'; }} />
-              : <span key={i} className={`seat-token-dot ${typeClass}`} title={t.label}>●</span>;
+            const full = `${t.label}${t.ordinalOf > 1 ? ` ${t.ordinal}/${t.ordinalOf}` : ''}`;
+            return (
+              <span key={t.uid || t.key || t.instanceId} className={`seat-token-chip ${typeClass}`} title={full}>
+                {tImg && <img src={tImg} alt="" onError={e => { e.target.remove(); }} />}
+                <b>{t.short || t.label}</b>
+                {t.ordinalOf > 1 && <i>{t.ordinal}</i>}
+              </span>
+            );
           })}
-          {(player.tokens || []).length > 3 && (
-            <span className="seat-token-overflow">+{(player.tokens || []).length - 3}</span>
+          {(player.tokens || []).length > 4 && (
+            <span className="seat-token-overflow">+{(player.tokens || []).length - 4}</span>
           )}
         </div>
       )}
@@ -194,7 +211,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
       )}
 
       {/* Role token mini-badge */}
-      {role && (isNarrator || isMe) && (
+      {role && canSeeRoles && (
         <div className={`role-token-mini ${role.alignment}`}>
           <RoleIcon role={role} size={null} style={{ width: '100%', height: '100%' }} />
         </div>
@@ -202,7 +219,7 @@ function Seat({ player, isMe, isNarrator, canAct, nominated, activeActor, voteTu
 
       <div className="seat-nameplate">
         <div className="seat-name">{player.name}</div>
-        {(isNarrator || isMe) && role && (
+        {canSeeRoles && role && (
           <div className="seat-role-label"
             style={{ color: role.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)' }}>
             {role.name}
@@ -244,6 +261,7 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
   const { players, phase, nominations } = game;
   const canAct = isNarrator || ['day', 'nominations', 'voting'].includes(phase);
   const isNight = ['first_night', 'night'].includes(phase);
+  const seesGrimoire = !isNarrator && !!game.viewerSeesGrimoire;
 
   const cx = containerDims.w / 2;
   const cy = containerDims.h / 2;
@@ -370,6 +388,7 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
           player={player}
           isMe={player.id === playerId}
           isNarrator={isNarrator}
+          seesGrimoire={seesGrimoire}
           canAct={canAct}
           nominated={nomineeIds.has(player.id)}
           activeActor={isNarrator && player.id === activeActorId}
@@ -389,6 +408,7 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
           players={grpPlayers}
           cornerCfg={CORNER_CHANNELS[channel]}
           isNarrator={isNarrator}
+          seesGrimoire={seesGrimoire}
           playerId={playerId}
           onClick={setActionTarget}
         />

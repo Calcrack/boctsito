@@ -15,6 +15,11 @@ const CAMPAIGNS = {
 
 const DEFAULT_CAMPAIGN = troubleBrewing.id;
 
+// Campañas que NO se ofrecen como guion jugable, pero cuyos roles siguen en
+// ALL_ROLES para que los guiones personalizados puedan usarlos. The Carousel
+// no es una campaña: es la expansión de roles experimentales.
+const HIDDEN_CAMPAIGN_IDS = new Set(['CAROUSEL']);
+
 function getCampaign(id) {
   return CAMPAIGNS[id] || CAMPAIGNS[DEFAULT_CAMPAIGN];
 }
@@ -67,11 +72,14 @@ function registerCampaign(campaign) {
 }
 
 function listCampaigns() {
-  return Object.values(CAMPAIGNS).map(c => ({ id: c.id, name: c.name, isCustom: !!c.isCustom, author: c.author || null }));
+  return Object.values(CAMPAIGNS)
+    .filter(c => c.isCustom || !HIDDEN_CAMPAIGN_IDS.has(c.id))
+    .map(c => ({ id: c.id, name: c.name, isCustom: !!c.isCustom, author: c.author || null }));
 }
 
 module.exports = {
   CAMPAIGNS, DEFAULT_CAMPAIGN, getCampaign, ALL_ROLES, registerCampaign, listCampaigns,
+  HIDDEN_CAMPAIGN_IDS,
   EXTRA_ROLES, EXTRA_SETUP_MODIFIERS,
   ALL_OUTSIDER_MODIFIERS, ALL_MINION_MODIFIERS,
 };

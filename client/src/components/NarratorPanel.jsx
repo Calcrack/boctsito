@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BarberPanel, RoshamboBox } from './NarratorTools';
+import { BarberPanel, RoshamboBox, NarratorCounter } from './NarratorTools';
+import { ABILITY_PANELS } from '../data/abilityPanels';
 import { useGame } from '../context/GameContext';
-import { ALL_ROLES, ROLE_BY_ID, CAMPAIGN_LIST } from '../data/roles';
+import { ALL_ROLES, ROLE_BY_ID, SELECTABLE_CAMPAIGNS } from '../data/roles';
 import { formatIdentity, MASK } from '../utils/identity';
 import { phaseInfo, hasBlock, mainAction } from '../data/narratorPhases';
 import useNarratorHotkeys, { HOTKEYS } from '../hooks/useNarratorHotkeys';
@@ -12,6 +13,7 @@ import StatusChips from './StatusChips';
 import GameTable from './GameTable';
 import ActionModal from './ActionModal';
 import RoleIcon from './RoleIcon';
+import SheetLink from './SheetLink';
 
 function MiniAvatar({ player, size = 20 }) {
   return (
@@ -194,6 +196,7 @@ export default function NarratorPanel() {
             <button onClick={() => changeScale(-0.1)} className="nx-icon-btn">A−</button>
             <button onClick={() => changeScale(0.1)} className="nx-icon-btn" style={{ fontSize: 17 }}>A+</button>
           </div>
+          <SheetLink game={game} compact />
           <button onClick={() => setMenuTab('partida')} className="nx-btn sm" title="Ajustes, Discord, rankings y atajos">⋯</button>
         </div>
       </header>
@@ -218,7 +221,7 @@ export default function NarratorPanel() {
             <div>
               <p className="panel-label">Campaña</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {(serverCampaigns && serverCampaigns.length ? serverCampaigns : CAMPAIGN_LIST).map(c => {
+                {(serverCampaigns && serverCampaigns.length ? serverCampaigns : SELECTABLE_CAMPAIGNS).map(c => {
                   const active = game.campaignId === c.id;
                   const locked = phase !== 'lobby';
                   return (
@@ -418,6 +421,9 @@ export default function NarratorPanel() {
       {/* ── Columna derecha — PENDIENTE (igual en todas las fases) ── */}
       <aside className="right-panel">
         <AlertsInline game={game} send={send} />
+
+        {/* Contadores que se llevan DURANTE EL DÍA (Yaggababble) */}
+        <DayCounters game={game} send={send} />
 
         {/* Pasos que no pueden esperar: Barbero y Roshambo */}
         <BarberPanel />
@@ -904,6 +910,31 @@ function AlertsInline({ game, send }) {
             <p>{a.text}</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Contadores de día ────────────────────────────────────────────────
+// El Yaggababble mata de noche a tantos jugadores como veces dijo su frase
+// DURANTE EL DÍA. El contador estaba escondido dentro del panel del jugador y
+// era estado local de React: se perdía al cerrarlo. Aquí está siempre visible
+// mientras el personaje esté vivo, y el valor vive en el servidor.
+function DayCounters({ game, send }) {
+  const owners = (game.players || []).filter(p => p.alive && p.role === 'YAGGABABBLE');
+  if (!owners.length) return null;
+  const cfg = ABILITY_PANELS.YAGGABABBLE?.counter;
+  if (!cfg) return null;
+  return (
+    <div className="nx-card">
+      <div className="nx-card-head">
+        <p className="nx-head-title">🗣 Yaggababble — {owners.map(p => p.name).join(', ')}</p>
+      </div>
+      <div className="nx-card-body">
+        <NarratorCounter cfg={cfg} game={game} send={send} compact />
+        <p className="nx-hint" style={{ margin: 0 }}>
+          Súbelo cada vez que diga su frase secreta en público. Esta noche elegirá esa cantidad de víctimas.
+        </p>
       </div>
     </div>
   );

@@ -6,11 +6,11 @@
 export const extraRoles = [
   { id: 'ALSAAHIR', name: 'Alsaahir', alignment: 'good', type: 'townfolk', img: null,
     ability: 'Cada día, si adivinas públicamente qué jugadores son Esbirros y qué jugadores son Demonios, ganan los buenos.', night: { passive: true } },
-  { id: 'PIXIE', name: 'Duendecillo', alignment: 'good', type: 'townfolk', img: null,
+  { id: 'PIXIE', name: 'Duendecillo', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/pixie.png',
     ability: 'Empiezas conociendo 1 Aldeano en juego. Si estás loco sobre que eres ese personaje, ganas su habilidad cuando muera.', night: { passive: true } },
   { id: 'PRINCESS', name: 'Princesa', alignment: 'good', type: 'townfolk', img: null,
     ability: 'En tu primer día, si nominas y ejecutas a un jugador, el Demonio no mata esta noche.', night: { passive: true } },
-  { id: 'VILLAGE_IDIOT', name: 'Tonto del Pueblo', alignment: 'good', type: 'townfolk', img: null,
+  { id: 'VILLAGE_IDIOT', name: 'Tonto del Pueblo', alignment: 'good', type: 'townfolk', img: '/assets/roles/carousel/village-idiot.png',
     ability: 'Cada noche elige 1 jugador: descubres su alineamiento. [+0 a +2 Tontos del pueblo, uno extra está borracho]', night: { passive: true } },
   { id: 'HERMIT', name: 'Ermitaño', alignment: 'good', type: 'outsider', img: null,
     ability: 'Tienes todas las habilidades de Forasteros. [-0 o -1 Forasteros]', night: { passive: true } },

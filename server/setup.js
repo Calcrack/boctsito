@@ -178,6 +178,19 @@ function computeRequiredDecisions(game) {
       });
     }
 
+    // 11b) Legión — «la mayoría de jugadores son Legión». El narrador marca
+    // qué asientos lo son; hasta ahora había que hacerlo a mano con
+    // «Cambiar personaje» uno por uno.
+    if (s.legionMajority) {
+      const min = Math.ceil(ctx.seats.length / 2);
+      keep({
+        id: `legionSeats:${seat.id}`, kind: 'legionSeats',
+        seat: seat.id, seatName: seat.name,
+        min, chosen: null,
+        consequence: `Marca los asientos que son Legión (mínimo ${min} de ${ctx.seats.length}). Todos ellos son malvados y comparten el personaje.`,
+      });
+    }
+
     // 11) Invocador — preparación especial (solo aviso, auto-resuelto)
     if (s.summonerSetup) {
       keep({
@@ -237,6 +250,12 @@ function suggestDecision(decision, game) {
         d.targetSeat = pick(opp.map(s => s.id));
       }
       break;
+    // Legión: por defecto, la mitad de la mesa empezando por quien la tiene.
+    case 'legionSeats': {
+      const rest = ctx.seats.filter(s => s.id !== d.seat).map(s => s.id);
+      d.chosen = [d.seat, ...rest.slice(0, Math.max(0, d.min - 1))];
+      break;
+    }
     // El Maestro de Acertijos marca a otro jugador como borracho.
     case 'puzzlemasterDrunk':
       d.chosen = pick(seatsExcept(ctx, [d.seat]).map(s => s.id));
@@ -278,6 +297,7 @@ function isDecisionResolved(d) {
     case 'forasteros':         return Array.isArray(d.chosen) && d.chosen.length === d.expected;
     case 'registroInicial':    return !!d.registersAs;
     case 'otroSecreto':        return d.secret !== 'evilTwin' || !!d.targetSeat;
+    case 'legionSeats':        return Array.isArray(d.chosen) && d.chosen.length >= d.min;
     case 'puzzlemasterDrunk':  return !!d.chosen;
     case 'alchemistAbility':   return !!d.chosen;
     case 'boffinAbility':      return !!d.chosen;

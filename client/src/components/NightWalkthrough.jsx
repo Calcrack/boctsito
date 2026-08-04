@@ -46,15 +46,18 @@ const GLOBAL_OTHER_NIGHT_ORDER = [
   'TOYMAKER',
   'POPPY_GROWER',
   'LUNATIC',
-  'LLEECH','KAZALI','LEGION','LIL_MONSTA','HARLOT','OJO','AL_HADIKHIA','LORD_OF_TYPHON','FIDDLER',
+  'HARLOT','FIDDLER',
   'BARISTA','BUREAUCRAT','THIEF','DUCHESS',
-  'WIDOW','MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER','SUMMONER','YAGGABABBLE','XAAN','WRAITH',
+  'WIDOW','MEZEPHELES','FEARMONGER','HARPY','ORGAN_GRINDER','SUMMONER','XAAN','WRAITH',
   'PHILOSOPHER','SAILOR','COURTIER','INNKEEPER',
   'POISONER','MONK',
   'DEVILS_ADVOCATE','EXORCIST',
   'SNAKE_CHARMER','WITCH','CERENOVUS','PIT_HAG',
+  // Todos los ataques demoníacos van DESPUÉS de la protección: si no, la
+  // Lleech o la Legión mataban antes de que el Monje o el Exorcista actuaran.
   'ZOMBUUL','PUKKA','SHABALOTH','PO',
   'FANG_GU','NO_DASHII','VORTOX','VIGORMORTIS',
+  'LLEECH','KAZALI','LEGION','LIL_MONSTA','OJO','AL_HADIKHIA','LORD_OF_TYPHON','YAGGABABBLE',
   'SCARLET_WOMAN','IMP','ASSASSIN','GODFATHER',
   'GAMBLER',
   'PREACHER','LYCANTHROPE','HUNTSMAN','ENGINEER','ACROBAT',
@@ -109,6 +112,10 @@ function PendingChoices({ game, send }) {
   );
 }
 
+// ¿Murió este jugador durante esta noche? Lo usan los roles que reaccionan a
+// su propia muerte (Adorable, Sabio).
+const diedTonight = (p, game) => !p.alive && (game.nightDeaths || []).includes(p.id);
+
 function buildSteps(game) {
   const campaign    = getCampaign(game.campaignId);
   const isFirstNight = game.nightNumber <= 1;
@@ -132,9 +139,12 @@ function buildSteps(game) {
 
   // Supplement: role IDs that players carry, have a pattern, but aren't in campaign order
   const globalPos = new Map(globalOrder.map((id, i) => [id, i]));
+  // Ya no se exige que el rol tenga patrón: GenericStepPanel cubre a los que
+  // no lo tienen, así que ningún personaje repartido desde otra campaña se
+  // queda fuera de la guía por no estar automatizado.
   const supplementSorted = [...new Set(
     [...playerRoleIds].filter(id =>
-      !campaignSet.has(id) && NIGHT_ROLE_PATTERN[id] && globalPos.has(id)
+      !campaignSet.has(id) && ROLE_BY_ID[id] && globalPos.has(id)
     )
   )].sort((a, b) => (globalPos.get(a) ?? 9999) - (globalPos.get(b) ?? 9999));
 
@@ -166,11 +176,14 @@ function buildSteps(game) {
     const role = ROLE_BY_ID[roleId];
     if (!role) continue;
     const isPending = roleId === 'RAVENKEEPER' && !!pendingRaven;
+    // `showWhen` es para los roles que reaccionan a algo (murió esta noche,
+    // le mató el Demonio…): sin él aparecerían todas las noches sin motivo.
+    const showWhen = NIGHT_ROLE_PATTERN[roleId]?.showWhen;
     const actors = players.filter(p =>
       (p.role === roleId ||
        (p.role === 'DRUNK' && p.drunkAs === roleId) ||
        (p.believedRole === roleId && !rolesInOrder.has(p.role))) &&
-      (isPending ? true : p.alive)
+      (showWhen ? showWhen(p, game) : (isPending ? true : p.alive))
     );
     for (const actor of actors) steps.push({ type: 'role', role, actor });
   }
@@ -192,7 +205,18 @@ const NIGHT_ROLE_PATTERN = {
   BUTLER:         { kind: 'P3', effect: 'BUTLER_MASTER',   emoji: '🤵', label: 'Amo de',      notSelf: true,  autoToken: true },
   FORTUNE_TELLER: { kind: 'P4', emoji: '🔮' },
   SPY:            { kind: 'P_INFO', emoji: '🕵️',
-                    note: 'Mostrar el Grimorio completo al Espía esta noche.' },
+                    note: 'Mostrar el Grimorio completo al Espía esta noche. También lo ve en su propia ruleta.' },
+  // Estos tres están en la cola de su campaña pero tienen firstNight/otherNights
+  // en false, así que hasta ahora se quedaban sin patrón y la tarjeta salía
+  // sin un solo control (el Criacuervos además bloqueaba el fin de la noche).
+  RAVENKEEPER:    { kind: 'P3', effect: 'RAVENKEEPER_INFO', emoji: '🦅', label: 'Aprende el personaje de',
+                    notSelf: true, showWhen: (p) => !!p.pendingRavenkeeper,
+                    note: 'Solo si murió ESTA noche. Descubre el personaje del jugador que elija.' },
+  SWEETHEART:     { kind: 'P3', effect: 'SWEETHEART_DRUNK', emoji: '💐', label: 'Queda borracho',
+                    notSelf: true, autoToken: true, showWhen: (p, g) => diedTonight(p, g),
+                    note: 'Solo al morir la Adorable. El elegido queda borracho el RESTO de la partida.' },
+  SAGE:           { kind: 'P_INFO', emoji: '🧙', showWhen: (p, g) => diedTonight(p, g),
+                    note: 'Solo si lo mató el Demonio. Muéstrale 2 jugadores: uno es el Demonio.' },
   SCARLET_WOMAN:  { kind: 'P_INFO', emoji: '💄',
                     note: '¿El Diablillo murió con ≥5 jugadores vivos? Si SÍ → esta jugadora se convierte automáticamente en el nuevo Diablillo.' },
   // ── BMR demons ──────────────────────────────────────────────────────────
@@ -231,7 +255,8 @@ const NIGHT_ROLE_PATTERN = {
                      note: 'Tú O el elegido quedáis borrachos (Narrador decide). Pierdes inmunidad si eres tú el borracho.' },
   CHAMBERMAID:     { kind: 'P_CHAMBERMAID', emoji: '🛎️' },
   EXORCIST:        { kind: 'P3',     effect: 'EXORCIST_CHOOSE',           emoji: '✝️', label: 'Elegir a',            notSelf: true, autoToken: true,
-                     note: 'Si es el Demonio: informarle quién eres + suprimir su ataque. Si no: nada (no dar señal).' },
+                     excludeToken: 'EXORCIST_LAST',
+                     note: 'No puede repetir el objetivo de anoche (ya está fuera de la lista). Si es el Demonio: informarle quién eres + suprimir su ataque. Si no: nada (no dar señal).' },
   INNKEEPER:       { kind: 'P_INNKEEPER', emoji: '🏨',
                      note: 'Ambos quedan protegidos de toda muerte nocturna. Tú eliges cuál queda borracho.' },
   GAMBLER:         { kind: 'P_GAMBLER', emoji: '🎲' },
@@ -273,8 +298,7 @@ const NIGHT_ROLE_PATTERN = {
   CERENOVUS:       { kind: 'P_CERENOVUS', emoji: '🧠' },
   PIT_HAG:         { kind: 'P_PITHAG', emoji: '🪄' },
   // ── S&V forasteros con paso nocturno ────────────────────────────────────
-  EVIL_TWIN:     { kind: 'P_INFO', emoji: '👯', firstNightOnly: true,
-                   note: 'Despertar a la Gemela Malvada y a su contraparte simultáneamente — se reconocen mutuamente.' },
+  EVIL_TWIN:     { kind: 'P_EVIL_TWIN', emoji: '👯', firstNightOnly: true },
   BARBER:        { kind: 'P_INFO', emoji: '✂️',
                    note: 'Si el Barbero murió hoy o esta noche y el Demonio está sano: el Demonio puede intercambiar los personajes de 2 jugadores esta noche.' },
   // ── Carousel aldeanos ────────────────────────────────────────────────────
@@ -710,12 +734,15 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
   const isMisperc = actor.believedRole && actor.believedRole !== actor.role;
   // For misperception (Marionette/Lunatic): show believed role's panel so narrator goes through the motions
   const p = NIGHT_ROLE_PATTERN[isMisperc ? role.id : trueRole.id];
-  if (!p) return null;
+  const generic = (note) => <GenericStepPanel actor={actor} role={role} game={game} send={send} note={note} />;
+  if (!p) return generic();
   const isFirstNight = game.nightNumber === 1;
-  if (p.kind === 'P2' && !isFirstNight) return null;
-  if ((p.kind === 'P3' || p.kind === 'P3x2') && trueRole.id === 'MONK' && isFirstNight) return null;
-  if (p.kind === 'P1' && p.what === 'executedRole' && !game.executedToday) return null;
-  if (p.firstNightOnly && !isFirstNight) return null;
+  // Estos casos antes devolvían null y dejaban la tarjeta muda. Ahora al menos
+  // se puede cerrar el paso y se explica por qué no hay controles.
+  if (p.kind === 'P2' && !isFirstNight) return generic('Este personaje solo actúa la primera noche.');
+  if ((p.kind === 'P3' || p.kind === 'P3x2') && trueRole.id === 'MONK' && isFirstNight) return generic('El Monje no protege la primera noche.');
+  if (p.kind === 'P1' && p.what === 'executedRole' && !game.executedToday) return generic('Hoy no hubo ejecución: no hay nada que mostrar.');
+  if (p.firstNightOnly && !isFirstNight) return generic('Este paso es solo de la primera noche.');
   const roleName = role.name;
   switch (p.kind) {
     case 'P2':     return <P2Panel     actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
@@ -750,6 +777,7 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
     case 'P_HARLOT':        return <HarlotPanel       actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_APPRENTICE':    return <ApprenticePanel   actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     case 'P_XAAN':          return <XaanPanel         actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
+    case 'P_EVIL_TWIN':     return <EvilTwinPanel     actor={actor} pattern={p} game={game} send={send} roleName={roleName} />;
     // Panel completo del personaje dentro del paso nocturno: mismos controles
     // que el mini-panel de la ruleta, sin tener que salir de la guía.
     case 'P_PANEL':         return (
@@ -758,7 +786,7 @@ function NarratorActionPanel({ actor, role, trueRole, game, send }) {
         <AbilityTab target={actor} game={game} send={send} onClose={() => {}} />
       </div>
     );
-    default:                return null;
+    default:                return generic();
   }
 }
 
@@ -930,7 +958,10 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
         (pattern.evilOnly && !actor.poisoned ? p.alignment === 'evil' : true) &&
         // typeFilter: solo jugadores de ese tipo (Duendecillo → Aldeanos).
         // Envenenado/borracho: sin filtro, el narrador miente con libertad.
-        (pattern.typeFilter && !actor.poisoned ? p.type === pattern.typeFilter : true)
+        (pattern.typeFilter && !actor.poisoned ? p.type === pattern.typeFilter : true) &&
+        // excludeToken: quien lleve esa ficha no puede volver a ser elegido
+        // (Exorcista: no repite el objetivo de anoche).
+        (pattern.excludeToken ? !(p.tokens || []).some(t => t.type === pattern.excludeToken) : true)
       );
 
   const infoLabels = {
@@ -1091,7 +1122,7 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
     send('NIGHT_NARRATOR_ACTION', payload);
     if (isSameAlign) {
       const role = ROLE_BY_ID[actor.role];
-      send('ADD_TOKEN', { playerId: actor.id, token: { instanceId: `${actor.role}:NO_ABILITY:${Date.now()}`, tokenId: 'NO_ABILITY', roleId: actor.role, roleName: role?.name, img: role?.img, label: 'Sin habilidad', duration: 'oneShot' } });
+      send('ADD_TOKEN', { playerId: actor.id, token: { tokenId: 'NO_ABILITY', roleId: actor.role, roleName: role?.name, img: role?.img, label: 'Sin habilidad', duration: 'oneShot' } });
     }
     setOk(true);
   };
@@ -1129,6 +1160,91 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
       {actor.poisoned && poisonNote}
       <button onClick={confirm} disabled={!can} className="btn-action primary"
         style={{ ...btnPrimary, opacity: can ? 1 : 0.4 }}>✓ Confirmar</button>
+    </div>
+  );
+}
+
+// Red de seguridad: cualquier rol que llegue a la cola sin patrón definido
+// (o cuyo patrón no aplique esta noche) muestra al menos su habilidad, la
+// ayuda del narrador y un botón para cerrar el paso. Antes se devolvía null y
+// la tarjeta salía sin un solo control — el Criacuervos incluso bloqueaba el
+// fin de la noche.
+function GenericStepPanel({ actor, role, game, send, note }) {
+  const [ok, setOk] = useState(actor.nightInfo != null);
+  const hint = (game.roleHints || []).find(h => h.roleId === role.id && h.playerId === actor.id)
+            || (game.roleHints || []).find(h => h.roleId === role.id);
+  const confirm = () => {
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🎙 ${role.name}\n[Narrador gestionó manualmente]` });
+    setOk(true);
+  };
+  return (
+    <div style={{ ...panelStyle, borderColor: 'rgba(201,162,74,0.18)' }}>
+      <p style={labelStyle}>{ok ? '✓ Anotado' : `${role.name} — sin automatismo`}</p>
+      {note && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-300)', margin: '0 0 6px', lineHeight: 1.5 }}>{note}</p>
+      )}
+      {role.ability && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-200)', fontStyle: 'italic', margin: '0 0 8px', lineHeight: 1.5 }}>
+          {role.ability}
+        </p>
+      )}
+      {hint?.text && (
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 8, lineHeight: 1.5 }}>
+          🎙 {hint.text}
+        </p>
+      )}
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--bone-500)', fontStyle: 'italic', margin: '0 0 8px' }}>
+        Resuélvelo a mano (usa «+ ficha» arriba si necesitas marcar algo) y cierra el paso.
+      </p>
+      <button onClick={confirm} className="btn-action" style={{ ...btnPrimary, opacity: ok ? 0.5 : 1 }}>
+        {ok ? '✓ Anotado' : '✓ Confirmar paso'}
+      </button>
+    </div>
+  );
+}
+
+// P_EVIL_TWIN — presentación mutua de los gemelos. El servidor ya guardó la
+// pareja en el montaje; aquí se nombran los dos y se avisa de sus dos reglas
+// especiales, que antes solo estaban implementadas a medias.
+function EvilTwinPanel({ actor, game, send }) {
+  const [ok, setOk] = useState(actor.nightInfo != null);
+  const pair = game.evilTwinPair;
+  const evil = game.players.find(p => p.id === pair?.evilId);
+  const good = game.players.find(p => p.id === pair?.goodId);
+  const goodRole = good?.role ? ROLE_BY_ID[good.role] : null;
+  const confirm = () => {
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
+      nightInfo: `👯 Gemela Malvada\nTu gemelo bueno es ${good?.name || '?'}${goodRole ? ` (${goodRole.name})` : ''}.` });
+    if (good) {
+      send('NIGHT_NARRATOR_ACTION', { actorId: good.id,
+        nightInfo: `👯 Gemelo bueno\nTu gemela malvada es ${evil?.name || '?'} (Gemela Malvada).` });
+    }
+    setOk(true);
+  };
+  if (!pair || !evil || !good) {
+    return (
+      <div style={{ ...panelStyle, borderColor: 'rgba(201,162,74,0.18)' }}>
+        <p style={labelStyle}>Gemela Malvada — falta emparejar</p>
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--blood-hi)', margin: 0 }}>
+          No hay pareja guardada. Vuelve al montaje y elige a su gemelo de alineación opuesta.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div style={{ ...panelStyle, borderColor: 'rgba(201,162,74,0.18)' }}>
+      <p style={labelStyle}>{ok ? '✓ Gemelos presentados' : 'Gemela Malvada — presentación mutua'}</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', margin: '0 0 8px', lineHeight: 1.6 }}>
+        Despierta a <b style={{ color: 'var(--blood-hi)' }}>{evil.name}</b> y a{' '}
+        <b style={{ color: 'var(--good)' }}>{good.name}</b> a la vez y que se vean.
+        {goodRole && <> El gemelo bueno es <b>{goodRole.name}</b>.</>}
+      </p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 8, lineHeight: 1.5 }}>
+        Mientras los dos vivan, el Bien no puede ganar. Si ejecutan a {good.name}, ganan los malos.
+      </p>
+      <button onClick={confirm} className="btn-action" style={{ ...btnPrimary, opacity: ok ? 0.5 : 1 }}>
+        {ok ? '✓ Presentados' : '✓ Presentarlos'}
+      </button>
     </div>
   );
 }
@@ -1653,12 +1769,12 @@ function PukkaPanel({ actor, pattern, game, send, roleName }) {
       targetIds: [targetId], nightInfo: `🕸️ Pukka\nEnvenenado esta noche: ${tname}.` });
     const role = ROLE_BY_ID['PUKKA'];
     send('ADD_TOKEN', { playerId: targetId, token: {
-      instanceId: `PUKKA:POISONED:${Date.now()}`, tokenId: 'POISONED',
+      tokenId: 'POISONED',
       roleId: 'PUKKA', roleName: 'Pukka', img: role?.img,
       label: 'Pukka: envenenado', duration: 'permanent' } });
     if (prevPoisoned) {
       const old = prevPoisoned.tokens.find(t => t.roleId === 'PUKKA' && t.tokenId === 'POISONED');
-      if (old) send('REMOVE_TOKEN', { playerId: prevPoisoned.id, instanceId: old.instanceId });
+      if (old) send('REMOVE_TOKEN', { playerId: prevPoisoned.id, uid: old.uid || old.key });
     }
     setOk(true);
   };
@@ -1867,7 +1983,7 @@ function CerenovusPanel({ actor, game, send }) {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId],
       nightInfo: `🧠 Cerenovus\nMañana, ${tname} está loco de ser ${rname}. Si no actúa como tal, puede ser ejecutado.` });
     send('ADD_TOKEN', { playerId: targetId, token: {
-      instanceId: `CERENOVUS:LOCO:${Date.now()}`, tokenId: 'LOCO', roleId: 'CERENOVUS',
+      tokenId: 'LOCO', roleId: 'CERENOVUS',
       roleName: 'Cerenovus', label: `Loco: cree ser ${rname}`, duration: 'night' } });
     setOk(true);
   };
@@ -1947,7 +2063,7 @@ function EngineerPanel({ actor, game, send }) {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
       nightInfo: `⚙️ Ingeniero\nCambia ${choice === 'minions' ? 'los Esbirros' : 'el Demonio'} por: ${names}.\nAvisar a cada jugador afectado en privado de su nuevo personaje.` });
     send('ADD_TOKEN', { playerId: actor.id, token: {
-      instanceId: `ENGINEER:SIN_HABILIDAD:${Date.now()}`, tokenId: 'SIN_HABILIDAD',
+      tokenId: 'SIN_HABILIDAD',
       roleId: 'ENGINEER', roleName: 'Ingeniero', label: 'Sin habilidad (usada)', duration: 'permanent' } });
     setOk(true);
   };
@@ -2076,11 +2192,10 @@ function LilMonstaPanel({ actor, game, send }) {
   const minions = game.players.filter(p => p.type === 'minion' && p.alive);
   const nm = game.players.find(p => p.id === chosen)?.name;
   const confirm = () => {
-    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [chosen],
+    // El motor coloca la ficha LIL_MONSTA_KEEPER, que es la que hace que el
+    // canguro cuente como Demonio vivo.
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'LIL_MONSTA_ASSIGN', targetIds: [chosen],
       nightInfo: `👶 Lil' Monsta\n${nm} es el canguro esta noche — "es el Demonio".` });
-    send('ADD_TOKEN', { playerId: chosen, token: {
-      instanceId: `LIL_MONSTA:DEMON:${Date.now()}`, tokenId: 'ES_EL_DEMONIO',
-      roleId: 'LIL_MONSTA', roleName: "Lil' Monsta", label: 'ES el Demonio (canguro)', duration: 'night' } });
     setOk(true);
   };
   return (
@@ -2111,7 +2226,7 @@ function BaristaPanel({ actor, game, send }) {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId],
       nightInfo: `☕ Barista\n${tname}: ${label} hasta el crepúsculo. Despertar y mostrar: 1 dedo (sobrio) o 2 dedos (dos veces).` });
     send('ADD_TOKEN', { playerId: targetId, token: {
-      instanceId: `BARISTA:${effect}:${Date.now()}`, tokenId: effect === 'sober' ? 'SOBRIO_Y_SANO' : 'ACTUA_DOS_VECES',
+      tokenId: effect === 'sober' ? 'SOBRIO_Y_SANO' : 'ACTUA_DOS_VECES',
       roleId: 'BARISTA', roleName: 'Barista', label, duration: 'night' } });
     setOk(true);
   };

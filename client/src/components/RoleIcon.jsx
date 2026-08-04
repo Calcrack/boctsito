@@ -29,10 +29,14 @@ export default function RoleIcon({ role, size = 24, radius, className, style = {
         ...style,
       };
 
-  if (role.img && !failed) {
+  // `img` es la clave del catálogo del cliente; `image` la que manda el
+  // servidor para los roles homebrew de guiones importados.
+  const src = role.img || role.image || null;
+
+  if (src && !failed) {
     return (
       <img
-        src={role.img}
+        src={src}
         alt={alt ?? role.name ?? ''}
         className={className}
         onError={() => setFailed(true)}

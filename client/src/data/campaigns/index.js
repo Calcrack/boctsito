@@ -13,7 +13,13 @@ export const CAMPAIGNS = {
   [carousel.id]: carousel,
 };
 
+// CAMPAIGN_LIST = fuente de roles (incluye Carousel).
+// SELECTABLE_CAMPAIGNS = guiones que el Narrador puede elegir. The Carousel no
+// es una campaña sino una expansión de roles: sus 56 personajes siguen
+// disponibles para guiones personalizados, pero no se ofrece como partida.
 export const CAMPAIGN_LIST = [troubleBrewing, badMoonRising, sectsViolets, carousel];
+export const HIDDEN_CAMPAIGN_IDS = ['CAROUSEL'];
+export const SELECTABLE_CAMPAIGNS = CAMPAIGN_LIST.filter(c => !HIDDEN_CAMPAIGN_IDS.includes(c.id));
 export const DEFAULT_CAMPAIGN = troubleBrewing.id;
 
 export function getCampaign(id) {
@@ -48,20 +54,38 @@ export const ALL_ROLES = (() => {
 // Narrador haya repartido desde otra campaña en el montaje (esos extras solo
 // viajan al Narrador, así que los jugadores ven exactamente el guion).
 // Sin partida cargada todavía → catálogo completo, para no dejar la vista vacía.
+// Fusiona el rol que manda el servidor (name/type/ability/image, y que SÍ
+// conoce los roles homebrew de un guion importado) con el del catálogo local
+// (que aporta `img` y `night`). Antes se hacía `ROLE_BY_ID[id]` a secas y los
+// personajes de guiones propios desaparecían en silencio de todas las listas.
 export function scriptRoles(game) {
-  const ids = (game?.campaignRoles || []).map(r => r.id);
-  for (const roleId of Object.values(game?.setup?.assignments || {})) {
-    if (roleId) ids.push(roleId);
-  }
+  if (!game) return ALL_ROLES;
   const seen = new Set();
   const out = [];
-  for (const id of ids) {
-    if (seen.has(id)) continue;
+  const push = (srv, id) => {
+    if (!id || seen.has(id)) return;
     seen.add(id);
-    const r = ROLE_BY_ID[id];
-    if (r) out.push(r);
-  }
+    const local = ROLE_BY_ID[id];
+    if (!local && !srv) return;
+    out.push({
+      ...(local || {}),
+      id,
+      name:      srv?.name      || local?.name || id,
+      type:      srv?.type      || local?.type,
+      alignment: srv?.alignment || local?.alignment,
+      ability:   srv?.ability   || local?.ability,
+      img:       local?.img     || srv?.image || null,
+      homebrew:  !!srv?.homebrew,
+    });
+  };
+  for (const r of game.campaignRoles || []) push(r, r.id);
+  for (const roleId of Object.values(game.setup?.assignments || {})) push(null, roleId);
   return out.length ? out : ALL_ROLES;
+}
+
+// Mapa id → rol del guion en curso (mismo criterio que scriptRoles).
+export function scriptRoleById(game) {
+  return Object.fromEntries(scriptRoles(game).map(r => [r.id, r]));
 }
 
 export const ROLE_BY_ID = Object.fromEntries(ALL_ROLES.map(r => [r.id, r]));
@@ -88,15 +112,21 @@ export function statusTokens(id) {
 // ── Fichas recordatorias (reminder tokens) ─────────────────────────
 // Devuelve el catálogo de fichas de los roles EN JUEGO, cada una con el
 // arte (img) y nombre del rol dueño, listo para colocar sobre un jugador.
-export function remindersForRolesInPlay(campaignId, roleIdsInPlay) {
+// `game` es opcional: con él se añaden las fichas de los personajes que el
+// catálogo local no conoce (roles extra y guiones importados), leyendo
+// `campaignRoles[].reminders` que manda el servidor. Sin esto, un guion propio
+// se quedaba con las fichas de Trouble Brewing (el fallback de getCampaign).
+export function remindersForRolesInPlay(campaignId, roleIdsInPlay, game = null) {
   const campaign = getCampaign(campaignId);
   const map = campaign.reminders || {};
   const seenRoles = new Set(roleIdsInPlay);
   const out = [];
+  const covered = new Set();
   for (const roleId of Object.keys(map)) {
     if (!seenRoles.has(roleId)) continue;
     const role = ROLE_BY_ID[roleId];
     if (!role) continue;
+    covered.add(roleId);
     for (const t of map[roleId]) {
       out.push({
         tokenId: t.id,
@@ -108,5 +138,27 @@ export function remindersForRolesInPlay(campaignId, roleIdsInPlay) {
       });
     }
   }
+  for (const srv of game?.campaignRoles || []) {
+    if (!seenRoles.has(srv.id) || covered.has(srv.id)) continue;
+    if (!Array.isArray(srv.reminders) || !srv.reminders.length) continue;
+    for (const label of srv.reminders) {
+      out.push({
+        tokenId: slugToken(label),
+        roleId: srv.id,
+        roleName: srv.name,
+        img: ROLE_BY_ID[srv.id]?.img || srv.image || null,
+        label,
+        duration: 'permanent',
+      });
+    }
+  }
   return out;
+}
+
+// "Cortina de humo" → "CORTINA_DE_HUMO". Necesitamos un id estable porque la
+// ficha se identifica por (roleId, tokenId) en el servidor.
+function slugToken(label) {
+  return String(label)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
 }

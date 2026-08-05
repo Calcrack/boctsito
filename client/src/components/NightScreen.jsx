@@ -106,32 +106,6 @@ function NightSkipPanel({ game, playerId, send }) {
   );
 }
 
-function SpyGrimoire({ players }) {
-  return (
-    <div style={{ marginTop: 16, background: 'rgba(0,0,0,0.3)', border: 'var(--hairline)', borderRadius: 4, padding: '12px 14px' }}>
-      <p style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>Grimorio</p>
-      <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {players.map(p => {
-          const role = p.role ? ROLE_BY_ID[p.role] : null;
-          return (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: p.alive ? 1 : 0.4 }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--ink-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-100)', flexShrink: 0, overflow: 'hidden' }}>
-                {p.avatar ? <img src={p.avatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.name[0]}
-              </div>
-              <span style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-200)', flex: 1 }}>{p.name}</span>
-              {role && (
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: role.alignment === 'evil' ? 'var(--blood-hi)' : 'var(--good)', padding: '2px 7px', background: role.alignment === 'evil' ? 'rgba(168,58,45,0.15)' : 'rgba(109,140,184,0.15)', borderRadius: 2 }}>
-                  {role.name}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 const PASSIVE_INFO_ROLES = new Set(['WASHERWOMAN','LIBRARIAN','INVESTIGATOR','COOK','EMPATH','UNDERTAKER','SPY']);
 
 function FrozenTableroToggle({ players }) {
@@ -201,18 +175,31 @@ function getCirclePositions(count, radius = 160) {
 
 const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-900) 70%)';
 
-// Punto 5: la rueda de jugadores deja de estar abajo y pasa a estar ARRIBA,
-// centrada, alrededor de la luna del anuncio. Sin botón para ocultarla y
-// adaptándose al tamaño de pantalla (GameTable usa un ResizeObserver: seats
-// se recolocan solos según el ancho/alto del contenedor).
+// Punto 5: la rueda de jugadores es la protagonista de toda la pantalla de
+// noche, centrada y adaptándose al tamaño de la ventana (GameTable usa un
+// ResizeObserver: los medallones se recolocan solos). El anuncio (luna ☾,
+// título y rol del jugador) se superpone sobre el CENTRO de la rueda, de modo
+// que la mesa queda "alrededor de la luna". Sin botón para ocultarla.
 function WheelNightLayout({ children }) {
   return (
-    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column', padding: '12px 12px 28px' }}>
-      <div style={{ position: 'relative', flex: '1 1 auto', minHeight: '42vh' }}>
-        <GameTable isNarrator={false} />
+    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', width: '100vw', height: '100vh', boxSizing: 'border-box', padding: 12 }}>
+        <div className="table-embed" style={{ maxWidth: 'min(94vw, 90vh)', maxHeight: '88vh' }}>
+          <GameTable isNarrator={false} />
+        </div>
       </div>
-      <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-        <div style={{ width: '100%', maxWidth: 540, textAlign: 'center' }}>{children}</div>
+      <div style={{
+        position: 'absolute', inset: 12, zIndex: 5,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: '100%', maxWidth: 560, textAlign: 'center',
+          pointerEvents: 'auto',
+          background: 'rgba(8,9,16,0.42)', backdropFilter: 'blur(3px)',
+          border: 'var(--hairline)', borderRadius: 10, padding: '18px 20px',
+        }}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -229,10 +216,6 @@ export default function NightScreen({ player }) {
   const displayRoleId = player.displayRole || player.role;
   const role = displayRoleId ? ROLE_BY_ID[displayRoleId] : null;
   const phase = game?.phase;
-  // Lo decide el servidor (Espía todas las noches, Viuda la suya). Antes se
-  // comprobaba `role === 'SPY'` aquí y además el Grimorio colgaba de
-  // `player.nightInfo`, que en modo manual nunca llega al jugador.
-  const seesGrimoire = !!game?.viewerSeesGrimoire;
   const isMyTurn = player.id === game?.currentNightActor;
   const iNightReady = game?.iNightReady;
 
@@ -409,7 +392,7 @@ export default function NightScreen({ player }) {
               <RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} />
             </p>
           </>)}
-          {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
+          {/* Grimorio retirado: el Espía/Viuda leen los roles directamente en la rueda */}
         </div>
       </WheelNightLayout>
     );
@@ -489,7 +472,7 @@ export default function NightScreen({ player }) {
             {infoLabel}
             <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)', lineHeight: 2.4 }}><RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} /></p>
           </>)}
-          {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
+          {/* Grimorio retirado: el Espía/Viuda leen los roles directamente en la rueda */}
           <button onClick={handleAcknowledge} className="btn-action primary" style={{ width: '100%', padding: '22px 0', fontSize: 22 }}>
             ✓ Hecho
           </button>
@@ -560,7 +543,7 @@ export default function NightScreen({ player }) {
             {infoLabel}
             <p style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--bone-100)', lineHeight: 2.4 }}><RichNightInfo text={stripHeader(player.nightInfo)} players={allPlayers} /></p>
           </>)}
-          {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
+          {/* Grimorio retirado: el Espía/Viuda leen los roles directamente en la rueda */}
         </div>
         {!waitingForTurn && (
           <div style={{ width: '100%', maxWidth: 460, margin: '0 auto' }}>

@@ -182,8 +182,8 @@ const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-90
 // pantalla. Sin botón para ocultarla.
 function WheelNightLayout({ children }) {
   return (
-    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 12px 24px' }}>
-      <div style={{ width: '100%', maxWidth: 'min(92vw, 62vh, 580px)', aspectRatio: '1 / 1', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 12px 24px' }}>
+      <div style={{ width: '100%', maxWidth: 'min(92vw, 62vh, 580px)', aspectRatio: '1 / 1', position: 'relative', margin: '0 auto' }}>
         <GameTable isNarrator={false} />
       </div>
       <div style={{ flex: '0 0 auto', width: '100%', textAlign: 'center', paddingTop: 2 }}>

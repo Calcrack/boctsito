@@ -75,6 +75,18 @@
   max-width: 160px;
 }
 
+/* Centro de la rueda NOCTURNA (anuncio luna + rol): el disco se agranda y el
+   contenedor NO es de solo lectura (pointer-events: none a nivel .table-disc),
+   porque aquí el jugador pulsa "Hecho". */
+.table-center-wheel {
+  max-width: none;
+  width: 100%;
+  padding: 8px 14px;
+  max-height: 100%;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
 .table-center-phase {
   font-family: var(--mono);
   font-size: 9px;

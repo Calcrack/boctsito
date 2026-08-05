@@ -175,31 +175,15 @@ function getCirclePositions(count, radius = 160) {
 
 const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-900) 70%)';
 
-// Punto 5: la rueda de jugadores es la protagonista de toda la pantalla de
-// noche, centrada y adaptándose al tamaño de la ventana (GameTable usa un
-// ResizeObserver: los medallones se recolocan solos). El anuncio (luna ☾,
-// título y rol del jugador) se superpone sobre el CENTRO de la rueda, de modo
-// que la mesa queda "alrededor de la luna". Sin botón para ocultarla.
+// Punto 5: la rueda de jugadores es la protagonista de toda la pantalla y el
+// anuncio nocturno (luna ☾ + "Es de noche" + rol) se dibuja en el CENTRO del
+// disco de la mesa, a través de game.centerContent. Así hay una sola luna y la
+// mesa queda alrededor de ella. GameTable se adapta solo (ResizeObserver).
 function WheelNightLayout({ children }) {
   return (
-    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'relative', width: '100vw', height: '100vh', boxSizing: 'border-box', padding: 12 }}>
-        <div className="table-embed" style={{ maxWidth: 'min(94vw, 90vh)', maxHeight: '88vh' }}>
-          <GameTable isNarrator={false} />
-        </div>
-      </div>
-      <div style={{
-        position: 'absolute', inset: 12, zIndex: 5,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-      }}>
-        <div style={{
-          width: '100%', maxWidth: 560, textAlign: 'center',
-          pointerEvents: 'auto',
-          background: 'rgba(8,9,16,0.42)', backdropFilter: 'blur(3px)',
-          border: 'var(--hairline)', borderRadius: 10, padding: '18px 20px',
-        }}>
-          {children}
-        </div>
+    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+      <div style={{ width: '100%', maxWidth: 'min(94vw, 88vh)', aspectRatio: '1 / 1', position: 'relative' }}>
+        <GameTable isNarrator={false} centerContent={children} />
       </div>
     </div>
   );

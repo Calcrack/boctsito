@@ -181,12 +181,12 @@ const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-90
 function WheelNightLayout({ children }) {
   return (
     <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: '1 1 auto', minHeight: 0, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px 4px' }}>
-        <div style={{ width: '100%', height: '100%', maxWidth: 'min(92vw, 60vh, 580px)', aspectRatio: '1 / 1', position: 'relative' }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px 0' }}>
+        <div style={{ width: '100%', height: '100%', maxWidth: 'min(92vw, 62vh, 580px)', aspectRatio: '1 / 1', position: 'relative' }}>
           <GameTable isNarrator={false} />
         </div>
       </div>
-      <div style={{ flex: '0 0 auto', width: '100%', textAlign: 'center', padding: '6px 16px 28px' }}>
+      <div style={{ flex: '0 0 auto', width: '100%', textAlign: 'center', padding: '0 16px 24px' }}>
         {children}
       </div>
     </div>
@@ -353,24 +353,21 @@ export default function NightScreen({ player }) {
     return (
       <WheelNightLayout>
         <ExitBtn /><SheetBtn />
-        <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
-          {!player.alive ? (
-            <div style={{ fontSize: 64, color: 'var(--bone-400)', marginBottom: 16 }}>☠</div>
-          ) : (
-            <div style={{ fontSize: 70, color: 'var(--moon)', marginBottom: 16, opacity: 0.85 }}>☾</div>
+        <div style={{ textAlign: 'center', maxWidth: 460, width: '100%', margin: '0 auto' }}>
+          {!player.alive && (
+            <div style={{ fontSize: 40, color: 'var(--bone-400)', marginBottom: 10 }}>☠</div>
           )}
-          <h2 style={{ fontFamily: 'var(--title)', fontSize: 24, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 10, letterSpacing: '0.04em' }}>
-            {player.alive ? 'Es de noche' : 'Has muerto'}
-          </h2>
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 24 }}>
-            El narrador dirige la noche. Observa y espera.
-          </p>
+          {!player.alive && (
+            <h2 style={{ fontFamily: 'var(--title)', fontSize: 22, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
+              Has muerto
+            </h2>
+          )}
           {role && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 20, background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '16px 20px' }}>
-              <RoleIcon role={role} size={56} radius={6} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '14px 18px' }}>
+              <RoleIcon role={role} size={52} radius={6} />
               <div style={{ textAlign: 'left' }}>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-200)' }}>{role.name}</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 4, lineHeight: 1.5 }}>{role.ability}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-200)' }}>{role.name}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 4, lineHeight: 1.5 }}>{role.ability}</div>
               </div>
             </div>
           )}
@@ -508,22 +505,15 @@ export default function NightScreen({ player }) {
   // ── Waiting (no action) ──────────────────────────────────────────────
   if (!interactiveConfig) {
     return (
-      <WheelNightLayout>
+<WheelNightLayout>
         <ExitBtn /><SheetBtn />
-        <div style={{ textAlign: 'center', maxWidth: 460, width: '100%' }}>
-          <div style={{ fontSize: 34, color: 'var(--moon)', marginBottom: 8, opacity: 0.8 }}>☾</div>
-          <h2 style={{ fontFamily: 'var(--title)', fontSize: 26, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
-            {waitingForTurn ? 'Espera tu turno' : 'Es de noche'}
-          </h2>
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 19, color: 'var(--bone-400)', fontStyle: 'italic', marginBottom: 28 }}>
-            {waitingForTurn ? 'Pronto el narrador te llamará.' : 'Consulta tu rol y pulsa Hecho cuando estés listo.'}
-          </p>
+        <div style={{ textAlign: 'center', maxWidth: 460, width: '100%', margin: '0 auto' }}>
           {role && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'var(--bone-400)', marginBottom: 24, background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '16px 20px' }}>
-              <RoleIcon role={role} size={56} radius={6} style={{ opacity: 0.85 }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'var(--bone-400)', background: 'rgba(201,162,74,0.05)', border: 'var(--hairline)', borderRadius: 6, padding: '14px 18px' }}>
+              <RoleIcon role={role} size={52} radius={6} style={{ opacity: 0.85 }} />
               <div style={{ textAlign: 'left' }}>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--bone-200)' }}>{role.name}</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 5, lineHeight: 1.5 }}>{role.ability}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-200)' }}>{role.name}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--bone-500)', fontStyle: 'italic', marginTop: 4, lineHeight: 1.5 }}>{role.ability}</div>
               </div>
             </div>
           )}

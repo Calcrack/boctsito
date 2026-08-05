@@ -245,7 +245,7 @@ function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activ
   );
 }
 
-export default function GameTable({ isNarrator = false, activeActorId = null, centerContent = null }) {
+export default function GameTable({ isNarrator = false, activeActorId = null }) {
   const { state } = useGame();
   const { game, playerId, config } = state;
   const locationNames = config?.locationNames || {};
@@ -324,10 +324,8 @@ export default function GameTable({ isNarrator = false, activeActorId = null, ce
       {/* Table disc in center */}
       {/* El disco vive DENTRO del anillo de asientos: su diámetro es el del
           anillo menos un medallón, para que nunca quede por debajo de ellos. */}
-      <div className="table-disc" style={{ '--disc-size': `${Math.max(80, radius * 2 - seatSize - 12)}px`, zIndex: 2 }}>
-        {centerContent ? (
-          <div className="table-center table-center-wheel">{centerContent}</div>
-        ) : phase === 'voting' && game.activeNomination ? (() => {
+      <div className="table-disc" style={{ '--disc-size': `${Math.max(80, radius * 2 - seatSize - 12)}px` }}>
+        {phase === 'voting' && game.activeNomination ? (() => {
           const nom = nominations.find(n => n.id === game.activeNomination);
           const nominee = nom
             ? (players.find(p => p.id === nom.nomineeId)

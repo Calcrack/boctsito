@@ -846,7 +846,7 @@ function handleMessage(type, payload, session) {
           broadcastGame();
         }
       } else if (result.needsRavenkeeper) {
-        broadcastToAll('NOTIFICATION', { message: '🦅 Esperando al Guardián de Cuervos...', type: 'info' });
+        broadcastToAll('NOTIFICATION', { message: '🦅 Esperando al Criacuervos...', type: 'info' });
       }
       break;
     }

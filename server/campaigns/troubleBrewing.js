@@ -43,7 +43,7 @@ const roles = {
     firstNight: false, otherNights: true,
   },
   RAVENKEEPER: {
-    id: 'RAVENKEEPER', name: 'Guardián de Cuervos', alignment: 'good', type: 'townfolk',
+    id: 'RAVENKEEPER', name: 'Criacuervos', alignment: 'good', type: 'townfolk',
     ability: 'Si mueres por la noche, te despiertan para que elijas 1 jugador: descubres su personaje.',
     firstNight: false, otherNights: false,
   },

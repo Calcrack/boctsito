@@ -18,7 +18,7 @@ export const roles = [
     ability: 'Cada noche* descubres qué personaje ha muerto por ejecución hoy.', night: { passive: true } },
   { id: 'MONK', name: 'Monje', alignment: 'good', type: 'townfolk', img: '/assets/roles/monje.png',
     ability: 'Cada noche* elige 1 jugador (no a ti): está a salvo del Demonio esta noche.', night: { action: 'MONK_PROTECT', targets: 1 } },
-  { id: 'RAVENKEEPER', name: 'Guardián de Cuervos', alignment: 'good', type: 'townfolk', img: '/assets/roles/criacuervos.png',
+  { id: 'RAVENKEEPER', name: 'Criacuervos', alignment: 'good', type: 'townfolk', img: '/assets/roles/criacuervos.png',
     ability: 'Si mueres por la noche, te despiertan para que elijas 1 jugador: descubres su personaje.', night: { action: 'RAVENKEEPER_INFO', targets: 1, onlyIfPending: true } },
   { id: 'VIRGIN', name: 'Virgen', alignment: 'good', type: 'townfolk', img: '/assets/roles/virgen.png',
     ability: 'La primera vez que te nominen, si quien nomina es Aldeano, es ejecutado inmediatamente.' },

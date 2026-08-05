@@ -175,18 +175,19 @@ function getCirclePositions(count, radius = 160) {
 
 const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-900) 70%)';
 
-// Punto 5: la rueda de jugadores ocupa la zona superior y se acota para dejar
-// sitio abajo al anuncio nocturno (☾ "Es de noche" + rol), legible sin hacer
-// scroll incluso en pantallas pequeñas. GameTable se adapta solo (ResizeObserver).
+// Punto 5: la rueda de jugadores va arriba y debajo, pegada a ella, el rol del
+// jugador. La rueda se llena al ancho disponible (ResizeObserver recoloca los
+// medallones) y la tarjeta de rol queda justo tocando su base, centrada,
+// legible en cualquier pantalla. Sin botón para ocultarla.
 function WheelNightLayout({ children }) {
   return (
-    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: '1 1 auto', minHeight: 0, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px 0' }}>
+    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column', padding: '8px 12px 24px' }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
         <div style={{ width: '100%', height: '100%', maxWidth: 'min(92vw, 62vh, 580px)', aspectRatio: '1 / 1', position: 'relative' }}>
           <GameTable isNarrator={false} />
         </div>
       </div>
-      <div style={{ flex: '0 0 auto', width: '100%', textAlign: 'center', padding: '0 16px 24px' }}>
+      <div style={{ flex: '0 0 auto', width: '100%', textAlign: 'center', paddingTop: 2 }}>
         {children}
       </div>
     </div>

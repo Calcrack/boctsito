@@ -200,7 +200,7 @@ t('Espía: ve el grimorio completo', () => {
   const s = by(g, 'SPY');
   ok(s.nightInfo.includes('GRIMORIO') && s.nightInfo.includes('Diablillo'), s.nightInfo);
 });
-t('Guardián de Cuervos: al morir de noche queda pendiente y aprende un personaje', () => {
+t('Criacuervos: al morir de noche queda pendiente y aprende un personaje', () => {
   const g = mk(['RAVENKEEPER', 'POISONER', 'IMP', 'MONK', 'MAYOR', 'SOLDIER', 'EMPATH']);
   G.startNight(g); G.startDay(g); G.startNight(g);
   const rk = by(g, 'RAVENKEEPER'), imp = by(g, 'IMP');

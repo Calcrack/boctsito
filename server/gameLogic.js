@@ -929,7 +929,7 @@ function generateDrunkInfo(p, living, rand, game) {
       const target = rand(others);
       if (!target) return null;
       const fakeRole = rand(fakeTownfolkRoles.filter(r => r !== target.role));
-      return `🦅 Guardián de Cuervos\nEl rol de ${target.name} es: ${ROLES[fakeRole]?.name || fakeRole}.`;
+      return `🦅 Criacuervos\nEl rol de ${target.name} es: ${ROLES[fakeRole]?.name || fakeRole}.`;
     }
     case 'BUTLER': {
       const target = rand(others);
@@ -1378,7 +1378,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
           const isDrunkRaven = target.role === 'DRUNK' && target.drunkAs === 'RAVENKEEPER';
           if (isRealRaven || isDrunkRaven) {
             target.pendingRavenkeeper = true;
-            target.nightInfo = '🦅 Guardián de Cuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
+            target.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
             game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== target.id);
           }
           ROLE_INFO.onDemonKill(game, target, addDeferred);
@@ -1395,9 +1395,9 @@ function applyNightAction(game, actionType, actorId, targetIds) {
         const rand2 = arr => arr[Math.floor(Math.random() * arr.length)];
         if (actor.role === 'DRUNK' || actor.poisoned) {
           const fakeRole = rand2(fakeRK.filter(r => r !== targets[0].role));
-          actor.nightInfo = `🦅 Guardián de Cuervos\nEl rol de ${targets[0].name} es: ${ROLES[fakeRole]?.name || fakeRole}.`;
+          actor.nightInfo = `🦅 Criacuervos\nEl rol de ${targets[0].name} es: ${ROLES[fakeRole]?.name || fakeRole}.`;
         } else {
-          actor.nightInfo = `🦅 Guardián de Cuervos\nEl rol de ${targets[0].name} es: ${ROLES[targets[0].role]?.name || targets[0].role}.`;
+          actor.nightInfo = `🦅 Criacuervos\nEl rol de ${targets[0].name} es: ${ROLES[targets[0].role]?.name || targets[0].role}.`;
         }
         actor.pendingRavenkeeper = false;
       }
@@ -1861,7 +1861,7 @@ function applyNightAction(game, actionType, actorId, targetIds) {
       if (!isActorEffective(actor)) break;
       t.nightInfo = `🔦 ${actor.name} es el Sereno.`;
       addDeferred(game, {
-        label: `🔦 Sereno: despierta a ${t.name} y muéstrale que ${actor.name} es el Guardián.`,
+        label: `🔦 Sereno: despierta a ${t.name} y muéstrale que ${actor.name} es el Criacuervos.`,
         dueNight: game.nightNumber, sourcePlayerId: t.id, severity: 'warn', role: 'NIGHTWATCHMAN',
       });
       break;
@@ -2500,7 +2500,7 @@ function undoChoicePick(game, choice) {
 }
 
 // Muerte nocturna provocada por una decisión del Narrador (redirección del
-// Alcalde). Mismo tratamiento que un ataque normal, incluido el Guardián.
+// Alcalde). Mismo tratamiento que un ataque normal, incluido el Criacuervos.
 function killForChoice(game, victim, sourceRole) {
   // El Bufón sobrevive a su primera muerte también aquí.
   if (checkFoolProtection(game, victim, null, sourceRole)) return;
@@ -2515,7 +2515,7 @@ function killForChoice(game, victim, sourceRole) {
   const isDrunkRaven = victim.role === 'DRUNK' && victim.drunkAs === 'RAVENKEEPER';
   if (isRealRaven || isDrunkRaven) {
     victim.pendingRavenkeeper = true;
-    victim.nightInfo = '🦅 Guardián de Cuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
+    victim.nightInfo = '🦅 Criacuervos\nMoriste esta noche.\nEl narrador te pedirá que elijas un jugador.';
     game.nightReadyPlayers = (game.nightReadyPlayers || []).filter(id => id !== victim.id);
   }
 }

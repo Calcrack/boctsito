@@ -254,35 +254,15 @@ function NominationCard({ nom, game }) {
   );
 }
 
-// Vista nocturna del jugador: su pantalla de noche + la ruleta CONGELADA.
+// Vista nocturna del jugador: su pantalla de noche incluye la ruleta CONGELADA.
 // El servidor sirve el estado tal como quedó al anochecer (daySnapshot), así que
 // las muertes y movimientos de esta noche no se ven hasta el amanecer.
+// La mesa vive ahora DENTRO de NightScreen (alrededor de la luna), sin botón
+// para ocultarla para que se adapte al tamaño de pantalla.
 function NightView({ player }) {
-  const [showTable, setShowTable] = useState(true);
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--ink-900, #0a0a12)' }}>
       <NightScreen player={player} />
-      <div style={{ padding: '0 16px 32px', background: 'var(--ink-900, #0a0a12)' }}>
-        <button
-          onClick={() => setShowTable(s => !s)}
-          className="btn-night"
-          style={{ width: '100%', marginBottom: 10, fontSize: 11, letterSpacing: '0.12em' }}>
-          {showTable ? '▲ Ocultar la mesa' : '▼ Ver la mesa'}
-        </button>
-        {showTable && (
-          <>
-            <p style={{
-              fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--gold)', fontStyle: 'italic',
-              textAlign: 'center', margin: '0 0 10px',
-            }}>
-              🌙 Vista del atardecer — se actualizará al amanecer
-            </p>
-            <div className="table-embed">
-              <GameTable isNarrator={false} />
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID, ALL_ROLES } from '../data/roles';
 import RoleIcon from './RoleIcon';
 import SheetLink from './SheetLink';
+import GameTable from './GameTable';
 
 const SORTED_ROLES_FOR_PARSE = [...ALL_ROLES].sort((a, b) => b.name.length - a.name.length);
 
@@ -200,6 +201,23 @@ function getCirclePositions(count, radius = 160) {
 
 const nightBg = 'radial-gradient(ellipse at center top, #0a0b14 0%, var(--ink-900) 70%)';
 
+// Punto 5: la rueda de jugadores deja de estar abajo y pasa a estar ARRIBA,
+// centrada, alrededor de la luna del anuncio. Sin botón para ocultarla y
+// adaptándose al tamaño de pantalla (GameTable usa un ResizeObserver: seats
+// se recolocan solos según el ancho/alto del contenedor).
+function WheelNightLayout({ children }) {
+  return (
+    <div style={{ minHeight: '100vh', boxSizing: 'border-box', background: nightBg, display: 'flex', flexDirection: 'column', padding: '12px 12px 28px' }}>
+      <div style={{ position: 'relative', flex: '1 1 auto', minHeight: '42vh' }}>
+        <GameTable isNarrator={false} />
+      </div>
+      <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+        <div style={{ width: '100%', maxWidth: 540, textAlign: 'center' }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function NightScreen({ player }) {
   const { send, state, logout } = useGame();
   const { game, nightPlayerSnapshot } = state;
@@ -362,7 +380,7 @@ export default function NightScreen({ player }) {
   const narratorDriven = ['first_night', 'night'].includes(phase) && !game?.autoMode;
   if (narratorDriven) {
     return (
-      <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20 }}>
+      <WheelNightLayout>
         <ExitBtn /><SheetBtn />
         <div style={{ textAlign: 'center', maxWidth: 480, width: '100%' }}>
           {!player.alive ? (
@@ -393,7 +411,7 @@ export default function NightScreen({ player }) {
           </>)}
           {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
         </div>
-      </div>
+      </WheelNightLayout>
     );
   }
 
@@ -519,10 +537,10 @@ export default function NightScreen({ player }) {
   // ── Waiting (no action) ──────────────────────────────────────────────
   if (!interactiveConfig) {
     return (
-      <div style={{ minHeight: '100vh', background: nightBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 24 }}>
+      <WheelNightLayout>
         <ExitBtn /><SheetBtn />
-        <div style={{ textAlign: 'center', maxWidth: 460 }}>
-          <div style={{ fontSize: 76, color: 'var(--moon)', marginBottom: 24, opacity: 0.8 }}>☾</div>
+        <div style={{ textAlign: 'center', maxWidth: 460, width: '100%' }}>
+          <div style={{ fontSize: 34, color: 'var(--moon)', marginBottom: 8, opacity: 0.8 }}>☾</div>
           <h2 style={{ fontFamily: 'var(--title)', fontSize: 26, fontWeight: 400, color: 'var(--bone-300)', marginBottom: 12, letterSpacing: '0.04em' }}>
             {waitingForTurn ? 'Espera tu turno' : 'Es de noche'}
           </h2>
@@ -545,20 +563,19 @@ export default function NightScreen({ player }) {
           {seesGrimoire && game?.players && <SpyGrimoire players={game.players} />}
         </div>
         {!waitingForTurn && (
-          <div style={{ width: '100%', maxWidth: 460 }}>
+          <div style={{ width: '100%', maxWidth: 460, margin: '0 auto' }}>
             <ReadyBtn />
           </div>
         )}
         {waitingForTurn && (
-          <div style={{ textAlign: 'center', maxWidth: 460, width: '100%' }}>
+          <div style={{ textAlign: 'center', maxWidth: 460, width: '100%', margin: '0 auto' }}>
             <p style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--bone-500)', fontStyle: 'italic' }}>
               ⏳ Espera — tu turno se aproxima.
             </p>
           </div>
         )}
         <NightSkipPanel game={game} playerId={player.id} send={send} />
-        <FrozenTableroToggle players={nightPlayerSnapshot} />
-      </div>
+      </WheelNightLayout>
     );
   }
 

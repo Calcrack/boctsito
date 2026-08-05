@@ -19,7 +19,8 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, setVoiceStateCallback, setPlazaChannelPermission } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds } = require('./discordBot');
+const { initConfigStore, getConfig, setLocationNames } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -150,6 +151,15 @@ function broadcastGame() {
     if (!session.gameId) return;
     const state = getPublicState(game, session.playerId, session.isNarrator, presence);
     state.hasNarrator = hasNarrator;
+    // Config pública: nombres de emplazamientos + ids de canal (nada secreto:
+    // los nombres ya se mostraban hardcodeados en el cliente, y los ids hacen
+    // que la UI siga funcionando si se recablean canales en /admin).
+    const cfg = getConfig();
+    state.config = {
+      locationNames: cfg.locationNames || {},
+      channels: cfg.channels || {},
+      boctRoleId: cfg.boctRoleId || null,
+    };
     sendTo(session.ws, 'GAME_STATE', state);
   });
   // Auto-save sin bloquear
@@ -439,6 +449,52 @@ function handleMessage(type, payload, session) {
         const game = getGame(MAIN_GAME_ID);
         if (game.campaignId === cid) game.campaignId = DEFAULT_CAMPAIGN;
       }
+      sendTo(ws, 'CAMPAIGN_LIST', { campaigns: listCampaigns() });
+      broadcastGame();
+      break;
+    }
+
+    case 'EDIT_CAMPAIGN': {
+      // Punto 7: editar una campaña ya importada (cambiar su JSON/reparto o su
+      // nombre). Mantiene el MISMO id para no romper la partida activa.
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const eid = payload.campaignId;
+      const existing = CAMPAIGNS[eid];
+      if (!existing || !existing.isCustom) {
+        sendTo(ws, 'IMPORT_RESULT', { ok: false, error: 'Campaña no encontrada o no editable' });
+        break;
+      }
+      let updated;
+      try {
+        // Si no trae JSON nuevo, reconstruye desde los roles actuales y solo
+        // aplica el nuevo nombre.
+        const source = (typeof payload.json === 'string' && payload.json.trim())
+          ? payload.json.trim()
+          : Object.keys(existing.roles).map(id => existing.roles[id].unknown ? existing.roles[id].name || id : id);
+        const built = buildCampaign(source, existing.name);
+        updated = {
+          ...built,
+          id: eid,
+          name: (typeof payload.name === 'string' && payload.name.trim()) ? payload.name.trim() : (built.name || existing.name),
+        };
+      } catch (err) {
+        sendTo(ws, 'IMPORT_RESULT', { ok: false, error: err.message });
+        break;
+      }
+      CAMPAIGNS[eid] = updated;
+      saveCustomCampaign(updated).catch(e => console.error('[Campaigns] save error:', e.message));
+      const game = getGame(MAIN_GAME_ID);
+      if (game.campaignId === eid) {
+        // El reparto cambió: limpia el montaje para re-resolverlo.
+        game.setup = { locked: false, seatOrder: game.players.map(p => p.id), assignments: {}, decisions: [] };
+        game.setupResolved = null;
+        game.narratorDrunkAs = null; game.narratorRolesForImp = []; game.smokeScreenPlayerId = null;
+      }
+      sendTo(ws, 'IMPORT_RESULT', {
+        ok: true, id: eid, name: updated.name,
+        roleCount: Object.keys(updated.roles).length,
+        warnings: updated.warnings, setupNotes: updated.setupNotes,
+      });
       sendTo(ws, 'CAMPAIGN_LIST', { campaigns: listCampaigns() });
       broadcastGame();
       break;
@@ -1214,6 +1270,49 @@ function handleMessage(type, payload, session) {
           broadcastGame();
         })
         .catch(err => sendTo(ws, 'ERROR', { message: err.message }));
+      break;
+    }
+
+    case 'GET_CONFIG': {
+      // Config completa del bot (solo narrador/admin).
+      if (!isConfigAdmin(session)) throw new Error('No autorizado');
+      sendTo(ws, 'CONFIG', { config: getBotConfig() });
+      break;
+    }
+
+    case 'SET_CONFIG': {
+      // Guarda IDs de Discord recableables (punto 9 / Q8): guild, categoría de
+      // noche, rol de partida, canales y narradores. Solo narrador/admin.
+      if (!isConfigAdmin(session)) throw new Error('No autorizado');
+      const actor = currentActorId(session);
+      const p = payload || {};
+      try {
+        if (typeof p.guildId === 'string' && p.guildId.trim()) setGuildId(p.guildId, actor);
+        if (typeof p.nightCategoryId === 'string' && p.nightCategoryId.trim()) setNightCategoryId(p.nightCategoryId, actor);
+        if (typeof p.boctRoleId === 'string' && p.boctRoleId.trim()) setBoctRoleId(p.boctRoleId, actor);
+        if (p.channels && typeof p.channels === 'object') setChannelIds(p.channels, actor);
+        if (Array.isArray(p.narratorUserIds)) {
+          setNarratorIds(p.narratorUserIds).then(() => broadcastGame()).catch(() => {});
+        }
+        if (Array.isArray(p.adminUserIds)) setAdminUserIds(p.adminUserIds, actor);
+        const cfg = getBotConfig();
+        const game = getGame(MAIN_GAME_ID);
+        game.narratorDiscordIds = cfg.narratorUserIds;
+        sendTo(ws, 'CONFIG_SAVED', { config: cfg });
+        broadcastGame();
+      } catch (err) {
+        sendTo(ws, 'ERROR', { message: err.message });
+      }
+      break;
+    }
+
+    case 'SET_LOCATION_NAMES': {
+      // Nombres de los emplazamientos editables (puntos 2 y 6): se guardan en
+      // config y la mesa/canales de la web los usan en vez de los hardcodeados.
+      if (!session.isNarrator) throw new Error('No autorizado');
+      setLocationNames(payload.names || {}, currentActorId(session));
+      broadcastGame();
+      sendTo(ws, 'CONFIG_SAVED', { config: getBotConfig() });
       break;
     }
 
@@ -2019,6 +2118,24 @@ function requireGame(session) {
   return game;
 }
 
+// ¿Puede tocar la config del bot? Narrador con contraseña, o un jugador cuyo
+// Discord figure en adminUserIds (Q6: la lista blanca, no un rol genérico).
+function isConfigAdmin(session) {
+  if (session.isNarrator) return true;
+  const adminIds = (getConfig().adminUserIds || []);
+  if (!adminIds.length) return false;
+  const game = getGame(MAIN_GAME_ID);
+  const player = game && session.playerId ? game.players.find(p => p.id === session.playerId) : null;
+  return !!player && adminIds.includes(player.discordId);
+}
+
+// Id del actor para la auditoría de cambios (discordId del narrador/admin).
+function currentActorId(session) {
+  const game = getGame(MAIN_GAME_ID);
+  const player = game && session.playerId ? game.players.find(p => p.id === session.playerId) : null;
+  return (player && player.discordId) || (session.playerId) || null;
+}
+
 // Libera la SESIÓN de un asiento (no el asiento). Devuelve cuántas cerró.
 // La usan KICK_PLAYER_SESSION y REPLACE_PLAYER.
 function kickPlayerSession(game, playerId) {
@@ -2071,6 +2188,9 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 async function startup() {
+  // Config del bot (IDs de Discord, nombres de emplazamientos) persistente.
+  await initConfigStore();
+
   // Init BD
   try {
     await initDB();
@@ -2084,9 +2204,16 @@ async function startup() {
     console.error('[DB] Error:', e.message, e.stack);
   }
 
-  // Restaurar narradores guardados (o dejar el narrador por defecto).
-  if (Array.isArray(mainGame.narratorDiscordIds) && mainGame.narratorDiscordIds.length) {
-    setNarratorIds(mainGame.narratorDiscordIds).catch(() => {});
+  // Restaurar narradores: la config persistente manda; el estado guardado de la
+  // partida es respaldo para partidas viejas (Q8: los narradores viven en config).
+  const cfgNarrators = (getConfig().narratorUserIds || []);
+  const savedNarrators = (Array.isArray(mainGame.narratorDiscordIds) && mainGame.narratorDiscordIds.length)
+    ? mainGame.narratorDiscordIds : null;
+  const desired = cfgNarrators.length ? cfgNarrators : savedNarrators;
+  if (desired && desired.length) {
+    setNarratorIds(desired)
+      .then(applied => { mainGame.narratorDiscordIds = applied; })
+      .catch(() => {});
   } else {
     mainGame.narratorDiscordIds = getNarratorIds();
   }

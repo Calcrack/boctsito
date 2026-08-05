@@ -37,6 +37,7 @@ const MENU_TABS = [
   { id: 'partida',  label: '⚙ Partida' },
   { id: 'discord',  label: '💬 Discord' },
   { id: 'ranking',  label: '🏆 Rankings' },
+  { id: 'admin',    label: '🛡 Admin' },
   { id: 'atajos',   label: '⌨ Atajos' },
 ];
 
@@ -99,6 +100,7 @@ export default function NarratorPanel() {
   const [discordMap, setDiscordMap] = useState({});
   const [wizardOpen, setWizardOpen] = useState(false);
   const [menuTab, setMenuTab] = useState(null);          // null = menú ⋯ cerrado
+  const [editCampaign, setEditCampaign] = useState(null); // campaña abierta para editar (punto 7)
   const [nightStep, setNightStep] = useState({ current: 0, total: 0 });
   const [rosterTarget, setRosterTarget] = useState(null); // jugador abierto desde el roster
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
@@ -213,6 +215,10 @@ export default function NarratorPanel() {
           onClose={() => setRosterTarget(null)} />
       )}
 
+      {editCampaign && (
+        <EditCampaignModal campaign={editCampaign} send={send} onClose={() => setEditCampaign(null)} />
+      )}
+
       {/* ── Columna izquierda — AHORA ── */}
       <aside className="left-panel">
         {hasBlock(game, 'setup') && (
@@ -240,8 +246,12 @@ export default function NarratorPanel() {
                         {active ? '◆ ' : ''}{c.name}{c.isCustom ? ' ✦' : ''}
                       </button>
                       {c.isCustom && !locked && (
-                        <button onClick={() => { if (confirm(`¿Eliminar campaña "${c.name}"?`)) send('DELETE_CAMPAIGN', { campaignId: c.id }); }}
-                          className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }} title="Eliminar">✕</button>
+                        <>
+                          <button onClick={() => setEditCampaign(c)}
+                            className="btn-night" style={{ fontSize: 10, color: 'var(--gold)' }} title="Editar campaña">✎</button>
+                          <button onClick={() => { if (confirm(`¿Eliminar campaña "${c.name}"?`)) send('DELETE_CAMPAIGN', { campaignId: c.id }); }}
+                            className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }} title="Eliminar">✕</button>
+                        </>
                       )}
                     </div>
                   );
@@ -253,6 +263,7 @@ export default function NarratorPanel() {
                 </p>
               )}
               {phase === 'lobby' && <ImportCampaignBox send={send} importResult={importResult} />}
+              {phase === 'lobby' && <LocationNamesEditor send={send} />}
             </div>
 
             {/* Discord member quick-picker */}
@@ -545,6 +556,58 @@ function StatusLog({ log }) {
 }
 
 // ── Menú ⋯ — todo lo que no es narrar ────────────────────────────────
+// Editar una campaña ya importada (punto 7): cambia nombre y/o reparto, sin
+// romper la partida activa (el id se conserva en el servidor).
+function EditCampaignModal({ campaign, send, onClose }) {
+  const roles = campaign?.roles || {};
+  const seed = [
+    { id: '_meta', name: campaign?.name || '' },
+    ...Object.keys(roles).map(id => {
+      const r = roles[id];
+      return r?.unknown ? (r.name || id) : id;
+    }),
+  ];
+  const [name, setName] = useState(campaign?.name || '');
+  const [json, setJson] = useState(JSON.stringify(seed, null, 1));
+
+  const save = () => {
+    const hasJson = /"[a-zA-Z]/.test(json || '');
+    send('EDIT_CAMPAIGN', {
+      campaignId: campaign.id,
+      name,
+      ...(hasJson ? { json } : {}),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="nx-menu-card" onClick={e => e.stopPropagation()} style={{ width: 460 }}>
+        <div className="nx-menu-head">
+          <span className="panel-label" style={{ margin: 0, color: 'var(--gold-hot)' }}>✎ Editar campaña</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} className="nx-btn sm">✕ Cerrar</button>
+        </div>
+        <div className="nx-menu-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
+          <div>
+            <p className="panel-label" style={{ margin: '0 0 4px' }}>Nombre</p>
+            <input value={name} onChange={e => setName(e.target.value)}
+              style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <p className="panel-label" style={{ margin: '0 0 4px' }}>Script (JSON). Dejar vacío = solo cambio de nombre</p>
+            <textarea value={json} onChange={e => setJson(e.target.value)} rows={12}
+              style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-100)', resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+          <button onClick={save} className="btn-action primary" style={{ width: '100%', marginTop: 10, fontSize: 12, padding: '8px 0' }}>
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsMenu({ tab, setTab, onClose, game, send, rankings, discordMembers, players }) {
   const [confirmWin, setConfirmWin] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -562,7 +625,7 @@ function SettingsMenu({ tab, setTab, onClose, game, send, rankings, discordMembe
           <button onClick={onClose} className="nx-btn sm">✕ Cerrar</button>
         </div>
 
-        <div className="nx-menu-body">
+        <div className="nx-menu-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
           {tab === 'partida' && (
             <>
               <AutoModeBox game={game} send={send} players={players} />
@@ -614,6 +677,8 @@ function SettingsMenu({ tab, setTab, onClose, game, send, rankings, discordMembe
               <DiscordMemberPicker discordMembers={discordMembers} players={players} send={send} />
             </>
           )}
+
+          {tab === 'admin' && <AdminPanel send={send} />}
 
           {tab === 'ranking' && <RankingsManager rankings={rankings} send={send} />}
 
@@ -1021,6 +1086,48 @@ function SuspicionMap({ players }) {
 }
 
 
+// Nombres de los emplazamientos (puntos 2 y 6): viven en la config del server y
+// se muestran en la mesa, en los canales y en los límites. Este editor va justo
+// debajo de donde se pega el JSON de la campaña, como pedía el spec.
+const LOCATION_KEYS = ['PLAZA', 'MERCADO', 'TABERNA', 'CEMENTERIO', 'BOSQUE'];
+const LOCATION_DEFAULTS = { PLAZA: 'Plaza', MERCADO: 'Mercado', TABERNA: 'Taberna', CEMENTERIO: 'Cementerio', BOSQUE: 'Bosque' };
+
+function LocationNamesEditor({ send }) {
+  const { state } = useGame();
+  const saved = state.config?.locationNames || {};
+  const [vals, setVals] = useState(() => {
+    const o = {};
+    LOCATION_KEYS.forEach(k => { o[k] = saved[k] || LOCATION_DEFAULTS[k] || k; });
+    return o;
+  });
+  // Sincroniza si cambia la config desde otra pestaña (solo si aún no editamos).
+  const dirty = LOCATION_KEYS.some(k => vals[k] && vals[k] !== (saved[k] || LOCATION_DEFAULTS[k] || k));
+
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(0,0,0,0.25)', border: 'var(--hairline-bone)', borderRadius: 4 }}>
+      <p className="panel-label" style={{ margin: '0 0 6px' }}>🗺 Nombre de los emplazamientos</p>
+      <p className="nx-hint" style={{ margin: '0 0 8px' }}>
+        Así ven los jugadores los canales en la web. El primero (Plaza) siempre es el punto de encuentro inicial.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {LOCATION_KEYS.map(k => (
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', width: 74, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{k}</span>
+            <input value={vals[k] || ''} onChange={e => setVals(v => ({ ...v, [k]: e.target.value }))}
+              style={{ flex: 1, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '4px 8px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
+          </div>
+        ))}
+      </div>
+      <button onClick={() => send('SET_LOCATION_NAMES', { names: vals })}
+        disabled={!dirty}
+        className="btn-action primary"
+        style={{ width: '100%', marginTop: 8, fontSize: 11, padding: '6px 0', opacity: dirty ? 1 : 0.4 }}>
+        Guardar nombres
+      </button>
+    </div>
+  );
+}
+
 // Importar campaña personalizada: pegar JSON del script (formato BotC).
 function ImportCampaignBox({ send, importResult }) {
   const [open, setOpen] = useState(false);
@@ -1071,7 +1178,9 @@ function ImportCampaignBox({ send, importResult }) {
 }
 
 function DiscordMemberPicker({ discordMembers, players, send }) {
-  const GAME_ROLE_ID = '1499987378755076218';
+  // El rol de partida ya no está hardcodeado: lo trae la config del bot (/admin).
+  const { state } = useGame();
+  const GAME_ROLE_ID = state.config?.boctRoleId || '1499987378755076218';
   const [nicknames, setNicknames] = useState(() => {
     try { return JSON.parse(localStorage.getItem('boct_nicknames') || '{}'); } catch { return {}; }
   });
@@ -1232,6 +1341,8 @@ function NarratorsPicker({ game, discordMembers, send }) {
 }
 
 function ChannelLimitsControl({ game, send }) {
+  const { state } = useGame();
+  const locationNames = state.config?.locationNames || {};
   const CHANNELS = ['MERCADO', 'TABERNA', 'CEMENTERIO', 'BOSQUE'];
   const LABELS = { MERCADO: 'Mercado', TABERNA: 'Taberna', CEMENTERIO: 'Cementerio', BOSQUE: 'Bosque' };
   const limits = game.channelLimits || {};
@@ -1242,7 +1353,7 @@ function ChannelLimitsControl({ game, send }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {CHANNELS.map(ch => (
           <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-200)', flex: 1 }}>{LABELS[ch]}</span>
+            <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-200)', flex: 1 }}>{locationNames[ch] || LABELS[ch]}</span>
             <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
               <button
                 onClick={() => send('SET_CHANNEL_LIMIT', { channel: ch, limit: Math.max(0, (limits[ch] || 0) - 1) })}
@@ -1298,10 +1409,13 @@ function AutoModeTimer({ autoPhaseInfo, send }) {
 }
 
 function ChannelControl({ players, send }) {
+  const { state } = useGame();
+  const locationNames = state.config?.locationNames || {};
   const [open, setOpen] = useState(false);
   const [secretFeedback, setSecretFeedback] = useState({});
   const outOfPlaza = players.filter(p => p.discordChannel && p.discordChannel !== 'PLAZA');
   const CHANNEL_LABELS = { PLAZA: 'Plaza', MERCADO: 'Mercado', TABERNA: 'Taberna', CEMENTERIO: 'Cementerio', BOSQUE: 'Bosque' };
+  const nameOf = ch => locationNames[ch] || CHANNEL_LABELS[ch] || ch;
 
   const moveToSecret = (p) => {
     send('MOVE_TO_SECRET', { targetPlayerId: p.id });
@@ -1331,7 +1445,7 @@ function ChannelControl({ players, send }) {
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--bone-400)' }}>{CHANNEL_LABELS[ch] || ch}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--bone-400)' }}>{nameOf(ch)}</span>
                 <button
                   onClick={() => moveToSecret(p)}
                   title="Mover a canal secreto (confesionario)"
@@ -1348,6 +1462,114 @@ function ChannelControl({ players, send }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Panel Admin (punto 9 / Q8) ─────────────────────────────────────
+// Los IDs de Discord ya no están hardcodeados: se editan aquí y se guardan en
+// server/config.json (persistente en Render). Solo narrador o admin.
+const ADMIN_CHANNEL_KEYS = ['PLAZA', 'MERCADO', 'TABERNA', 'CEMENTERIO', 'BOSQUE', 'CONFESIONARIO'];
+function AdminPanel({ send }) {
+  const { state } = useGame();
+  const cfg = state.adminConfig;
+  const [form, setForm] = useState(null);
+
+  useEffect(() => {
+    send('GET_CONFIG', {});
+  }, [send]);
+
+  // Cuando llega la config del server, la volcamos al formulario local.
+  useEffect(() => {
+    if (cfg && !form) {
+      setForm({
+        guildId: cfg.guildId || '',
+        nightCategoryId: cfg.nightCategoryId || '',
+        boctRoleId: cfg.boctRoleId || '',
+        narratorUserIds: Array.isArray(cfg.narratorUserIds) ? [...cfg.narratorUserIds] : [],
+        adminUserIds: Array.isArray(cfg.adminUserIds) ? [...cfg.adminUserIds] : [],
+        channels: { ...(cfg.channels || {}) },
+      });
+    }
+  }, [cfg, form]);
+
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const save = () => {
+    if (!form) return;
+    send('SET_CONFIG', {
+      guildId: form.guildId,
+      nightCategoryId: form.nightCategoryId,
+      boctRoleId: form.boctRoleId,
+      narratorUserIds: form.narratorUserIds,
+      adminUserIds: form.adminUserIds,
+      channels: form.channels,
+    });
+  };
+
+  const field = {
+    width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)',
+    borderRadius: 2, padding: '4px 8px', fontFamily: 'var(--mono)', fontSize: 11,
+    color: 'var(--bone-100)', marginTop: 4,
+  };
+
+  return (
+    <div className="nx-card">
+      <div className="nx-card-head"><p className="nx-head-title">🛡 Admin — IDs de Discord</p></div>
+      <div className="nx-card-body">
+        <p className="nx-hint" style={{ marginBottom: 8 }}>
+          Si cambias de servidor o recreas los canales, actualiza aquí los IDs en vez de tocarlos en el código. Se guardan en <span className="nx-mono">server/config.json</span>.
+        </p>
+        {!form ? (
+          <p className="nx-hint">Cargando config…</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Servidor (Guild ID)</p>
+              <input value={form.guildId} onChange={e => set('guildId', e.target.value)} style={field} />
+            </div>
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Categoría de habitaciones de noche</p>
+              <input value={form.nightCategoryId} onChange={e => set('nightCategoryId', e.target.value)} style={field} />
+            </div>
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Rol de partida (Jugador)</p>
+              <input value={form.boctRoleId} onChange={e => set('boctRoleId', e.target.value)} style={field} />
+            </div>
+
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Canales de voz</p>
+              {ADMIN_CHANNEL_KEYS.map(k => (
+                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', width: 92, flexShrink: 0 }}>{k}</span>
+                  <input value={form.channels[k] || ''} onChange={e => set('channels', { ...form.channels, [k]: e.target.value })}
+                    style={{ ...field, marginTop: 0, flex: 1 }} />
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Narradores (IDs de Discord)</p>
+              <input
+                value={form.narratorUserIds.join(', ')}
+                onChange={e => set('narratorUserIds', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                style={field} />
+            </div>
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Admins (IDs de Discord, opcional)</p>
+              <input
+                value={form.adminUserIds.join(', ')}
+                onChange={e => set('adminUserIds', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                style={field} />
+              <p className="nx-hint" style={{ marginTop: 4 }}>Solo estos IDs pueden cambiar la config del bot. Vacío = solo el narrador.</p>
+            </div>
+
+            <button onClick={save} className="btn-action primary" style={{ fontSize: 12, padding: '8px 0' }}>
+              Guardar configuración
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -16,6 +16,8 @@ const initialState = {
   playerName: null,
   isNarrator: false,
   game: null,
+  config: null,
+  adminConfig: null,
   nightPlayerSnapshot: null,
   playerList: [],
   notifications: [],
@@ -46,7 +48,12 @@ function reducer(state, action) {
         : isNight
           ? state.nightPlayerSnapshot
           : null;
-      return { ...state, game: action.payload, nightPlayerSnapshot };
+      return {
+        ...state,
+        game: action.payload,
+        config: action.payload?.config || state.config,
+        nightPlayerSnapshot,
+      };
     }
     case 'DISCORD_MEMBERS':
       return { ...state, discordMembers: action.payload.members };
@@ -70,6 +77,8 @@ function reducer(state, action) {
       return { ...state, campaigns: action.payload.campaigns };
     case 'SET_IMPORT_RESULT':
       return { ...state, importResult: action.payload };
+    case 'SET_ADMIN_CONFIG':
+      return { ...state, adminConfig: action.payload.config };
     case 'LOGOUT':
       return { ...initialState, connected: state.connected, socketId: state.socketId };
     default:
@@ -187,6 +196,10 @@ export function GameProvider({ children }) {
           break;
         case 'IMPORT_RESULT':
           dispatch({ type: 'SET_IMPORT_RESULT', payload });
+          break;
+        case 'CONFIG':
+        case 'CONFIG_SAVED':
+          dispatch({ type: 'SET_ADMIN_CONFIG', payload });
           break;
         case 'KICKED_SESSION': {
           // El narrador expulsó esta sesión: NO re-unirse — volver al login limpio.

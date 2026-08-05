@@ -12,14 +12,20 @@ function getCirclePositions(count, radius) {
   });
 }
 
+// Posiciones fijas de los emplazamientos; el NOMBRE viene de la config
+// (config.locationNames) con estos como respaldo si la config no llega.
 const CORNER_CHANNELS = {
-  TABERNA:    { top: '8px',    left: '8px',    label: 'Taberna' },
-  MERCADO:    { top: '8px',    right: '8px',   label: 'Mercado' },
-  BOSQUE:     { bottom: '8px', left: '8px',    label: 'Bosque' },
-  CEMENTERIO: { bottom: '8px', right: '8px',   label: 'Cementerio' },
+  TABERNA:    { top: '8px',    left: '8px' },
+  MERCADO:    { top: '8px',    right: '8px' },
+  BOSQUE:     { bottom: '8px', left: '8px' },
+  CEMENTERIO: { bottom: '8px', right: '8px' },
+};
+const DEFAULT_NAMES = {
+  TABERNA: 'Taberna', MERCADO: 'Mercado', BOSQUE: 'Bosque',
+  CEMENTERIO: 'Cementerio', PLAZA: 'Plaza',
 };
 
-function CornerGroup({ channel, players, cornerCfg, isNarrator, seesGrimoire, playerId, onClick }) {
+function CornerGroup({ channel, label, players, cornerCfg, isNarrator, seesGrimoire, playerId, onClick }) {
   return (
     <div style={{
       position: 'absolute',
@@ -28,7 +34,7 @@ function CornerGroup({ channel, players, cornerCfg, isNarrator, seesGrimoire, pl
       gap: 4, zIndex: 10,
     }}>
       <span style={{ fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', opacity: 0.7 }}>
-        {cornerCfg.label}
+        {label}
       </span>
       {players.map(player => {
         const isMe = player.id === playerId;
@@ -241,7 +247,8 @@ function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activ
 
 export default function GameTable({ isNarrator = false, activeActorId = null }) {
   const { state } = useGame();
-  const { game, playerId } = state;
+  const { game, playerId, config } = state;
+  const locationNames = config?.locationNames || {};
   const [actionTarget, setActionTarget] = useState(null);
   const containerRef = useRef(null);
   const [containerDims, setContainerDims] = useState({ w: 480, h: 480 });
@@ -352,6 +359,9 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
           );
         })() : (
           <div className="table-center">
+            {isNight && (
+              <div className="table-center-moon" style={{ fontSize: Math.max(28, containerSize * 0.12), lineHeight: 1, color: 'var(--moon)', opacity: 0.9, marginBottom: 4 }}>☾</div>
+            )}
             <div className="table-center-phase">{isNight ? 'Noche' : 'Día'}</div>
             <div className="table-center-day" style={{ color: isNight ? 'var(--moon)' : 'var(--gold-hot)' }}>
               {phaseLabel}
@@ -405,6 +415,7 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
         <CornerGroup
           key={channel}
           channel={channel}
+          label={locationNames[channel] || DEFAULT_NAMES[channel] || channel}
           players={grpPlayers}
           cornerCfg={CORNER_CHANNELS[channel]}
           isNarrator={isNarrator}

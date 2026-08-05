@@ -1,23 +1,31 @@
 const { Client, GatewayIntentBits, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { getConfig, updateConfig } = require('./configStore');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const GUILD_ID = '1462151561575928034';
 
-// Categoría donde viven las "habitaciones" de noche (1 canal de voz por jugador).
-const NIGHT_CATEGORY_ID = '1515577274248859648';
-// Narradores: únicos que pueden VER las habitaciones de noche.
-// Lista dinámica: el narrador principal por defecto, ampliable desde la UI
-// (a veces narran otras personas).
-const DEFAULT_NARRATOR_USER_ID = '723204863873384469';
-let narratorUserIds = [DEFAULT_NARRATOR_USER_ID];
+// ── Accesos a config efectiva (defaults + overrides de server/config.json) ──
+function guildId()      { return getConfig().guildId; }
+function nightCategory(){ return getConfig().nightCategoryId; }
+function boctRole()     { return getConfig().boctRoleId; }
+function narratorIds()  { return [...getConfig().narratorUserIds]; }
+function effectiveChannels() { return getConfig().channels; }
 
+function channelId(key) { return effectiveChannels()[key]; }
+
+// Mapas inversos dinámicos (el bot puede recibir la config cambiada en caliente).
+function channelIdToKey() {
+  return Object.fromEntries(Object.entries(effectiveChannels()).map(([k, v]) => [v, k]));
+}
+
+// Narradores: los únicos que pueden VER las habitaciones de noche.
+// Lista dinámica: el narrador principal por defecto, ampliable desde la UI.
 function getNarratorIds() {
-  return [...narratorUserIds];
+  return narratorIds();
 }
 
 async function setNarratorIds(ids) {
   const clean = [...new Set((ids || []).filter(id => typeof id === 'string' && /^\d{5,}$/.test(id)))];
-  narratorUserIds = clean.length ? clean : [DEFAULT_NARRATOR_USER_ID];
+  updateConfig({ narratorUserIds: clean }, 'setNarratorIds');
   await refreshNightRoomPerms();
   return getNarratorIds();
 }
@@ -26,23 +34,12 @@ async function setNarratorIds(ids) {
 async function refreshNightRoomPerms() {
   if (!isReady || !guild) return;
   const rooms = guild.channels.cache.filter(c =>
-    c.parentId === NIGHT_CATEGORY_ID && c.type === ChannelType.GuildVoice
+    c.parentId === nightCategory() && c.type === ChannelType.GuildVoice
   );
   for (const channel of rooms.values()) {
-    await ensureRoomPerms(channel);
+    await ensureRoomPerms(channel, roomOwners.get(channel.name.toLowerCase()));
   }
 }
-
-const CHANNELS = {
-  PLAZA:        '1467693963610951711',
-  MERCADO:      '1467694466319257652',
-  TABERNA:      '1467694502109122765',
-  CEMENTERIO:   '1467694524137472050',
-  BOSQUE:       '1467694546665214085',
-  CONFESIONARIO:'1499969856160792676',
-};
-
-const CHANNEL_ID_TO_KEY = Object.fromEntries(Object.entries(CHANNELS).map(([k, v]) => [v, k]));
 
 let client = null;
 let isReady = false;
@@ -81,8 +78,9 @@ function initBot() {
   client.once('clientReady', async () => {
     console.log(`[Discord Bot] Conectado como ${client.user.tag}`);
     isReady = true;
-    guild = client.guilds.cache.get(GUILD_ID);
-    if (!guild) guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
+    const gid = guildId();
+    guild = client.guilds.cache.get(gid);
+    if (!guild) guild = await client.guilds.fetch(gid).catch(() => null);
     _fetchAndCacheMembers().catch(() => {});
   });
 
@@ -92,7 +90,7 @@ function initBot() {
     if (oldState.channelId === newState.channelId) return;
     const userId = newState.member?.user?.id;
     if (!userId) return;
-    const newChannelKey = newState.channelId ? (CHANNEL_ID_TO_KEY[newState.channelId] || null) : null;
+    const newChannelKey = newState.channelId ? (channelIdToKey()[newState.channelId] || null) : null;
     voiceStateCallback(userId, newChannelKey);
   });
 
@@ -132,7 +130,7 @@ async function getGuildMembers(force = false) {
 
 async function moveUserToChannel(discordUserId, channelKey, channelLimits = {}) {
   if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
-  const channelId = CHANNELS[channelKey];
+  const channelId = effectiveChannels()[channelKey];
   if (!channelId) return { ok: false, error: `Canal ${channelKey} desconocido` };
 
   try {
@@ -159,6 +157,8 @@ async function moveUserToChannel(discordUserId, channelKey, channelLimits = {}) 
 
 // Cache nombre-de-sala → channelId para no re-buscar cada noche.
 const nightRoomCache = new Map();
+// Cache nombre-de-sala → dueño (userId) para reaplicar permisos sin perderle.
+const roomOwners = new Map();
 
 function sanitizeRoomName(name) {
   // Discord recorta nombres largos; mantener legible.
@@ -168,48 +168,56 @@ function sanitizeRoomName(name) {
 // Busca el canal de voz del jugador dentro de la categoría de noche; si no
 // existe lo CREA (nunca se borra: se reutiliza entre partidas).
 // Solo el narrador puede VER la habitación; @everyone tiene "Ver canal" desactivado.
-function roomPermissionOverwrites() {
-  return [
+// El DUEÑO (el jugador que la usa esa noche) sí ve y entra (punto 3).
+function roomPermissionOverwrites(ownerId) {
+  const overwrites = [
     { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-    ...narratorUserIds.map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] })),
+    ...narratorIds().map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] })),
   ];
+  if (ownerId) overwrites.push({ id: ownerId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] });
+  return overwrites;
 }
 
-async function ensureRoomPerms(channel) {
+async function ensureRoomPerms(channel, ownerId) {
   try {
-    await channel.permissionOverwrites.set(roomPermissionOverwrites());
+    await channel.permissionOverwrites.set(roomPermissionOverwrites(ownerId));
   } catch (err) {
     console.error('[Discord] ensureRoomPerms error:', err.message);
   }
 }
 
-async function ensurePlayerRoom(playerName) {
+async function ensurePlayerRoom(playerName, ownerId) {
   if (!isReady || !guild) return null;
   const wanted = sanitizeRoomName(playerName);
   const key = wanted.toLowerCase();
   // Cache
   const cachedId = nightRoomCache.get(key);
-  if (cachedId && guild.channels.cache.get(cachedId)) return cachedId;
+  if (cachedId && guild.channels.cache.get(cachedId)) {
+    if (ownerId) roomOwners.set(key, ownerId);
+    return cachedId;
+  }
   try {
     // Buscar por nombre dentro de la categoría
     const existing = guild.channels.cache.find(c =>
-      c.parentId === NIGHT_CATEGORY_ID &&
+      c.parentId === nightCategory() &&
       c.type === ChannelType.GuildVoice &&
       c.name.toLowerCase() === key
     );
     if (existing) {
       nightRoomCache.set(key, existing.id);
-      ensureRoomPerms(existing).catch(() => {});
+      if (ownerId) roomOwners.set(key, ownerId);
+      ensureRoomPerms(existing, ownerId).catch(() => {});
       return existing.id;
     }
-    // Crear (con permisos: solo el narrador ve el canal)
+    // Crear (con permisos: solo el narrador y el dueño ven el canal)
     const created = await guild.channels.create({
       name: wanted,
       type: ChannelType.GuildVoice,
-      parent: NIGHT_CATEGORY_ID,
-      permissionOverwrites: roomPermissionOverwrites(),
+      parent: nightCategory(),
+      permissionOverwrites: roomPermissionOverwrites(ownerId),
     });
     nightRoomCache.set(key, created.id);
+    if (ownerId) roomOwners.set(key, ownerId);
     return created.id;
   } catch (err) {
     console.error('[Discord] ensurePlayerRoom error:', err.message);
@@ -221,7 +229,7 @@ async function ensurePlayerRoom(playerName) {
 async function moveUserToOwnRoom(discordUserId, playerName) {
   if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
   try {
-    const roomId = await ensurePlayerRoom(playerName);
+    const roomId = await ensurePlayerRoom(playerName, discordUserId);
     if (!roomId) return { ok: false, error: 'No se pudo crear la sala' };
     const member = guild.members.cache.get(discordUserId) || await guild.members.fetch(discordUserId);
     if (!member.voice?.channelId) return { ok: false, error: 'El jugador no está en un canal de voz' };
@@ -233,21 +241,20 @@ async function moveUserToOwnRoom(discordUserId, playerName) {
   }
 }
 
-const BOCT_ROLE_ID = '1499987378755076218';
-
 async function setPlazaChannelPermission(allow) {
   if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
   try {
-    const channel = guild.channels.cache.get(CHANNELS.PLAZA);
+    const channel = guild.channels.cache.get(channelId('PLAZA'));
     if (!channel) return { ok: false, error: 'Canal PLAZA no encontrado' };
-    const boctRole = guild.roles.cache.get(BOCT_ROLE_ID) || await guild.roles.fetch(BOCT_ROLE_ID);
-    if (!boctRole) return { ok: false, error: 'Rol BOCT no encontrado' };
+    const boctRoleId = boctRole();
+    const role = guild.roles.cache.get(boctRoleId) || await guild.roles.fetch(boctRoleId);
+    if (!role) return { ok: false, error: 'Rol BOCT no encontrado' };
     if (allow) {
       await channel.permissionOverwrites.edit(guild.roles.everyone, { [PermissionFlagsBits.Speak]: null });
-      await channel.permissionOverwrites.edit(boctRole, { [PermissionFlagsBits.Speak]: null });
+      await channel.permissionOverwrites.edit(role, { [PermissionFlagsBits.Speak]: null });
     } else {
       await channel.permissionOverwrites.edit(guild.roles.everyone, { [PermissionFlagsBits.Speak]: false });
-      await channel.permissionOverwrites.edit(boctRole, { [PermissionFlagsBits.Speak]: true });
+      await channel.permissionOverwrites.edit(role, { [PermissionFlagsBits.Speak]: true });
     }
     return { ok: true };
   } catch (err) {
@@ -272,4 +279,30 @@ function getBotStatus() {
   return { connected: isReady, tag: client?.user?.tag || null };
 }
 
-module.exports = { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom, sendDM, getBotStatus, CHANNELS, getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission };
+// Vista completa de la config del bot (para el panel /admin).
+function getBotConfig() {
+  const cfg = getConfig();
+  return {
+    guildId: cfg.guildId,
+    nightCategoryId: cfg.nightCategoryId,
+    boctRoleId: cfg.boctRoleId,
+    narratorUserIds: narratorIds(),
+    adminUserIds: cfg.adminUserIds || [],
+    channels: cfg.channels,
+    locationNames: cfg.locationNames,
+  };
+}
+
+module.exports = {
+  initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
+  sendDM, getBotStatus, getBotConfig,
+  getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
+  setChannelIds: (channels, actor) => updateConfig({ channels }, actor),
+  setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),
+  setNightCategoryId: (id, actor) => updateConfig({ nightCategoryId: String(id).trim() }, actor),
+  setBoctRoleId: (id, actor) => updateConfig({ boctRoleId: String(id).trim() }, actor),
+  setAdminUserIds: (ids, actor) => {
+    const clean = [...new Set((ids || []).filter(id => typeof id === 'string' && /^\d{5,}$/.test(id)))];
+    updateConfig({ adminUserIds: clean }, actor);
+  },
+};

@@ -1,17 +1,16 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
 
-const CHANNELS = [
-  { key: 'PLAZA',      label: 'Plaza' },
-  { key: 'MERCADO',    label: 'Mercado' },
-  { key: 'TABERNA',    label: 'Taberna' },
-  { key: 'CEMENTERIO', label: 'Cementerio' },
-  { key: 'BOSQUE',     label: 'Bosque' },
-];
+// Los 5 emplazamientos a los que un jugador puede moverse. El NOMBRE visible
+// sale de la config persistente (config.locationNames); key sigue siendo la
+// de Discord para los movimientos MOVE_TO_CHANNEL.
+const CHANNELS = ['PLAZA', 'MERCADO', 'TABERNA', 'CEMENTERIO', 'BOSQUE'];
+const DEFAULT_NAMES = { PLAZA: 'Plaza', MERCADO: 'Mercado', TABERNA: 'Taberna', CEMENTERIO: 'Cementerio', BOSQUE: 'Bosque' };
 
 export default function DiscordChannels() {
   const { state, send } = useGame();
-  const { game, playerId } = state;
+  const { game, playerId, config } = state;
+  const locationNames = config?.locationNames || {};
 
   if (!game) return null;
   const me = game.players.find(p => p.id === playerId);
@@ -24,11 +23,11 @@ export default function DiscordChannels() {
     <div>
       <p className="panel-label" style={{ marginBottom: 8 }}>Canal Discord</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {CHANNELS.map(ch => (
-          <button key={ch.key}
-            onClick={() => send('MOVE_TO_CHANNEL', { channel: ch.key })}
+        {CHANNELS.map(key => (
+          <button key={key}
+            onClick={() => send('MOVE_TO_CHANNEL', { channel: key })}
             className="btn-night">
-            {ch.label}
+            {locationNames[key] || DEFAULT_NAMES[key] || key}
           </button>
         ))}
       </div>

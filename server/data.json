@@ -1,0 +1,58 @@
+{
+  "games": {
+    "main": {
+      "data": {
+        "id": "main",
+        "narratorId": "narrator",
+        "campaignId": "TROUBLE_BREWING",
+        "phase": "lobby",
+        "dayNumber": 0,
+        "nightNumber": 0,
+        "players": [],
+        "nominations": [],
+        "activeNomination": null,
+        "executedToday": null,
+        "nightDeaths": [],
+        "nightActions": {},
+        "winner": null,
+        "winReason": null,
+        "smokeScreenPlayerId": null,
+        "rolesNotInPlay": [],
+        "narratorDrunkAs": null,
+        "narratorRolesForImp": [],
+        "channelLimits": {},
+        "nightQueue": [],
+        "nightQueueIndex": 0,
+        "nightSubmissions": {},
+        "nightWaitingForRavenkeeper": false,
+        "recluseRegistersAs": null,
+        "spyRegistersAs": null,
+        "mayorKillTarget": null,
+        "createdAt": 1781587843134,
+        "autoMode": false,
+        "autoPhaseInfo": null,
+        "autoDayMs": 300000,
+        "autoNomMs": 420000,
+        "autoVotes": {
+          "skipDay": [],
+          "skipNom": [],
+          "extend": [],
+          "skipNight": []
+        },
+        "pendingNightAfterNomination": false,
+        "nightReadyPlayers": [],
+        "statusLog": [],
+        "deferredEffects": [],
+        "setup": {
+          "locked": false,
+          "seatOrder": [],
+          "assignments": {},
+          "decisions": []
+        },
+        "setupResolved": null
+      },
+      "updatedAt": 1781587848287
+    }
+  },
+  "events": []
+}

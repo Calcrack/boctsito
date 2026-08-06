@@ -171,11 +171,9 @@ export default function NarratorPanel() {
     });
   };
 
-  // Cuando GameOver mock captura la imagen del ganador, se reenvía el test con
-  // ambas imágenes (texto + random + ganador) para confirmar el envío completo.
+  // Cuando GameOver mock captura la imagen del ganador, se envía al canal.
   const onTestCaptured = useCallback((winnerDataUrl) => {
-    if (!randomTestImageRef.current) return;
-    send('GAME_OVER_TEST', { randomImage: randomTestImageRef.current, winnerImage: winnerDataUrl });
+    send('GAME_OVER_SHOT', { imageDataUrl: winnerDataUrl, caption: '🏆 🧪 TEST — ganador' });
   }, [send]);
 
   const guideRef  = useRef(null);   // mando de la Guía (siguiente / anterior / ir a)

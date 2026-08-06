@@ -443,10 +443,14 @@ async function selfTestGameOver({ randomImage, winnerImage }) {
   })());
   await sendPostMessage({ text: '🧪 TEST — prueba de envío' })
     .then(r => steps.push({ name: 'Mensaje de texto', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
-  await sendPostMessage({ images: randomImage ? [randomImage] : [] })
-    .then(r => steps.push({ name: 'Imagen aleatoria', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
-  await sendPostMessage({ images: winnerImage ? [winnerImage] : [] })
-    .then(r => steps.push({ name: 'Imagen del ganador (BOCT)', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
+  if (randomImage) {
+    await sendPostMessage({ images: [randomImage] })
+      .then(r => steps.push({ name: 'Imagen aleatoria', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
+  }
+  if (winnerImage) {
+    await sendPostMessage({ images: [winnerImage] })
+      .then(r => steps.push({ name: 'Imagen del ganador (BOCT)', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
+  }
   return steps;
 }
 

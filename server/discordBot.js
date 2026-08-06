@@ -8,6 +8,7 @@ function guildId()      { return getConfig().guildId; }
 function nightCategory(){ return getConfig().nightCategoryId; }
 function boctRole()     { return getConfig().boctRoleId; }
 function narratorIds()  { return [...getConfig().narratorUserIds]; }
+function narratorRoleId(){ return getConfig().narratorRoleId; }
 function effectiveChannels() { return getConfig().channels; }
 
 function channelId(key) { return effectiveChannels()[key]; }
@@ -28,6 +29,30 @@ async function setNarratorIds(ids) {
   updateConfig({ narratorUserIds: clean }, 'setNarratorIds');
   await refreshNightRoomPerms();
   return getNarratorIds();
+}
+
+// IDs de los miembros que tienen el rol de narrador configurado.
+function roleNarratorMemberIds() {
+  const rid = narratorRoleId();
+  if (!isReady || !guild || !rid) return [];
+  const out = [];
+  for (const m of guild.members.cache.values()) {
+    if (m.user.bot) continue;
+    if (m.roles.cache.has(rid)) out.push(m.user.id);
+  }
+  return out;
+}
+
+// Une la lista explícita de narradores con la del rol: quien tenga el rol de
+// narrador SIEMPRE aparece como narrador (aunque la lista esté vacía).
+async function syncNarratorsFromRole() {
+  const fromRole = roleNarratorMemberIds();
+  if (!fromRole.length) return false;
+  const merged = [...new Set([...narratorIds(), ...fromRole])];
+  const clean = [...new Set(merged.filter(id => typeof id === 'string' && /^\d{5,}$/.test(id)))];
+  updateConfig({ narratorUserIds: clean }, 'syncNarratorsFromRole');
+  await refreshNightRoomPerms();
+  return true;
 }
 
 // Reaplica permisos de todas las habitaciones de noche al cambiar narradores.
@@ -111,6 +136,7 @@ async function _fetchAndCacheMembers() {
   membersCache = result;
   membersCacheTime = Date.now();
   console.log(`[Discord] Miembros cacheados: ${result.length}`);
+  syncNarratorsFromRole().catch(e => console.error('[Discord] sync narradores por rol:', e.message));
   return result;
 }
 
@@ -363,6 +389,7 @@ function getBotConfig() {
     nightCategoryId: cfg.nightCategoryId,
     boctRoleId: cfg.boctRoleId,
     narratorUserIds: narratorIds(),
+    narratorRoleId: cfg.narratorRoleId || '',
     adminUserIds: cfg.adminUserIds || [],
     channels: cfg.channels,
     locationNames: cfg.locationNames,
@@ -378,6 +405,8 @@ module.exports = {
   setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),
   setNightCategoryId: (id, actor) => updateConfig({ nightCategoryId: String(id).trim() }, actor),
   setBoctRoleId: (id, actor) => updateConfig({ boctRoleId: String(id).trim() }, actor),
+  setNarratorRoleId: (id, actor) => updateConfig({ narratorRoleId: String(id).trim() }, actor),
+  syncNarratorsFromRole,
   setAdminUserIds: (ids, actor) => {
     const clean = [...new Set((ids || []).filter(id => typeof id === 'string' && /^\d{5,}$/.test(id)))];
     updateConfig({ adminUserIds: clean }, actor);

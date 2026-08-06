@@ -1496,6 +1496,7 @@ function AdminPanel({ send }) {
         guildId: cfg.guildId || '',
         nightCategoryId: cfg.nightCategoryId || '',
         boctRoleId: cfg.boctRoleId || '',
+        narratorRoleId: cfg.narratorRoleId || '',
         narratorUserIds: Array.isArray(cfg.narratorUserIds) ? [...cfg.narratorUserIds] : [],
         adminUserIds: Array.isArray(cfg.adminUserIds) ? [...cfg.adminUserIds] : [],
         channels: { ...(cfg.channels || {}) },
@@ -1516,6 +1517,7 @@ function AdminPanel({ send }) {
       guildId: form.guildId,
       nightCategoryId: form.nightCategoryId,
       boctRoleId: form.boctRoleId,
+      narratorRoleId: form.narratorRoleId,
       narratorUserIds: form.narratorUserIds,
       adminUserIds: form.adminUserIds,
       channels: form.channels,
@@ -1590,6 +1592,17 @@ function AdminPanel({ send }) {
                 value={form.narratorUserIds.join(', ')}
                 onChange={e => set('narratorUserIds', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
                 style={field} />
+              <p className="nx-hint" style={{ marginTop: 4 }}>Vacío = solo el narrador por defecto. También puedes usar el rol de abajo.</p>
+            </div>
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Rol de narrador (ID del rol)</p>
+              <input
+                value={form.narratorRoleId}
+                onChange={e => set('narratorRoleId', e.target.value)}
+                style={field} />
+              <p className="nx-hint" style={{ marginTop: 4 }}>
+                Pegas aquí la ID de un rol de Discord que solo tengan los narradores. Quien lo tenga aparecerá en la lista "🎙 Narradores" y actuará como narrador automáticamente.
+              </p>
             </div>
             <div>
               <p className="panel-label" style={{ margin: 0 }}>Admins (IDs de Discord, opcional)</p>

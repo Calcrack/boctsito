@@ -25,6 +25,9 @@ const DEFAULTS = {
   nightCategoryId: '1515577274248859648',
   boctRoleId: '1499987378755076218',
   narratorUserIds: ['723204863873384469'],
+  // Rol de Discord de los narradores: quien lo tenga pasa a ser narrador
+  // automáticamente (se sincroniza al cargar los miembros del servidor).
+  narratorRoleId: '',
   adminUserIds: [],
   channels: {
     PLAZA: '1467693963610951711',

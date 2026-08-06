@@ -19,7 +19,7 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole } = require('./discordBot');
 const { initConfigStore, getConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
@@ -1089,13 +1089,37 @@ function handleMessage(type, payload, session) {
 
     case 'GET_DISCORD_MEMBERS': {
       if (!session.isNarrator) throw new Error('No autorizado');
-      getGuildMembers().then(members => sendTo(ws, 'DISCORD_MEMBERS', { members }));
+      getGuildMembers().then(members => {
+        sendTo(ws, 'DISCORD_MEMBERS', { members });
+        // El fetch dispara la sincronización por rol de narrador: si entraron
+        // narradores nuevos, el picker debe verlos ya.
+        if (getConfig().narratorRoleId) {
+          syncNarratorsFromRole().then(synced => {
+            if (synced) {
+              const g = getGame(MAIN_GAME_ID);
+              g.narratorDiscordIds = getBotConfig().narratorUserIds;
+              broadcastGame();
+            }
+          }).catch(() => {});
+        }
+      });
       break;
     }
 
     case 'REFRESH_DISCORD_MEMBERS': {
       if (!session.isNarrator) throw new Error('No autorizado');
-      getGuildMembers(true).then(members => sendTo(ws, 'DISCORD_MEMBERS', { members }));
+      getGuildMembers(true).then(members => {
+        sendTo(ws, 'DISCORD_MEMBERS', { members });
+        if (getConfig().narratorRoleId) {
+          syncNarratorsFromRole().then(synced => {
+            if (synced) {
+              const g = getGame(MAIN_GAME_ID);
+              g.narratorDiscordIds = getBotConfig().narratorUserIds;
+              broadcastGame();
+            }
+          }).catch(() => {});
+        }
+      });
       break;
     }
 
@@ -1337,6 +1361,17 @@ function handleMessage(type, payload, session) {
         if (p.channels && typeof p.channels === 'object') setChannelIds(p.channels, actor);
         if (Array.isArray(p.narratorUserIds)) {
           setNarratorIds(p.narratorUserIds).then(() => broadcastGame()).catch(() => {});
+        }
+        if (typeof p.narratorRoleId === 'string' && p.narratorRoleId.trim()) {
+          setNarratorRoleId(p.narratorRoleId, actor);
+          // Quien tenga el rol pasa a narrador automáticamente.
+          syncNarratorsFromRole().then(synced => {
+            if (synced) {
+              const g = getGame(MAIN_GAME_ID);
+              g.narratorDiscordIds = getBotConfig().narratorUserIds;
+              broadcastGame();
+            }
+          }).catch(() => {});
         }
         if (Array.isArray(p.adminUserIds)) setAdminUserIds(p.adminUserIds, actor);
         if (typeof p.adminPassword === 'string' && p.adminPassword.trim()) {

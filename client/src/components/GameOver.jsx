@@ -27,12 +27,12 @@ export default function GameOver({ mock }) {
     const node = gameOverRef.current;
     if (!node) return;
     const t = setTimeout(() => {
-      html2canvas(node, { backgroundColor: null, scale: 2, logging: false })
+      html2canvas(node, { backgroundColor: null, scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
         .then(canvas => {
           sentRef.current = true;
           send('GAME_OVER_SHOT', { imageDataUrl: canvas.toDataURL('image/png') });
         })
-        .catch(() => {});
+        .catch(err => console.error('[GameOver] captura falló:', err));
     }, 350);
     return () => clearTimeout(t);
   }, [effWinner, effIsNarrator, send]);

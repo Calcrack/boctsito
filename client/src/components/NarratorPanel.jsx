@@ -112,17 +112,22 @@ export default function NarratorPanel() {
   // de partida, roles al azar, ganador al azar) y monta GameOver para que capture
   // y envíe la imagen al canal configurado. Sirve para validar el envío sin jugar.
   const makeTestShot = () => {
-    const boctRoleId = game?.config?.boctRoleId || '1499987378755076218';
-    const members = discordMembers.filter(m => Array.isArray(m.roles) && m.roles.includes(boctRoleId));
-    const pool = members.length ? members : discordMembers;
-    if (!pool.length) { send('REFRESH_DISCORD_MEMBERS', {}); return; }
-    const count = Math.min(pool.length, Math.max(5, Math.min(12, pool.length)));
+    // Si no hay miembros de Discord cacheados, usa jugadores ficticios para que
+    // la prueba siempre genere una imagen.
+    let pool = (state.config?.boctRoleId
+      ? discordMembers.filter(m => Array.isArray(m.roles) && m.roles.includes(state.config.boctRoleId))
+      : []);
+    if (!pool.length) pool = discordMembers;
+    if (!pool.length) {
+      pool = Array.from({ length: 6 }, (_, i) => ({ id: 'fake' + i, displayName: 'Jugador ' + (i + 1), tag: null, avatar: null }));
+    }
+    const count = pool.length;
     const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, count);
-    const roleIds = Object.keys(ALL_ROLES);
+    const roleIds = Object.keys(ROLE_BY_ID);
     const assigned = shuffled.map((m, i) => ({
       id: m.id || 'p' + i,
-      name: m.displayName || m.tag || m.id,
-      avatar: m.avatar || null,
+      name: m.displayName || m.tag || m.id || 'Jugador ' + (i + 1),
+      avatar: null, // sin avatar para que html2canvas no falle por CORS en la prueba
       role: roleIds[Math.floor(Math.random() * roleIds.length)],
       alive: Math.random() > 0.3,
     }));
@@ -132,7 +137,7 @@ export default function NarratorPanel() {
       winReason: winner === 'good' ? 'Prueba: El Bien declara victoria' : 'Prueba: El Mal declara victoria',
       players: assigned.map(p => ({
         ...p,
-        alignment: (ALL_ROLES[p.role]?.alignment) || 'good',
+        alignment: ROLE_BY_ID[p.role]?.alignment || (ROLE_BY_ID[p.role]?.type === 'demon' || ROLE_BY_ID[p.role]?.type === 'minion' ? 'evil' : 'good'),
         drunkAs: null,
         isSmokeScreen: false,
       })),

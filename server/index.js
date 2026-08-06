@@ -990,6 +990,8 @@ async function handleMessage(type, payload, session) {
       const result = await sendGameOverImage(imageDataUrl);
       if (!result.ok) {
         sendTo(ws, 'ERROR', { message: result.error });
+      } else {
+        sendTo(ws, 'NOTIFICATION', { message: '📸 Imagen de fin de partida enviada al canal de Discord' });
       }
       break;
     }

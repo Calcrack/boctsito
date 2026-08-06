@@ -24,13 +24,22 @@ export default function GameOver() {
   const captureRef = useRef(null);
   const screenshotSent = useRef(false);
 
+  console.log('[GameOver] RENDER', { phase: game?.phase, winner: game?.winner });
+
   useEffect(() => {
-    if (!captureRef.current || screenshotSent.current || !game?.winner) return;
+    console.log('[GameOver] useEffect fired', { hasGame: !!game?.winner, hasRef: !!captureRef.current, sent: screenshotSent.current });
+    if (!game?.winner || !captureRef.current || screenshotSent.current) return;
     screenshotSent.current = true;
-    html2canvas(captureRef.current, { backgroundColor: null, useCORS: true }).then(canvas => {
-      send('SCREENSHOT_GAME_OVER', { image: canvas.toDataURL('image/png') });
-    }).catch(err => console.error('[GameOver] html2canvas error:', err));
-  }, [send, game?.winner]);
+    const timer = setTimeout(() => {
+      if (!captureRef.current) return;
+      console.log('[GameOver] Capturando con html2canvas...');
+      html2canvas(captureRef.current, { backgroundColor: '#07070a', useCORS: true, logging: true }).then(canvas => {
+        console.log('[GameOver] Screenshot tomado, enviando al server...');
+        send('SCREENSHOT_GAME_OVER', { image: canvas.toDataURL('image/png') });
+      }).catch(err => console.error('[GameOver] html2canvas error:', err));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [game?.winner, send]);
 
   if (!game) return null;
   const { winner, players = [], winReason } = game;
@@ -95,7 +104,14 @@ export default function GameOver() {
         ? 'radial-gradient(ellipse at center top, #080f1a 0%, #07070a 70%)'
         : 'radial-gradient(ellipse at center top, #1a0608 0%, #07070a 70%)',
     }}>
-      <div ref={captureRef} style={{ maxWidth: 720, width: '100%' }}>
+      <div ref={captureRef} style={{
+        maxWidth: 720,
+        width: '100%',
+        background: COLORS.ink900,
+        borderRadius: 12,
+        padding: 32,
+        border: '1px solid rgba(201,162,74,0.15)',
+      }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ fontSize: 60, color: isGoodWin ? COLORS.good : COLORS.bloodHi, marginBottom: 16 }}>
             {isGoodWin ? '✦' : '☠'}
@@ -108,7 +124,7 @@ export default function GameOver() {
               {winReason}
             </p>
           )}
-          <div className="flourish-divider" style={{ maxWidth: 200, margin: '4px auto 0' }}>✦</div>
+          <div style={{ maxWidth: 200, margin: '4px auto 0', textAlign: 'center', color: COLORS.gold, fontSize: 14, opacity: 0.6 }}>✦</div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>

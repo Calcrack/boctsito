@@ -18,8 +18,16 @@
       "723204863873384469"
     ],
     "gameOverChannelId": "1467694637190877234",
-    "narratorRoleId": "1499987378755076218"
+    "narratorRoleId": "1499987378755076218",
+    "locationNames": {
+      "PLAZA": "Plaza",
+      "MERCADO": "Mercado",
+      "TABERNA": "Taberna",
+      "CEMENTERIO": "Cementerio",
+      "BOSQUE": "Bosque",
+      "CONFESIONARIO": "Confesionario"
+    }
   },
-  "updatedAt": 1786056387212,
-  "updatedBy": "setNarratorIds"
+  "updatedAt": 1786056747976,
+  "updatedBy": null
 }

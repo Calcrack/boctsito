@@ -263,6 +263,30 @@ async function setPlazaChannelPermission(allow) {
   }
 }
 
+// Renombra los canales de voz REALES de Discord según los nombres de la
+// campaña activa (por configuración). Se reutilizan los canales ya existentes,
+// solo se les cambia el nombre. `names` = mapa key → nombre (PLAZA, MERCADO…).
+async function renameLocationChannels(names = {}) {
+  if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
+  const out = [];
+  for (const [key, name] of Object.entries(names)) {
+    if (!name) continue;
+    const cid = effectiveChannels()[key];
+    if (!cid) continue;
+    const channel = guild.channels.cache.get(cid);
+    if (!channel) continue;
+    if (channel.name === name) continue;
+    try {
+      await channel.setName(name);
+      out.push(key);
+    } catch (err) {
+      console.error(`[Discord] renameLocationChannel ${key}:`, err.message);
+    }
+  }
+  if (out.length) console.log('[Discord] Canales renombrados:', out.join(', '));
+  return { ok: true, renamed: out };
+}
+
 async function sendDM(discordUserId, message) {
   if (!isReady || !client) return false;
   try {
@@ -295,7 +319,7 @@ function getBotConfig() {
 
 module.exports = {
   initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
-  sendDM, getBotStatus, getBotConfig,
+  sendDM, getBotStatus, getBotConfig, renameLocationChannels,
   getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
   setChannelIds: (channels, actor) => updateConfig({ channels }, actor),
   setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),

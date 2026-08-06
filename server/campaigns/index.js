@@ -1,4 +1,5 @@
 // ── Registro de campañas (servidor) ────────────────────────────────
+const { getCampaignLocationNames } = require('../configStore');
 const troubleBrewing = require('./troubleBrewing');
 const badMoonRising  = require('./badMoonRising');
 const sectsViolets   = require('./sectsViolets');
@@ -74,7 +75,10 @@ function registerCampaign(campaign) {
 function listCampaigns() {
   return Object.values(CAMPAIGNS)
     .filter(c => c.isCustom || !HIDDEN_CAMPAIGN_IDS.has(c.id))
-    .map(c => ({ id: c.id, name: c.name, isCustom: !!c.isCustom, author: c.author || null }));
+    .map(c => ({
+      id: c.id, name: c.name, isCustom: !!c.isCustom, author: c.author || null,
+      locationNames: getCampaignLocationNames(c.id),
+    }));
 }
 
 module.exports = {

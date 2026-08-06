@@ -31,6 +31,10 @@ const DEFAULTS = {
     BOSQUE: 'Bosque',
     CONFESIONARIO: 'Confesionario',
   },
+  // Nombres de los emplazamientos POR CAMPAÑA (sobreescriben locationNames
+  // cuando esa campaña está activa). Custom y por defecto: cada campaña lleva
+  // su propio nombre. Las 3 por defecto cogen estos valores si no se editan.
+  campaignLocationNames: {},
 };
 
 let store = null;
@@ -105,4 +109,26 @@ function setLocationNames(names, actor) {
   return updateConfig({ locationNames: clean }, actor);
 }
 
-module.exports = { initConfigStore, getConfig, updateConfig, setLocationNames, DEFAULTS };
+// Nombres de los emplazamientos de UNA campaña concreta: base = los del
+// default de config (Plaza, Mercado, Taberna…) + overrides de esa campaña.
+function getCampaignLocationNames(campaignId) {
+  const over = (store?.overrides?.campaignLocationNames || {})[campaignId] || {};
+  return { ...DEFAULTS.locationNames, ...over };
+}
+
+function setCampaignLocationNames(campaignId, names, actor) {
+  const clean = {};
+  for (const key of Object.keys(DEFAULTS.locationNames)) {
+    const v = (names || {})[key];
+    if (typeof v === 'string' && v.trim()) clean[key] = v.trim().slice(0, 40);
+  }
+  const o = store.overrides;
+  if (!o.campaignLocationNames || typeof o.campaignLocationNames !== 'object') o.campaignLocationNames = {};
+  o.campaignLocationNames[campaignId] = { ...(o.campaignLocationNames[campaignId] || {}), ...clean };
+  store.updatedAt = Date.now();
+  store.updatedBy = actor || null;
+  persist();
+  return getCampaignLocationNames(campaignId);
+}
+
+module.exports = { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, DEFAULTS };

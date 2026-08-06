@@ -245,12 +245,15 @@ export default function NarratorPanel() {
                         }}>
                         {active ? '◆ ' : ''}{c.name}{c.isCustom ? ' ✦' : ''}
                       </button>
-                      {c.isCustom && !locked && (
+                      {!locked && (
                         <>
                           <button onClick={() => setEditCampaign(c)}
-                            className="btn-night" style={{ fontSize: 10, color: 'var(--gold)' }} title="Editar campaña">✎</button>
-                          <button onClick={() => { if (confirm(`¿Eliminar campaña "${c.name}"?`)) send('DELETE_CAMPAIGN', { campaignId: c.id }); }}
-                            className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }} title="Eliminar">✕</button>
+                            className="btn-night" style={{ fontSize: 10, color: 'var(--gold)' }}
+                            title={c.isCustom ? 'Editar campaña' : 'Editar nombre de los canales'}>✎</button>
+                          {c.isCustom && (
+                            <button onClick={() => { if (confirm(`¿Eliminar campaña "${c.name}"?`)) send('DELETE_CAMPAIGN', { campaignId: c.id }); }}
+                              className="btn-night" style={{ fontSize: 10, color: 'var(--blood-hi)' }} title="Eliminar">✕</button>
+                          )}
                         </>
                       )}
                     </div>
@@ -263,7 +266,6 @@ export default function NarratorPanel() {
                 </p>
               )}
               {phase === 'lobby' && <ImportCampaignBox send={send} importResult={importResult} />}
-              {phase === 'lobby' && <LocationNamesEditor send={send} />}
             </div>
 
             {/* Discord member quick-picker */}
@@ -556,8 +558,9 @@ function StatusLog({ log }) {
 }
 
 // ── Menú ⋯ — todo lo que no es narrar ────────────────────────────────
-// Editar una campaña ya importada (punto 7): cambia nombre y/o reparto, sin
-// romper la partida activa (el id se conserva en el servidor).
+// Editar una campaña (punto 7). Personalizada: nombre, reparto (JSON) y nombres
+// de canales. Oficial: SOLO nombres de canales (nombre y JSON bloqueados).
+// El id se conserva en el servidor para no romper la partida activa.
 function EditCampaignModal({ campaign, send, onClose }) {
   const roles = campaign?.roles || {};
   const seed = [
@@ -569,13 +572,14 @@ function EditCampaignModal({ campaign, send, onClose }) {
   ];
   const [name, setName] = useState(campaign?.name || '');
   const [json, setJson] = useState(JSON.stringify(seed, null, 1));
+  const [locationNames, setLocationNames] = useState({ ...LOCATION_DEFAULTS, ...(campaign?.locationNames || {}) });
 
   const save = () => {
     const hasJson = /"[a-zA-Z]/.test(json || '');
     send('EDIT_CAMPAIGN', {
       campaignId: campaign.id,
-      name,
-      ...(hasJson ? { json } : {}),
+      ...(campaign.isCustom ? { name, ...(hasJson ? { json } : {}) } : {}),
+      locationNames,
     });
     onClose();
   };
@@ -589,15 +593,26 @@ function EditCampaignModal({ campaign, send, onClose }) {
           <button onClick={onClose} className="nx-btn sm">✕ Cerrar</button>
         </div>
         <div className="nx-menu-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
-          <div>
-            <p className="panel-label" style={{ margin: '0 0 4px' }}>Nombre</p>
-            <input value={name} onChange={e => setName(e.target.value)}
-              style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
-          </div>
+          {campaign.isCustom ? (
+            <>
+              <div>
+                <p className="panel-label" style={{ margin: '0 0 4px' }}>Nombre</p>
+                <input value={name} onChange={e => setName(e.target.value)}
+                  style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <p className="panel-label" style={{ margin: '0 0 4px' }}>Script (JSON). Dejar vacío = solo cambio de nombre</p>
+                <textarea value={json} onChange={e => setJson(e.target.value)} rows={12}
+                  style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-100)', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+            </>
+          ) : (
+            <p className="nx-hint" style={{ fontStyle: 'italic' }}>
+              Campaña oficial: solo deja cambiar el nombre de los canales. El nombre y el guion no se pueden editar.
+            </p>
+          )}
           <div style={{ marginTop: 10 }}>
-            <p className="panel-label" style={{ margin: '0 0 4px' }}>Script (JSON). Dejar vacío = solo cambio de nombre</p>
-            <textarea value={json} onChange={e => setJson(e.target.value)} rows={12}
-              style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-100)', resize: 'vertical', boxSizing: 'border-box' }} />
+            <LocationNamesFields values={locationNames} onChange={(k, v) => setLocationNames(prev => ({ ...prev, [k]: v }))} />
           </div>
           <button onClick={save} className="btn-action primary" style={{ width: '100%', marginTop: 10, fontSize: 12, padding: '8px 0' }}>
             Guardar cambios
@@ -1086,44 +1101,28 @@ function SuspicionMap({ players }) {
 }
 
 
-// Nombres de los emplazamientos (puntos 2 y 6): viven en la config del server y
-// se muestran en la mesa, en los canales y en los límites. Este editor va justo
-// debajo de donde se pega el JSON de la campaña, como pedía el spec.
+// Nombres de los emplazamientos POR CAMPAÑA (puntos 2 y 6): cada campaña lleva
+// su propia lista de nombres, que se aplican (web + canales de voz reales de
+// Discord) al elegirla. Campos reutilizables en el import y en la edición.
 const LOCATION_KEYS = ['PLAZA', 'MERCADO', 'TABERNA', 'CEMENTERIO', 'BOSQUE'];
 const LOCATION_DEFAULTS = { PLAZA: 'Plaza', MERCADO: 'Mercado', TABERNA: 'Taberna', CEMENTERIO: 'Cementerio', BOSQUE: 'Bosque' };
 
-function LocationNamesEditor({ send }) {
-  const { state } = useGame();
-  const saved = state.config?.locationNames || {};
-  const [vals, setVals] = useState(() => {
-    const o = {};
-    LOCATION_KEYS.forEach(k => { o[k] = saved[k] || LOCATION_DEFAULTS[k] || k; });
-    return o;
-  });
-  // Sincroniza si cambia la config desde otra pestaña (solo si aún no editamos).
-  const dirty = LOCATION_KEYS.some(k => vals[k] && vals[k] !== (saved[k] || LOCATION_DEFAULTS[k] || k));
-
+function LocationNamesFields({ values, onChange }) {
   return (
-    <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(0,0,0,0.25)', border: 'var(--hairline-bone)', borderRadius: 4 }}>
-      <p className="panel-label" style={{ margin: '0 0 6px' }}>🗺 Nombre de los emplazamientos</p>
+    <div>
+      <p className="panel-label" style={{ margin: '0 0 4px' }}>🗺 Nombre de los emplazamientos</p>
       <p className="nx-hint" style={{ margin: '0 0 8px' }}>
-        Así ven los jugadores los canales en la web. El primero (Plaza) siempre es el punto de encuentro inicial.
+        Así se renombran los canales de voz y se muestran en la web con esta campaña. Son por campaña.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {LOCATION_KEYS.map(k => (
           <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--bone-400)', width: 74, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{k}</span>
-            <input value={vals[k] || ''} onChange={e => setVals(v => ({ ...v, [k]: e.target.value }))}
+            <input value={values[k] || ''} onChange={e => onChange(k, e.target.value)}
               style={{ flex: 1, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '4px 8px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
           </div>
         ))}
       </div>
-      <button onClick={() => send('SET_LOCATION_NAMES', { names: vals })}
-        disabled={!dirty}
-        className="btn-action primary"
-        style={{ width: '100%', marginTop: 8, fontSize: 11, padding: '6px 0', opacity: dirty ? 1 : 0.4 }}>
-        Guardar nombres
-      </button>
     </div>
   );
 }
@@ -1133,10 +1132,11 @@ function ImportCampaignBox({ send, importResult }) {
   const [open, setOpen] = useState(false);
   const [json, setJson] = useState('');
   const [name, setName] = useState('');
+  const [locationNames, setLocationNames] = useState({ ...LOCATION_DEFAULTS });
 
   const doImport = () => {
     if (!json.trim()) return;
-    send('IMPORT_CAMPAIGN', { json: json.trim(), name: name.trim() || undefined });
+    send('IMPORT_CAMPAIGN', { json: json.trim(), name: name.trim() || undefined, locationNames });
   };
 
   return (
@@ -1150,8 +1150,9 @@ function ImportCampaignBox({ send, importResult }) {
             style={{ width: '100%', marginBottom: 6, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '5px 7px', fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-100)' }} />
           <textarea value={json} onChange={e => setJson(e.target.value)} rows={5}
             placeholder='Pega el script: [{"id":"_meta","name":"..."},"washerwoman",...]'
-            style={{ width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-100)', resize: 'vertical' }} />
-          <button onClick={doImport} disabled={!json.trim()} className="btn-action primary" style={{ width: '100%', marginTop: 6, opacity: json.trim() ? 1 : 0.4 }}>
+            style={{ width: '100%', marginBottom: 6, background: 'var(--ink-700)', border: 'var(--hairline-bone)', borderRadius: 2, padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--bone-100)', resize: 'vertical' }} />
+          <LocationNamesFields values={locationNames} onChange={(k, v) => setLocationNames(prev => ({ ...prev, [k]: v }))} />
+          <button onClick={doImport} disabled={!json.trim()} className="btn-action primary" style={{ width: '100%', marginTop: 8, opacity: json.trim() ? 1 : 0.4 }}>
             Importar
           </button>
           {importResult && (

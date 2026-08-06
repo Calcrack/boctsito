@@ -19,8 +19,8 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds } = require('./discordBot');
-const { initConfigStore, getConfig, setLocationNames } = require('./configStore');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels } = require('./discordBot');
+const { initConfigStore, getConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -405,6 +405,12 @@ function handleMessage(type, payload, session) {
       const cid = payload.campaignId;
       if (!CAMPAIGNS[cid]) throw new Error('Campaña desconocida');
       game.campaignId = cid;
+      // Ya no hay editor global de emplazamientos: cada campaña lleva su propio
+      // nombre. Al elegirla aplicamos sus nombres a la config (para la web) y
+      // renombramos los canales de voz REALES de Discord.
+      const campaignNames = getCampaignLocationNames(cid);
+      setLocationNames(campaignNames, currentActorId(session));
+      renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
       // Los roles de la campaña anterior ya no aplican: limpia el montaje.
       game.setup = { locked: false, seatOrder: game.players.map(p => p.id), assignments: {}, decisions: [] };
       game.setupResolved = null;
@@ -424,6 +430,9 @@ function handleMessage(type, payload, session) {
         break;
       }
       registerCampaign(campaign);
+      if (payload.locationNames && typeof payload.locationNames === 'object') {
+        setCampaignLocationNames(campaign.id, payload.locationNames, currentActorId(session));
+      }
       saveCustomCampaign(campaign).catch(e => console.error('[Campaigns] save error:', e.message));
       sendTo(ws, 'IMPORT_RESULT', {
         ok: true, id: campaign.id, name: campaign.name,
@@ -456,12 +465,30 @@ function handleMessage(type, payload, session) {
 
     case 'EDIT_CAMPAIGN': {
       // Punto 7: editar una campaña ya importada (cambiar su JSON/reparto o su
-      // nombre). Mantiene el MISMO id para no romper la partida activa.
+      // nombre) y, desde el nuevo flujo, sus NOMBRES DE EMPLAZAMIENTO. Mantiene
+      // el MISMO id para no romper la partida activa. Las campañas oficiales
+      // solo dejan editar los nombres (JSON y nombre quedan bloqueados).
       if (!session.isNarrator) throw new Error('No autorizado');
       const eid = payload.campaignId;
       const existing = CAMPAIGNS[eid];
-      if (!existing || !existing.isCustom) {
-        sendTo(ws, 'IMPORT_RESULT', { ok: false, error: 'Campaña no encontrada o no editable' });
+      if (!existing) {
+        sendTo(ws, 'IMPORT_RESULT', { ok: false, error: 'Campaña no encontrada' });
+        break;
+      }
+      // Nombres de emplazamientos: editables en cualquier campaña (oficial o
+      // personalizada). Si es la campaña activa, se reaplican en caliente.
+      if (payload.locationNames && typeof payload.locationNames === 'object') {
+        setCampaignLocationNames(eid, payload.locationNames, currentActorId(session));
+        if (getGame(MAIN_GAME_ID).campaignId === eid) {
+          const activeNames = getCampaignLocationNames(eid);
+          setLocationNames(activeNames, currentActorId(session));
+          renameLocationChannels(activeNames).catch(e => console.error('[Discord] rename error:', e.message));
+        }
+      }
+      if (!existing.isCustom) {
+        sendTo(ws, 'IMPORT_RESULT', { ok: true, id: eid, name: existing.name });
+        sendTo(ws, 'CAMPAIGN_LIST', { campaigns: listCampaigns() });
+        broadcastGame();
         break;
       }
       let updated;

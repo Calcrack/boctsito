@@ -45,7 +45,7 @@ export default function GameOver() {
       borderRadius: 6,
       padding: '16px 18px',
     }}>
-      <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: isGood ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 12, textAlign: 'center' }}>
+      <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: isGood ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 12 }}>
         {label}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -57,7 +57,7 @@ export default function GameOver() {
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: p.alive ? 1 : 0.55 }}>
               <RoleIcon role={role} size={30} radius={4} />
               <PlayerChip name={p.name} avatar={p.avatar} size="lg" />
-              <div style={{ textAlign: 'left' }}>
+              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-400)', display: 'block' }}>
                   {role?.name}
                 </span>

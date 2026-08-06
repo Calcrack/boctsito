@@ -19,7 +19,7 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage, sendGameOverPost } = require('./discordBot');
 const { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
@@ -987,11 +987,29 @@ async function handleMessage(type, payload, session) {
       if (!session.isNarrator) throw new Error('No autorizado');
       const imageDataUrl = payload.imageDataUrl;
       if (!imageDataUrl) throw new Error('Imagen vacía');
-      const result = await sendGameOverImage(imageDataUrl);
+      const result = await sendGameOverImage(imageDataUrl, payload.caption || null);
       if (!result.ok) {
         sendTo(ws, 'ERROR', { message: result.error });
       } else {
         sendTo(ws, 'NOTIFICATION', { message: '📸 Imagen de fin de partida enviada al canal de Discord' });
+      }
+      break;
+    }
+
+    case 'GAME_OVER_TEST': {
+      // 🧪 Prueba: envía al canal configurado un mensaje "test", una imagen al
+      // azar generada en el servidor y la captura del ganador enviada por el
+      // cliente. Valida el canal sin necesidad de jugar una partida completa.
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const randomImage = payload.randomImage || null;
+      const winnerImage = payload.winnerImage || null;
+      const images = [randomImage, winnerImage].filter(Boolean);
+      if (!images.length) throw new Error('Sin imágenes para enviar');
+      const result = await sendGameOverPost({ text: '🧪 TEST — prueba de fin de partida', images });
+      if (!result.ok) {
+        sendTo(ws, 'ERROR', { message: result.error });
+      } else {
+        sendTo(ws, 'NOTIFICATION', { message: '🧪 Mensaje de prueba enviado al canal de Discord' });
       }
       break;
     }

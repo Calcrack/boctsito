@@ -110,8 +110,28 @@ export default function NarratorPanel() {
 
   // 🧪 Prueba temporal: genera un fin de partida aleatorio (jugadores con el rol
   // de partida, roles al azar, ganador al azar) y monta GameOver para que capture
-  // y envíe la imagen al canal configurado. Sirve para validar el envío sin jugar.
+  // y envíe la imagen al canal configurado. Incluye una imagen aleatoria para
+  // validar el envío sin jugar.
+  const [randomTestImage, setRandomTestImage] = useState(null);
+
   const makeTestShot = () => {
+    // Genera una imagen al azar (canvas) que se envía junto a la del ganador.
+    const c = document.createElement('canvas');
+    c.width = 800; c.height = 300;
+    const ctx = c.getContext('2d');
+    const hue = Math.floor(Math.random() * 360);
+    const grad = ctx.createLinearGradient(0, 0, c.width, c.height);
+    grad.addColorStop(0, `hsl(${hue}, 60%, 20%)`);
+    grad.addColorStop(1, `hsl(${(hue + 80) % 360}, 70%, 35%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = 'bold 42px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('PRUEBA TEST', c.width / 2, c.height / 2);
+    const randDataUrl = c.toDataURL('image/png');
+    setRandomTestImage(randDataUrl);
+
     // Si no hay miembros de Discord cacheados, usa jugadores ficticios para que
     // la prueba siempre genere una imagen.
     let pool = (state.config?.boctRoleId
@@ -143,6 +163,13 @@ export default function NarratorPanel() {
       })),
     });
   };
+
+  // Una vez que GameOver mock captura la imagen del ganador, se envía el mensaje
+  // de prueba con la imagen aleatoria + la del ganador.
+  const onTestCaptured = useCallback((winnerDataUrl) => {
+    if (!randomTestImage) return;
+    send('GAME_OVER_TEST', { randomImage: randomTestImage, winnerImage: winnerDataUrl });
+  }, [randomTestImage, send]);
 
   const guideRef  = useRef(null);   // mando de la Guía (siguiente / anterior / ir a)
   const searchRef = useRef(null);   // buscador del roster
@@ -257,7 +284,7 @@ export default function NarratorPanel() {
       {/* 🧪 Prueba: pantalla de fin de partida falsa para validar el envío al canal */}
       {testShot && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }} onClick={() => setTestShot(null)}>
-          <GameOver mock={testShot} />
+          <GameOver mock={testShot} onCaptured={onTestCaptured} />
           <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 10 }}>
             <button onClick={() => setTestShot(null)} className="nx-btn sm">✕ Cerrar prueba</button>
           </div>
@@ -1542,6 +1569,8 @@ function AdminPanel({ send }) {
   const [form, setForm] = useState(null);
   const [pw, setPw] = useState('');
   const [failed, setFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(null);
 
   // Solo pide la config si ya pasamos la contraseña de admin.
   useEffect(() => {
@@ -1578,6 +1607,8 @@ function AdminPanel({ send }) {
 
   const save = () => {
     if (!form) return;
+    setSaving(true);
+    setSavedMsg(null);
     send('SET_CONFIG', {
       guildId: form.guildId,
       nightCategoryId: form.nightCategoryId,
@@ -1589,6 +1620,16 @@ function AdminPanel({ send }) {
       channels: form.channels,
     });
   };
+
+  // Feedback al guardar: el server responde CONFIG_SAVED (actualiza cfg) → mostramos
+  // "✓ Guardado" durante unos segundos. Si no llega confirmación, el error sale solo.
+  useEffect(() => {
+    if (!saving) return;
+    setSaving(false);
+    setSavedMsg('✓ Configuración guardada y sincronizada');
+    const t = setTimeout(() => setSavedMsg(null), 3500);
+    return () => clearTimeout(t);
+  }, [cfg, saving]);
 
   const field = {
     width: '100%', background: 'var(--ink-700)', border: 'var(--hairline-bone)',
@@ -1692,6 +1733,16 @@ function AdminPanel({ send }) {
             <button onClick={save} className="btn-action primary" style={{ fontSize: 12, padding: '8px 0' }}>
               Guardar configuración
             </button>
+            {savedMsg && (
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--good)', textAlign: 'center', margin: 0 }}>
+                {savedMsg}
+              </p>
+            )}
+            {state.error && state.error.includes('contest') && (
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--blood-hi)', textAlign: 'center', margin: 0 }}>
+                No autorizado para guardar.
+              </p>
+            )}
           </div>
         )}
       </div>

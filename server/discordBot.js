@@ -381,22 +381,34 @@ async function sendDM(discordUserId, message) {
   }
 }
 
-// Publica una imagen (dataUrl PNG) de la pantalla de fin de partida en el canal
-// de Discord configurado. Devuelve { ok } o { ok: false, error }.
-async function sendGameOverImage(imageDataUrl) {
+// Publica en el canal configurado los mensajes de fin de partida. Acepta un
+// texto opcional (caption) y una o varias imágenes (dataUrl PNG). Devuelve
+// { ok } o { ok: false, error }.
+async function sendGameOverImage(imageDataUrl, caption) {
+  return sendGameOverPost({ images: imageDataUrl ? [imageDataUrl] : [], text: caption });
+}
+
+// Variante genérica: envía un texto y un listado de imágenes al canal.
+async function sendGameOverPost({ text, images }) {
   if (!isReady || !client) return { ok: false, error: 'Bot no conectado' };
   const channelId = getConfig().gameOverChannelId;
   if (!channelId) return { ok: false, error: 'No hay canal de fin de partida configurado' };
   try {
     const channel = client.channels.cache.get(channelId);
     if (!channel || !channel.isTextBased()) return { ok: false, error: 'Canal no encontrado o no es de texto' };
-    const base64 = String(imageDataUrl || '').replace(/^data:image\/\w+;base64,/, '');
-    if (!base64) return { ok: false, error: 'Imagen vacía' };
-    const attachment = new AttachmentBuilder(Buffer.from(base64, 'base64'), { name: 'fin-de-partida.png' });
-    await channel.send({ files: [attachment] });
+    const files = (images || [])
+      .map((d, i) => {
+        const base64 = String(d || '').replace(/^data:image\/\w+;base64,/, '');
+        return base64 ? new AttachmentBuilder(Buffer.from(base64, 'base64'), { name: `fin-partida-${i + 1}.png` }) : null;
+      })
+      .filter(Boolean);
+    if (!files.length) return { ok: false, error: 'Imagen vacía' };
+    const payload = { files };
+    if (text) payload.content = text;
+    await channel.send(payload);
     return { ok: true };
   } catch (err) {
-    console.error('[Discord] sendGameOverImage error:', err.message);
+    console.error('[Discord] sendGameOverPost error:', err.message);
     return { ok: false, error: err.message };
   }
 }
@@ -425,7 +437,7 @@ module.exports = {
   initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
   deletePlayerRoom, deleteAllNightRooms, setReadyCallback,
   sendDM, getBotStatus, getBotConfig, renameLocationChannels,
-  sendGameOverImage,
+  sendGameOverImage, sendGameOverPost,
   getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
   setChannelIds: (channels, actor) => updateConfig({ channels }, actor),
   setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),

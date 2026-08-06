@@ -12,12 +12,12 @@ const https = require('https');
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
 // Persistencia de la config en GitHub (igual que rankings/campañas): Render es
-// efímero, así que los overrides se guardan en la branch config-data para que
+// efímero, así que los overrides se guardan en la branch rankings-data para que
 // sobrevivan a los reinicios. Si no hay credenciales, cae al archivo local.
 const GITHUB_TOKEN     = process.env.GITHUB_TOKEN;
 const GITHUB_REPO      = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH = process.env.GITHUB_CONFIG_PATH || 'server/config.json';
-const GITHUB_BRANCH    = process.env.GITHUB_BRANCH    || 'config-data';
+const GITHUB_BRANCH    = process.env.GITHUB_BRANCH    || 'rankings-data';
 
 // Contraseña de admin NO se guarda en claro: solo su SHA-256. El valor en
 // texto de este hash por defecto es "B0ct-Adm1n-0806!" (cámbialo con el env
@@ -95,8 +95,28 @@ function _ghRequest(method, apiPath, body) {
   });
 }
 
+async function _ensureBranch() {
+  const check = await _ghRequest('GET', `/repos/${GITHUB_REPO}/git/refs/heads/${GITHUB_BRANCH}`, null);
+  if (check.status === 200) return true;
+  if (check.status !== 404) return false;
+  // La branch no existe: crearla desde main (igual que rankings).
+  const main = await _ghRequest('GET', `/repos/${GITHUB_REPO}/git/refs/heads/main`, null);
+  if (main.status !== 200) return false;
+  const create = await _ghRequest('POST', `/repos/${GITHUB_REPO}/git/refs`, {
+    ref: `refs/heads/${GITHUB_BRANCH}`,
+    sha: main.body.object.sha,
+  });
+  if (create.status === 201) {
+    console.log(`[Config] Branch '${GITHUB_BRANCH}' creado`);
+    return true;
+  }
+  console.error('[Config] No se pudo crear branch:', create.status);
+  return false;
+}
+
 async function _pushToGithub(config) {
   if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  await _ensureBranch();
   const content = Buffer.from(JSON.stringify(config, null, 2), 'utf8').toString('base64');
   const apiPath = `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
   if (!_ghSha) {

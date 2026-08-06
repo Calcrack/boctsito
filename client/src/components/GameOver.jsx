@@ -5,7 +5,7 @@ import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import RoleIcon from './RoleIcon';
 
-export default function GameOver({ mock }) {
+export default function GameOver({ mock, onCaptured }) {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
 
@@ -30,12 +30,14 @@ export default function GameOver({ mock }) {
       html2canvas(node, { backgroundColor: null, scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
         .then(canvas => {
           sentRef.current = true;
-          send('GAME_OVER_SHOT', { imageDataUrl: canvas.toDataURL('image/png') });
+          const dataUrl = canvas.toDataURL('image/png');
+          if (mock && onCaptured) onCaptured(dataUrl);
+          else send('GAME_OVER_SHOT', { imageDataUrl: dataUrl, caption: mock ? '🧪 TEST' : null });
         })
         .catch(err => console.error('[GameOver] captura falló:', err));
     }, 350);
     return () => clearTimeout(t);
-  }, [effWinner, effIsNarrator, send]);
+  }, [effWinner, effIsNarrator, send, mock, onCaptured]);
 
   if (mock) {
     if (!mock.winner) return null;

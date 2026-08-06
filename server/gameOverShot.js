@@ -2,7 +2,8 @@
 // El servidor renderiza su propio HTML de la pantalla de fin de partida
 // (idéntico en colores/tipografía al cliente) y lanza Chromium headless para
 // obtener el PNG. Devuelve un data URL para enviar al canal de Discord.
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const Chromium = require('@sparticuz/chromium').default;
 const { ROLES } = require('./roles');
 
 // Paleta & tipografías replicadas de theme.css del cliente.
@@ -24,10 +25,20 @@ let browserPromise = null;
 
 async function getBrowser() {
   if (!browserPromise) {
-    browserPromise = puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
+    browserPromise = (async () => {
+      // En Render el binario de Chromium viene en node_modules (@sparticuz/chromium).
+      // En local (Windows) se puede apuntar a un Chrome instalado con la variable
+      // PUPPETEER_EXECUTABLE_PATH para probar el envío sin desplegar.
+      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || (await Chromium.executablePath().catch(() => null));
+      const args = process.env.PUPPETEER_EXECUTABLE_PATH
+        ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        : Chromium.args;
+      return puppeteer.launch({
+        headless: process.env.PUPPETEER_EXECUTABLE_PATH ? 'new' : 'shell',
+        executablePath,
+        args,
+      });
+    })();
   }
   return browserPromise;
 }

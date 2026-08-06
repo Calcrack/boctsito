@@ -191,8 +191,8 @@ function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activ
       {/* Overlays de muerte: tumba y moneda superpuestas ENCIMA del medallón,
           no recortadas por él (caen sobre el jugador al morir). */}
       {isDead && (
-        <div className="seat-overlays">
-          <img key={deathKey} src="/assets/ficha-muerto.png" alt="" className="death-shroud"
+        <div key={deathKey} className="seat-overlays">
+          <img src="/assets/ficha-muerto.png" alt="" className="death-shroud"
             onError={e => { e.target.style.display = 'none'; }} />
           <div className={`dead-vote-token ${voteUsed ? 'voted' : ''}`}>
             <img src="/assets/token-ultimo-voto.png" alt="Voto disponible"

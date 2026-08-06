@@ -217,7 +217,7 @@ async function preloadAvatars(players) {
 // ── Main generator ─────────────────────────────────────────────────
 async function generateGameOverImage(game) {
   await ensureFonts();
-  const { winner, players = [], winReason } = game;
+  const { winner, players = [] } = game;
   if (!winner) return null;
 
   await preloadAvatars(players);
@@ -246,9 +246,8 @@ async function generateGameOverImage(game) {
   const iconSize = 60 * SCALE;
   const headerGap = 16 * SCALE;
   const titleH = 44 * SCALE;
-  const reasonH = winReason ? 30 * SCALE : 0;
   const dividerH = 26 * SCALE;
-  const headerH = iconSize + headerGap + titleH + (winReason ? 6 * SCALE + reasonH : 0) + dividerH;
+  const headerH = iconSize + headerGap + titleH + dividerH;
   const headerMargin = 32 * SCALE;
 
   const PAD = 32 * SCALE;
@@ -295,14 +294,6 @@ async function generateGameOverImage(game) {
   const titleTxt = isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado';
   ctx.fillText(titleTxt, W / 2, y + titleH / 2);
   y += titleH;
-
-  // ── Win reason ──
-  if (winReason) {
-    ctx.fillStyle = BONE300;
-    ctx.font = `italic 400 ${14 * SCALE}px "Cormorant Garamond"`;
-    ctx.fillText(winReason, W / 2, y + reasonH / 2);
-    y += reasonH;
-  }
 
   // ── Divider ✦ ──
   ctx.fillStyle = 'rgba(201,162,74,0.6)';

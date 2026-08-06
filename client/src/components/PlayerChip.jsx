@@ -11,8 +11,9 @@ export default function PlayerChip({ name, avatar, size = 'sm', color }) {
       background: 'rgba(201,162,74,0.12)',
       border: '1px solid rgba(201,162,74,0.25)',
       borderRadius: 4,
-      padding: '1px 7px 1px 3px',
+      padding: '1px 7px 2px 3px',
       verticalAlign: 'middle',
+      lineHeight: 1,
     }}>
       <span style={{
         width: avatarSize, height: avatarSize,
@@ -38,6 +39,7 @@ export default function PlayerChip({ name, avatar, size = 'sm', color }) {
         fontSize,
         fontWeight: 600,
         color: color || 'var(--bone-50)',
+        lineHeight: 1,
       }}>
         {name}
       </span>

@@ -5,46 +5,33 @@ import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import RoleIcon from './RoleIcon';
 
-export default function GameOver({ mock, onCaptured }) {
+export default function GameOver() {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
 
   const captureRef = useRef(null);
   const sentRef = useRef(false);
 
-  // Para pruebas: si llega `mock`, se ignoran el estado real y la condición de
-  // narrador y se captura igualmente (los datos de `mock` se renderizan abajo).
-  const effWinner = mock ? mock.winner : (game?.winner || null);
-  const effPlayers = mock ? mock.players || [] : ((game?.players) || []);
-  const effWinReason = mock ? mock.winReason : (game?.winReason || null);
-  const effIsNarrator = mock ? true : isNarrator;
-
   // Cuando acaba la partida, el narrador captura el panel (título + jugadores)
   // y lo envía al servidor para que el bot lo publique en el canal configurado.
   useEffect(() => {
-    if (!effWinner || !effIsNarrator || sentRef.current) return;
+    if (!game?.winner || !isNarrator || sentRef.current) return;
     const node = captureRef.current;
     if (!node) return;
     const t = setTimeout(() => {
-      html2canvas(node, { backgroundColor: null, scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
+      html2canvas(node, { backgroundColor: '#070709', scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
         .then(canvas => {
           sentRef.current = true;
-          const dataUrl = canvas.toDataURL('image/png');
-          if (mock && onCaptured) onCaptured(dataUrl);
-          else send('GAME_OVER_SHOT', { imageDataUrl: dataUrl, caption: mock ? '🧪 TEST' : null });
+          send('GAME_OVER_SHOT', { imageDataUrl: canvas.toDataURL('image/png') });
         })
         .catch(err => console.error('[GameOver] captura falló:', err));
     }, 350);
     return () => clearTimeout(t);
-  }, [effWinner, effIsNarrator, send, mock, onCaptured]);
+  }, [game, isNarrator, send]);
 
-  if (mock) {
-    if (!mock.winner) return null;
-  } else {
-    if (!game) return null;
-    if (!game.winner) return null;
-  }
-  const { winner, players = [], winReason } = mock || { winner: game.winner, players: game.players, winReason: game.winReason };
+  if (!game) return null;
+  const { winner, players = [], winReason } = game;
+  if (!winner) return null;
 
   const isGoodWin = winner === 'good';
 
@@ -58,7 +45,7 @@ export default function GameOver({ mock, onCaptured }) {
       borderRadius: 6,
       padding: '16px 18px',
     }}>
-      <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: isGood ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 12 }}>
+      <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: isGood ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 12, textAlign: 'center' }}>
         {label}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -67,10 +54,10 @@ export default function GameOver({ mock, onCaptured }) {
           const drunkFakeRole = isDrunk && p.drunkAs ? ROLE_BY_ID[p.drunkAs] : null;
           const role = p.role ? ROLE_BY_ID[p.role] : null;
           return (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: p.alive ? 1 : 0.55 }}>
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: p.alive ? 1 : 0.55 }}>
               <RoleIcon role={role} size={30} radius={4} />
               <PlayerChip name={p.name} avatar={p.avatar} size="lg" />
-              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <div style={{ textAlign: 'left' }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-400)', display: 'block' }}>
                   {role?.name}
                 </span>
@@ -114,9 +101,9 @@ export default function GameOver({ mock, onCaptured }) {
             <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
               {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
             </h1>
-            {effWinReason && (
+            {winReason && (
               <p style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-300)', fontStyle: 'italic' }}>
-                {effWinReason}
+                {winReason}
               </p>
             )}
             <div className="flourish-divider" style={{ maxWidth: 200, margin: '4px auto 0' }}>✦</div>

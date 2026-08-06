@@ -14,7 +14,6 @@ import GameTable from './GameTable';
 import ActionModal from './ActionModal';
 import RoleIcon from './RoleIcon';
 import SheetLink from './SheetLink';
-import GameOver from './GameOver';
 
 function MiniAvatar({ player, size = 20 }) {
   return (
@@ -104,77 +103,8 @@ export default function NarratorPanel() {
   const [editCampaign, setEditCampaign] = useState(null); // campaña abierta para editar (punto 7)
   const [nightStep, setNightStep] = useState({ current: 0, total: 0 });
   const [rosterTarget, setRosterTarget] = useState(null); // jugador abierto desde el roster
-  const [testShot, setTestShot] = useState(null); // mock de fin de partida para probar el envío
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
   const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
-
-  // 🧪 Prueba temporal: genera un fin de partida aleatorio (jugadores con el rol
-  // de partida, roles al azar, ganador al azar) y monta GameOver para que capture
-  // y envíe la imagen al canal configurado. Incluye una imagen aleatoria para
-  // validar el envío sin jugar.
-  const [randomTestImage, setRandomTestImage] = useState(null);
-  const randomTestImageRef = useRef(null);
-
-  const makeTestShot = () => {
-    // Genera una imagen al azar (canvas) que se envía junto a la del ganador.
-    const c = document.createElement('canvas');
-    c.width = 800; c.height = 300;
-    const ctx = c.getContext('2d');
-    const hue = Math.floor(Math.random() * 360);
-    const grad = ctx.createLinearGradient(0, 0, c.width, c.height);
-    grad.addColorStop(0, `hsl(${hue}, 60%, 20%)`);
-    grad.addColorStop(1, `hsl(${(hue + 80) % 360}, 70%, 35%)`);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.font = 'bold 42px serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('PRUEBA TEST', c.width / 2, c.height / 2);
-    const randDataUrl = c.toDataURL('image/png');
-    randomTestImageRef.current = randDataUrl;
-    setRandomTestImage(randDataUrl);
-
-    // ENVÍO INMEDIATO: texto + imagen aleatoria, sin esperar la captura del
-    // ganador. Así, aunque html2canvas falle, el bot ya manda algo al canal y
-    // podemos diagnosticar si el problema está en el canal o en la captura.
-    send('GAME_OVER_TEST', { randomImage: randDataUrl, winnerImage: null });
-
-    // Si no hay miembros de Discord cacheados, usa jugadores ficticios para que
-    // la prueba siempre genere una imagen.
-    let pool = (state.config?.boctRoleId
-      ? discordMembers.filter(m => Array.isArray(m.roles) && m.roles.includes(state.config.boctRoleId))
-      : []);
-    if (!pool.length) pool = discordMembers;
-    if (!pool.length) {
-      pool = Array.from({ length: 6 }, (_, i) => ({ id: 'fake' + i, displayName: 'Jugador ' + (i + 1), tag: null, avatar: null }));
-    }
-    const count = pool.length;
-    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, count);
-    const roleIds = Object.keys(ROLE_BY_ID);
-    const assigned = shuffled.map((m, i) => ({
-      id: m.id || 'p' + i,
-      name: m.displayName || m.tag || m.id || 'Jugador ' + (i + 1),
-      avatar: null, // sin avatar para que html2canvas no falle por CORS en la prueba
-      role: roleIds[Math.floor(Math.random() * roleIds.length)],
-      alive: Math.random() > 0.3,
-    }));
-    const winner = Math.random() > 0.5 ? 'good' : 'evil';
-    setTestShot({
-      winner,
-      winReason: winner === 'good' ? 'Prueba: El Bien declara victoria' : 'Prueba: El Mal declara victoria',
-      players: assigned.map(p => ({
-        ...p,
-        alignment: ROLE_BY_ID[p.role]?.alignment || (ROLE_BY_ID[p.role]?.type === 'demon' || ROLE_BY_ID[p.role]?.type === 'minion' ? 'evil' : 'good'),
-        drunkAs: null,
-        isSmokeScreen: false,
-      })),
-    });
-  };
-
-  // Cuando GameOver mock captura la imagen del ganador, se envía al canal.
-  const onTestCaptured = useCallback((winnerDataUrl) => {
-    send('GAME_OVER_SHOT', { imageDataUrl: winnerDataUrl, caption: '🏆 🧪 TEST — ganador' });
-  }, [send]);
 
   const guideRef  = useRef(null);   // mando de la Guía (siguiente / anterior / ir a)
   const searchRef = useRef(null);   // buscador del roster
@@ -269,12 +199,6 @@ export default function NarratorPanel() {
             <button onClick={() => changeScale(0.1)} className="nx-icon-btn" style={{ fontSize: 17 }}>A+</button>
           </div>
           <SheetLink game={game} compact />
-          <button
-            onClick={() => makeTestShot()}
-            className="nx-btn sm"
-            title="Enviar imagen de prueba del fin de partida al canal de Discord"
-            style={{ borderColor: 'rgba(255,180,80,0.5)', color: 'var(--gold-hot)' }}
-          >🧪</button>
           <button onClick={() => setMenuTab('partida')} className="nx-btn sm" title="Ajustes, Discord, rankings y atajos">⋯</button>
         </div>
       </header>
@@ -284,30 +208,6 @@ export default function NarratorPanel() {
           tab={menuTab} setTab={setMenuTab} onClose={() => setMenuTab(null)}
           game={game} send={send} rankings={rankings} discordMembers={discordMembers} players={players}
         />
-      )}
-
-      {/* 🧪 Prueba: pantalla de fin de partida falsa para validar el envío al canal */}
-      {testShot && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }} onClick={() => setTestShot(null)}>
-          <GameOver mock={testShot} onCaptured={onTestCaptured} />
-          <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-            {state.testResult?.steps && (
-              <div style={{ background: 'rgba(10,10,16,0.95)', border: '1px solid var(--hairline-bone)', borderRadius: 8, padding: 10, maxWidth: 300 }}>
-                <p className="panel-label" style={{ margin: '0 0 6px', color: state.testResult.ok ? 'var(--good)' : 'var(--blood-hi)' }}>
-                  {state.testResult.ok ? '✔ Test OK — revisa el canal' : '✘ Test con fallos'}
-                </p>
-                {state.testResult.steps.map((s, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 6, fontSize: 12, color: s.ok ? 'var(--good)' : 'var(--blood-hi)', alignItems: 'center' }}>
-                    <span>{s.ok ? '✔' : '✘'}</span>
-                    <span style={{ fontFamily: 'var(--serif)' }}>{s.name}</span>
-                    <span style={{ marginLeft: 'auto', color: 'var(--bone-400)' }}>{s.ok ? 'llegó' : s.detail}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button onClick={() => setTestShot(null)} className="nx-btn sm">✕ Cerrar prueba</button>
-          </div>
-        </div>
       )}
 
       {rosterTarget && players.some(p => p.id === rosterTarget) && (

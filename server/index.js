@@ -19,7 +19,7 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage, sendGameOverPost, selfTestGameOver } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage, sendGameOverPost } = require('./discordBot');
 const { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
@@ -993,19 +993,6 @@ async function handleMessage(type, payload, session) {
       } else {
         sendTo(ws, 'NOTIFICATION', { message: '📸 Imagen de fin de partida enviada al canal de Discord' });
       }
-      break;
-    }
-
-    case 'GAME_OVER_TEST': {
-      // 🧪 Prueba: envía al canal configurado (1) un mensaje de texto, (2) una
-      // imagen al azar y (3) la captura del ganador. Devuelve confirmación de
-      // cada paso para verificar en el Discord que todo llegó.
-      if (!session.isNarrator) throw new Error('No autorizado');
-      const randomImage = payload.randomImage || null;
-      const winnerImage = payload.winnerImage || null;
-      const steps = await selfTestGameOver({ randomImage, winnerImage });
-      const ok = steps.every(s => s.ok);
-      sendTo(ws, 'TEST_RESULT', { ok, steps });
       break;
     }
 

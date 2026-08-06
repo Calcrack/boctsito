@@ -426,34 +426,6 @@ async function sendPostMessage({ text, images }) {
   }
 }
 
-// Auto-test de fin de partida: envía al canal configurado, en orden, (1) un
-// mensaje de texto, (2) una imagen aleatoria y (3) la captura del ganador, y
-// devuelve la confirmación de cada paso para verificar en el Discord.
-async function selfTestGameOver({ randomImage, winnerImage }) {
-  const steps = [];
-  steps.push(await (async () => {
-    if (!isReady || !client) return { name: 'Validar canal', ok: false, detail: 'Bot no conectado' };
-    const channelId = getConfig().gameOverChannelId;
-    if (!channelId) return { name: 'Canal configurado', ok: false, detail: 'No hay canal (Admin → Canal de fin de partida)' };
-    let ch = client.channels.cache.get(channelId);
-    if (!ch) ch = await client.channels.fetch(channelId).catch(() => null);
-    return ch && ch.isTextBased()
-      ? { name: 'Canal configurado', ok: true, detail: `#${ch.name}` }
-      : { name: 'Canal configurado', ok: false, detail: `Canal ${channelId} no es de texto` };
-  })());
-  await sendPostMessage({ text: '🧪 TEST — prueba de envío' })
-    .then(r => steps.push({ name: 'Mensaje de texto', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
-  if (randomImage) {
-    await sendPostMessage({ images: [randomImage] })
-      .then(r => steps.push({ name: 'Imagen aleatoria', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
-  }
-  if (winnerImage) {
-    await sendPostMessage({ images: [winnerImage] })
-      .then(r => steps.push({ name: 'Imagen del ganador (BOCT)', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
-  }
-  return steps;
-}
-
 // Estado completo del bot para diagnóstico: conectado, canal de fin de partida
 // (id + nombre si existe), y si el canal es de texto.
 async function getBotStatus() {
@@ -495,7 +467,7 @@ module.exports = {
   initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
   deletePlayerRoom, deleteAllNightRooms, setReadyCallback,
   sendDM, getBotStatus, getBotConfig, renameLocationChannels,
-  sendGameOverImage, sendGameOverPost, selfTestGameOver,
+  sendGameOverImage, sendGameOverPost,
   getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
   setChannelIds: (channels, actor) => updateConfig({ channels }, actor),
   setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),

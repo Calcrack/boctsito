@@ -51,7 +51,7 @@ export default function GameOver() {
                   </span>
                 )}
               </div>
-              {!p.alive && <span style={{ color: 'var(--blood-hi)', fontSize: 14 }}>☠</span>}
+              {!p.alive && <img src="/assets/wraith.png" alt="Muerto" style={{ height: 18, width: 18, alignSelf: 'center' }} />}
             </div>
           );
         })}

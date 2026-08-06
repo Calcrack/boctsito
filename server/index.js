@@ -23,6 +23,7 @@ const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarra
 const { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
+const { generateGameOverImage } = require('./gameOverImage');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
 const { WISH_CATALOG } = require('./wishes');
 const { loadRankings, initRankings, recordGameStart, recordGameWin, deleteRankingEntry, updateRankingEntry } = require('./rankings');
@@ -183,6 +184,18 @@ function announceGameOver(game, winner) {
   recordGameWin(game, winner);
   broadcastToAll('GAME_OVER', { winner });
   broadcastGame();
+
+  // Generar y enviar imagen al canal de fin de partida
+  generateGameOverImage(game).then(buffer => {
+    if (buffer) {
+      const caption = winner === 'good' ? '✦ El Bien ha ganado' : '☠ El Mal ha ganado';
+      sendGameOverImage('data:image/png;base64,' + buffer.toString('base64'), caption).catch(err => {
+        console.error('[Discord] Error enviando imagen de fin de partida:', err.message);
+      });
+    }
+  }).catch(err => {
+    console.error('[GameOver] Error generando imagen:', err.message);
+  });
 }
 
 // Mensaje privado a un jugador concreto (todas sus pestañas abiertas).
@@ -2063,16 +2076,6 @@ async function handleMessage(type, payload, session) {
       const { key: rKey, updates } = payload;
       const updated = updateRankingEntry(rKey, updates);
       sendTo(ws, 'RANKINGS', updated);
-      break;
-    }
-
-    case 'SCREENSHOT_GAME_OVER': {
-      const { image } = payload;
-      if (image) {
-        sendGameOverImage(image, null).catch(err => {
-          console.error('[Discord] Error enviando screenshot game over:', err.message);
-        });
-      }
       break;
     }
 

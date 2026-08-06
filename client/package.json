@@ -9,7 +9,6 @@
     "smoke": "node ./node_modules/vite/bin/vite.js build --config vite.smoke.config.mjs --logLevel error && node ./test/.smoke-out/smoke.cjs"
   },
   "dependencies": {
-    "html2canvas": "^1.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

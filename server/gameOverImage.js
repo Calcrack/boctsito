@@ -98,11 +98,38 @@ function truncate(ctx, text, maxW) {
   return t + '…';
 }
 
+// ── Avatar pre-fetch ───────────────────────────────────────────────
+// Descarga las fotos de perfil ANTES de pintar la imagen: en paralelo,
+// con timeout, y cacheando por URL (los jugadores pueden repetir cuenta).
+// Si una URL falla o tarda demasiado se guarda `null` → el dibujo usa la
+// inicial del nombre como fallback. Todo ocurre en memoria: no se escribe
+// nada en disco ni en el repo.
+const AVATAR_TIMEOUT_MS = 4000;
+const avatarCache = new Map();
+
+async function preloadAvatars(players) {
+  const unique = [...new Set(players.map(p => p.avatar).filter(Boolean))];
+  await Promise.all(unique.map(async url => {
+    if (avatarCache.has(url)) return;
+    let img = null;
+    try {
+      const buf = await Promise.race([
+        download(url),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), AVATAR_TIMEOUT_MS)),
+      ]);
+      img = await loadImage(buf);
+    } catch { img = null; }
+    avatarCache.set(url, img);
+  }));
+}
+
 // ── Main generator ─────────────────────────────────────────────────
 async function generateGameOverImage(game) {
   await ensureFonts();
   const { winner, players = [], winReason } = game;
   if (!winner) return null;
+
+  await preloadAvatars(players);
 
   const isGoodWin = winner === 'good';
   const goodTeam = players.filter(p => p.alignment === 'good');
@@ -293,15 +320,15 @@ async function drawPlayerChip(ctx, p, x, y, rh, isGood) {
   ctx.strokeStyle = 'rgba(255,255,255,0.1)';
   ctx.stroke();
   if (p.avatar) {
-    try {
-      const img = await loadImage(p.avatar);
+    const img = await avatarCache.get(p.avatar);
+    if (img) {
       ctx.save();
       ctx.beginPath();
       ctx.arc(avX + avatarSize / 2, avY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
       ctx.clip();
       ctx.drawImage(img, avX, avY, avatarSize, avatarSize);
       ctx.restore();
-    } catch {
+    } else {
       drawAvatarFallback(ctx, (p.name || '?')[0].toUpperCase(), avX, avY, avatarSize);
     }
   } else {

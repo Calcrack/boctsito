@@ -285,7 +285,21 @@ export default function NarratorPanel() {
       {testShot && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }} onClick={() => setTestShot(null)}>
           <GameOver mock={testShot} onCaptured={onTestCaptured} />
-          <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 10 }}>
+          <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+            {state.testResult?.steps && (
+              <div style={{ background: 'rgba(10,10,16,0.95)', border: '1px solid var(--hairline-bone)', borderRadius: 8, padding: 10, maxWidth: 300 }}>
+                <p className="panel-label" style={{ margin: '0 0 6px', color: state.testResult.ok ? 'var(--good)' : 'var(--blood-hi)' }}>
+                  {state.testResult.ok ? '✔ Test OK — revisa el canal' : '✘ Test con fallos'}
+                </p>
+                {state.testResult.steps.map((s, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, fontSize: 12, color: s.ok ? 'var(--good)' : 'var(--blood-hi)', alignItems: 'center' }}>
+                    <span>{s.ok ? '✔' : '✘'}</span>
+                    <span style={{ fontFamily: 'var(--serif)' }}>{s.name}</span>
+                    <span style={{ marginLeft: 'auto', color: 'var(--bone-400)' }}>{s.ok ? 'llegó' : s.detail}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <button onClick={() => setTestShot(null)} className="nx-btn sm">✕ Cerrar prueba</button>
           </div>
         </div>

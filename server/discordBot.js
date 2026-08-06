@@ -390,31 +390,75 @@ async function sendGameOverImage(imageDataUrl, caption) {
 
 // Variante genérica: envía un texto y un listado de imágenes al canal.
 async function sendGameOverPost({ text, images }) {
+  const res = await sendPostMessage({ text, images });
+  return res;
+}
+
+// Núcleo de envío: un solo mensaje en el canal configurado con texto + imágenes.
+// Devuelve { ok:true, msg } o { ok:false, error }.
+async function sendPostMessage({ text, images }) {
   if (!isReady || !client) return { ok: false, error: 'Bot no conectado' };
   const channelId = getConfig().gameOverChannelId;
   if (!channelId) return { ok: false, error: 'No hay canal de fin de partida configurado' };
   try {
-    const channel = client.channels.cache.get(channelId);
-    if (!channel || !channel.isTextBased()) return { ok: false, error: 'Canal no encontrado o no es de texto' };
+    let channel = client.channels.cache.get(channelId);
+    if (!channel) channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+      console.error(`[Discord] sendPostMessage: canal ${channelId} no encontrado o no es de texto`);
+      return { ok: false, error: `Canal ${channelId} no encontrado o no es de texto` };
+    }
     const files = (images || [])
       .map((d, i) => {
         const base64 = String(d || '').replace(/^data:image\/\w+;base64,/, '');
         return base64 ? new AttachmentBuilder(Buffer.from(base64, 'base64'), { name: `fin-partida-${i + 1}.png` }) : null;
       })
       .filter(Boolean);
-    if (!files.length) return { ok: false, error: 'Imagen vacía' };
-    const payload = { files };
+    if (!text && !files.length) return { ok: false, error: 'Nada que enviar' };
+    const payload = {};
     if (text) payload.content = text;
-    await channel.send(payload);
-    return { ok: true };
+    if (files.length) payload.files = files;
+    console.log(`[Discord] Enviando a canal ${channelId} (${channel.name}): ${text ? `"${text}"` : ''} ${files.length ? `+ ${files.length} imagen(es)` : ''}`);
+    const msg = await channel.send(payload);
+    return { ok: true, msg };
   } catch (err) {
-    console.error('[Discord] sendGameOverPost error:', err.message);
+    console.error('[Discord] sendPostMessage error:', err.message);
     return { ok: false, error: err.message };
   }
 }
 
-function getBotStatus() {
-  return { connected: isReady, tag: client?.user?.tag || null };
+// Auto-test de fin de partida: envía al canal configurado, en orden, (1) un
+// mensaje de texto, (2) una imagen aleatoria y (3) la captura del ganador, y
+// devuelve la confirmación de cada paso para verificar en el Discord.
+async function selfTestGameOver({ randomImage, winnerImage }) {
+  const steps = [];
+  await sendPostMessage({ text: '🧪 TEST — prueba de envío' })
+    .then(r => steps.push({ name: 'Mensaje de texto', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
+  await sendPostMessage({ images: randomImage ? [randomImage] : [] })
+    .then(r => steps.push({ name: 'Imagen aleatoria', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
+  await sendPostMessage({ images: winnerImage ? [winnerImage] : [] })
+    .then(r => steps.push({ name: 'Imagen del ganador (BOCT)', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
+  return steps;
+}
+
+// Estado completo del bot para diagnóstico: conectado, canal de fin de partida
+// (id + nombre si existe), y si el canal es de texto.
+async function getBotStatus() {
+  let gameOverChannel = null;
+  if (isReady && client) {
+    const cid = getConfig().gameOverChannelId;
+    if (cid) {
+      let ch = client.channels.cache.get(cid);
+      if (!ch) ch = await client.channels.fetch(cid).catch(() => null);
+      if (ch) gameOverChannel = { id: cid, name: ch.name, text: !!ch.isTextBased() };
+    }
+  }
+  return {
+    connected: isReady,
+    tag: client?.user?.tag || null,
+    guildId: getConfig().guildId,
+    gameOverChannel,
+    gameOverChannelId: getConfig().gameOverChannelId || null,
+  };
 }
 
 // Vista completa de la config del bot (para el panel /admin).
@@ -437,7 +481,7 @@ module.exports = {
   initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
   deletePlayerRoom, deleteAllNightRooms, setReadyCallback,
   sendDM, getBotStatus, getBotConfig, renameLocationChannels,
-  sendGameOverImage, sendGameOverPost,
+  sendGameOverImage, sendGameOverPost, selfTestGameOver,
   getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
   setChannelIds: (channels, actor) => updateConfig({ channels }, actor),
   setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),

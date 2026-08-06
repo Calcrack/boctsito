@@ -26,6 +26,7 @@ const initialState = {
   broadcastEvent: null,
   error: null,
   rankings: null,
+  testResult: null,
 };
 
 function reducer(state, action) {
@@ -82,6 +83,8 @@ function reducer(state, action) {
       return { ...state, adminConfig: action.payload.config };
     case 'ADMIN_AUTH_OK':
       return { ...state, adminAuthed: true };
+    case 'SET_TEST_RESULT':
+      return { ...state, testResult: action.payload };
     case 'LOGOUT':
       return { ...initialState, connected: state.connected, socketId: state.socketId };
     default:
@@ -206,6 +209,9 @@ export function GameProvider({ children }) {
           break;
         case 'ADMIN_AUTH_OK':
           dispatch({ type: 'ADMIN_AUTH_OK', payload });
+          break;
+        case 'TEST_RESULT':
+          dispatch({ type: 'SET_TEST_RESULT', payload });
           break;
         case 'KICKED_SESSION': {
           // El narrador expulsó esta sesión: NO re-unirse — volver al login limpio.

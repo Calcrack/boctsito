@@ -101,21 +101,27 @@ function Celestials({ isNight }) {
   );
 }
 
-function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activeActor, voteTurn, seatSize, posX, posY, onClick }) {
+function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activeActor, voteTurn, seatSize, posX, posY, onClick, phase }) {
   const role = player.role ? ROLE_BY_ID[player.role] : null;
   const isDead = !player.alive;
 
-  // Detecta cuándo el jugador ACABA de morir (transición vivo → muerto). Al
-  // cambiar `deathShroudKey`, la tumba se re-monta y su animación de caída se
-  // vuelve a ejecutar cada vez que alguien muere (p. ej. al salir el día).
+  // Detecta cuándo volver a ejecutar la caída de la tumba:
+  //  · cuando el jugador ACABA de morir (vivo → muerto), y
+  //  · al AMANECER (paso de noche a día) de un jugador ya muerto, para que la
+  //    animación se repita cada mañana después de la muerte.
+  const isNight = phase === 'first_night' || phase === 'night';
   const prevAlive = useRef(player.alive);
+  const prevDay = useRef(null);
   const [deathKey, setDeathKey] = useState(0);
   useEffect(() => {
-    if (prevAlive.current === true && player.alive === false) {
+    const justDied = prevAlive.current === true && player.alive === false;
+    const dawnHappened = prevDay.current === false && !isNight;
+    prevAlive.current = player.alive;
+    prevDay.current = isNight;
+    if (player.alive === false && (justDied || dawnHappened)) {
       setDeathKey(k => k + 1);
     }
-    prevAlive.current = player.alive;
-  }, [player.alive]);
+  }, [player.alive, isNight]);
 
   // Moneda: al usarse el voto de muerto pasa a estado "votado" y se desvanece.
   const voteUsed = isDead && !!player.deadVoteNominationId;
@@ -423,6 +429,7 @@ export default function GameTable({ isNarrator = false, activeActorId = null }) 
           posX={positions[i].x}
           posY={positions[i].y}
           onClick={setActionTarget}
+          phase={phase}
         />
       ))}
 

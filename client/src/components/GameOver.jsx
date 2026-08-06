@@ -9,7 +9,7 @@ export default function GameOver() {
   const { game, isNarrator } = state;
 
   if (!game) return null;
-  const { winner, players = [], winReason } = game;
+  const { winner, players = [] } = game;
   if (!winner) return null;
 
   const isGoodWin = winner === 'good';
@@ -79,11 +79,6 @@ export default function GameOver() {
           <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
             {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
           </h1>
-          {winReason && (
-            <p style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-300)', fontStyle: 'italic' }}>
-              {winReason}
-            </p>
-          )}
           <div className="flourish-divider" style={{ maxWidth: 200, margin: '4px auto 0' }}>✦</div>
         </div>
 

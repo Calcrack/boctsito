@@ -26,8 +26,18 @@
       "CEMENTERIO": "Cementerio",
       "BOSQUE": "Bosque",
       "CONFESIONARIO": "Confesionario"
+    },
+    "campaignLocationNames": {
+      "BAD_MOON_RISING": {
+        "PLAZA": "Capilla",
+        "MERCADO": "Asilo",
+        "TABERNA": "Cementerio",
+        "CEMENTERIO": "Bosque Maldito",
+        "BOSQUE": "Mansión",
+        "CONFESIONARIO": "Confesionario"
+      }
     }
   },
-  "updatedAt": 1786056747976,
+  "updatedAt": 1786056808570,
   "updatedBy": null
 }

@@ -20,11 +20,11 @@
     "gameOverChannelId": "1467694637190877234",
     "narratorRoleId": "1499987378755076218",
     "locationNames": {
-      "PLAZA": "Plaza",
-      "MERCADO": "Mercado",
-      "TABERNA": "Taberna",
-      "CEMENTERIO": "Cementerio",
-      "BOSQUE": "Bosque",
+      "PLAZA": "Palacio",
+      "MERCADO": "Salón de Baile",
+      "TABERNA": "Jardin",
+      "CEMENTERIO": "Comedor",
+      "BOSQUE": "Sala del Trono",
       "CONFESIONARIO": "Confesionario"
     },
     "campaignLocationNames": {
@@ -51,9 +51,17 @@
         "CEMENTERIO": "Cementerio",
         "BOSQUE": "Bosque",
         "CONFESIONARIO": "Confesionario"
+      },
+      "CUSTOM_LAFIESTAREAL_mse8a1o0": {
+        "PLAZA": "Palacio",
+        "MERCADO": "Salón de Baile",
+        "TABERNA": "Jardin",
+        "CEMENTERIO": "Comedor",
+        "BOSQUE": "Sala del Trono",
+        "CONFESIONARIO": "Confesionario"
       }
     }
   },
-  "updatedAt": 1786056868484,
+  "updatedAt": 1786056891053,
   "updatedBy": null
 }

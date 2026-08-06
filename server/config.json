@@ -35,9 +35,17 @@
         "CEMENTERIO": "Bosque Maldito",
         "BOSQUE": "Mansión",
         "CONFESIONARIO": "Confesionario"
+      },
+      "SECTS_AND_VIOLETS": {
+        "PLAZA": "Jardín Violeta",
+        "MERCADO": "Observatorio",
+        "TABERNA": "Biblioteca Arcana",
+        "CEMENTERIO": "Invernadero",
+        "BOSQUE": "Cripta del Culto",
+        "CONFESIONARIO": "Confesionario"
       }
     }
   },
-  "updatedAt": 1786056808570,
+  "updatedAt": 1786056824489,
   "updatedBy": null
 }

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import html2canvas from 'html2canvas';
+import { domToPng } from 'modern-screenshot';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
@@ -19,18 +19,10 @@ export default function GameOver() {
     const node = captureRef.current;
     if (!node) return;
     const t = setTimeout(() => {
-      html2canvas(node, {
-        backgroundColor: '#070709', scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0,
-        // Ajuste solo para la captura: html2canvas dibuja la línea base del texto
-        // desplazada hacia abajo. Se sube el nombre dentro de su contenedor para
-        // que quede centrado en la imagen (sin alterar la página visible).
-        onclone: (doc) => {
-          doc.querySelectorAll('.pc-name').forEach(el => { el.style.position = 'relative'; el.style.top = '-2px'; });
-        },
-      })
-        .then(canvas => {
+      domToPng(node, { backgroundColor: '#070709', scale: 2 })
+        .then(dataUrl => {
           sentRef.current = true;
-          send('GAME_OVER_SHOT', { imageDataUrl: canvas.toDataURL('image/png') });
+          send('GAME_OVER_SHOT', { imageDataUrl: dataUrl });
         })
         .catch(err => console.error('[GameOver] captura falló:', err));
     }, 350);

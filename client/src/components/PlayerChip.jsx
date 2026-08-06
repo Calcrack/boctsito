@@ -39,7 +39,7 @@ export default function PlayerChip({ name, avatar, size = 'sm', color }) {
         fontWeight: 600,
         color: color || 'var(--bone-50)',
         lineHeight: 1,
-      }} className="pc-name">
+      }}>
         {name}
       </span>
     </span>

@@ -21,7 +21,6 @@ const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionRe
 const { renderCampaignSheet } = require('./campaignSheet');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage, sendGameOverPost } = require('./discordBot');
 const { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
-const { captureGameOver } = require('./gameOverShot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -174,9 +173,7 @@ function broadcastToAll(type, payload) {
   });
 }
 
-// Fin de partida: registra la victoria, avisa a los clientes y, en segundo
-// plano, genera la imagen de fin de partida (Puppeteer) y la publica en el
-// canal configurado en Admin. No bloquea el flujo del juego.
+// Fin de partida: registra la victoria y avisa a los clientes.
 function announceGameOver(game, winner) {
   game.winner = winner;
   game.phase = 'game_over';
@@ -186,19 +183,6 @@ function announceGameOver(game, winner) {
   recordGameWin(game, winner);
   broadcastToAll('GAME_OVER', { winner });
   broadcastGame();
-  if (!getConfig().gameOverChannelId) return;
-  captureGameOver(game)
-    .then(shot => {
-      if (!shot.ok) {
-        console.error(`[gameOverShot] ${shot.error}`);
-        return;
-      }
-      sendGameOverImage(shot.dataUrl, null).then(r => {
-        if (!r.ok) console.error(`[Discord] Imagen de fin de partida: ${r.error}`);
-        else console.log('[Discord] Imagen de fin de partida enviada ✓');
-      });
-    })
-    .catch(err => console.error('[gameOverShot]', err.message));
 }
 
 // Mensaje privado a un jugador concreto (todas sus pestañas abiertas).

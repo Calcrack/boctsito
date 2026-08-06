@@ -159,6 +159,7 @@ function broadcastGame() {
       locationNames: cfg.locationNames || {},
       channels: cfg.channels || {},
       boctRoleId: cfg.boctRoleId || null,
+      narratorRoleId: cfg.narratorRoleId || null,
     };
     sendTo(session.ws, 'GAME_STATE', state);
   });

@@ -43,13 +43,17 @@ function roleNarratorMemberIds() {
   return out;
 }
 
-// Une la lista explícita de narradores con la del rol: quien tenga el rol de
-// narrador SIEMPRE aparece como narrador (aunque la lista esté vacía).
+// El rol de narrador define QUIÉN puede narrar (el picker solo ofrece a los que
+// lo tienen). Aquí solo se PODA: si alguien de la lista pierde el rol se le
+// quita; no se auto-añaden todos los del rol, porque solo hay UN narrador activo.
 async function syncNarratorsFromRole() {
+  const rid = narratorRoleId();
+  if (!isReady || !guild || !rid) return false;
   const fromRole = roleNarratorMemberIds();
   if (!fromRole.length) return false;
-  const merged = [...new Set([...narratorIds(), ...fromRole])];
-  const clean = [...new Set(merged.filter(id => typeof id === 'string' && /^\d{5,}$/.test(id)))];
+  const current = narratorIds();
+  const clean = current.filter(id => fromRole.includes(id));
+  if (clean.length === current.length) return false;
   updateConfig({ narratorUserIds: clean }, 'syncNarratorsFromRole');
   await refreshNightRoomPerms();
   return true;

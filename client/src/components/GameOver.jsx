@@ -5,18 +5,25 @@ import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import RoleIcon from './RoleIcon';
 
-export default function GameOver() {
+export default function GameOver({ mock }) {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
 
   const gameOverRef = useRef(null);
   const sentRef = useRef(false);
 
+  // Para pruebas: si llega `mock`, se ignoran el estado real y la condición de
+  // narrador y se captura igualmente (los datos de `mock` se renderizan abajo).
+  const effWinner = mock ? mock.winner : (game?.winner || null);
+  const effPlayers = mock ? mock.players || [] : ((game?.players) || []);
+  const effWinReason = mock ? mock.winReason : (game?.winReason || null);
+  const effIsNarrator = mock ? true : isNarrator;
+
   // Cuando acaba la partida, el narrador captura la pantalla completa de fin de
   // partida (título, roles, jugadores y fondo) y la envía al servidor para que
   // el bot la publique en el canal configurado.
   useEffect(() => {
-    if (!game?.winner || !isNarrator || sentRef.current) return;
+    if (!effWinner || !effIsNarrator || sentRef.current) return;
     const node = gameOverRef.current;
     if (!node) return;
     const t = setTimeout(() => {
@@ -28,11 +35,15 @@ export default function GameOver() {
         .catch(() => {});
     }, 350);
     return () => clearTimeout(t);
-  }, [game?.winner, isNarrator, send]);
+  }, [effWinner, effIsNarrator, send]);
 
-  if (!game) return null;
-  const { winner, players = [], winReason } = game;
-  if (!winner) return null;
+  if (mock) {
+    if (!mock.winner) return null;
+  } else {
+    if (!game) return null;
+    if (!game.winner) return null;
+  }
+  const { winner, players = [], winReason } = mock || { winner: game.winner, players: game.players, winReason: game.winReason };
 
   const isGoodWin = winner === 'good';
 

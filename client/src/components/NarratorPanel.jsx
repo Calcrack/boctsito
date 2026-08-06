@@ -14,6 +14,7 @@ import GameTable from './GameTable';
 import ActionModal from './ActionModal';
 import RoleIcon from './RoleIcon';
 import SheetLink from './SheetLink';
+import GameOver from './GameOver';
 
 function MiniAvatar({ player, size = 20 }) {
   return (
@@ -103,8 +104,40 @@ export default function NarratorPanel() {
   const [editCampaign, setEditCampaign] = useState(null); // campaña abierta para editar (punto 7)
   const [nightStep, setNightStep] = useState({ current: 0, total: 0 });
   const [rosterTarget, setRosterTarget] = useState(null); // jugador abierto desde el roster
+  const [testShot, setTestShot] = useState(null); // mock de fin de partida para probar el envío
   const [uiScale, setUiScale] = useState(() => parseFloat(localStorage.getItem('boct_uiscale') || '1'));
   const changeScale = (d) => { const v = Math.max(0.8, Math.min(1.5, +(uiScale + d).toFixed(2))); setUiScale(v); localStorage.setItem('boct_uiscale', String(v)); };
+
+  // 🧪 Prueba temporal: genera un fin de partida aleatorio (jugadores con el rol
+  // de partida, roles al azar, ganador al azar) y monta GameOver para que capture
+  // y envíe la imagen al canal configurado. Sirve para validar el envío sin jugar.
+  const makeTestShot = () => {
+    const boctRoleId = game?.config?.boctRoleId || '1499987378755076218';
+    const members = discordMembers.filter(m => Array.isArray(m.roles) && m.roles.includes(boctRoleId));
+    const pool = members.length ? members : discordMembers;
+    if (!pool.length) { send('REFRESH_DISCORD_MEMBERS', {}); return; }
+    const count = Math.min(pool.length, Math.max(5, Math.min(12, pool.length)));
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, count);
+    const roleIds = Object.keys(ALL_ROLES);
+    const assigned = shuffled.map((m, i) => ({
+      id: m.id || 'p' + i,
+      name: m.displayName || m.tag || m.id,
+      avatar: m.avatar || null,
+      role: roleIds[Math.floor(Math.random() * roleIds.length)],
+      alive: Math.random() > 0.3,
+    }));
+    const winner = Math.random() > 0.5 ? 'good' : 'evil';
+    setTestShot({
+      winner,
+      winReason: winner === 'good' ? 'Prueba: El Bien declara victoria' : 'Prueba: El Mal declara victoria',
+      players: assigned.map(p => ({
+        ...p,
+        alignment: (ALL_ROLES[p.role]?.alignment) || 'good',
+        drunkAs: null,
+        isSmokeScreen: false,
+      })),
+    });
+  };
 
   const guideRef  = useRef(null);   // mando de la Guía (siguiente / anterior / ir a)
   const searchRef = useRef(null);   // buscador del roster
@@ -199,6 +232,12 @@ export default function NarratorPanel() {
             <button onClick={() => changeScale(0.1)} className="nx-icon-btn" style={{ fontSize: 17 }}>A+</button>
           </div>
           <SheetLink game={game} compact />
+          <button
+            onClick={() => makeTestShot()}
+            className="nx-btn sm"
+            title="Enviar imagen de prueba del fin de partida al canal de Discord"
+            style={{ borderColor: 'rgba(255,180,80,0.5)', color: 'var(--gold-hot)' }}
+          >🧪</button>
           <button onClick={() => setMenuTab('partida')} className="nx-btn sm" title="Ajustes, Discord, rankings y atajos">⋯</button>
         </div>
       </header>
@@ -208,6 +247,16 @@ export default function NarratorPanel() {
           tab={menuTab} setTab={setMenuTab} onClose={() => setMenuTab(null)}
           game={game} send={send} rankings={rankings} discordMembers={discordMembers} players={players}
         />
+      )}
+
+      {/* 🧪 Prueba: pantalla de fin de partida falsa para validar el envío al canal */}
+      {testShot && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }} onClick={() => setTestShot(null)}>
+          <GameOver mock={testShot} />
+          <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 10 }}>
+            <button onClick={() => setTestShot(null)} className="nx-btn sm">✕ Cerrar prueba</button>
+          </div>
+        </div>
       )}
 
       {rosterTarget && players.some(p => p.id === rosterTarget) && (

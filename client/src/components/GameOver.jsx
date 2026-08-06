@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import html2canvas from 'html2canvas';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
@@ -7,6 +8,16 @@ import RoleIcon from './RoleIcon';
 export default function GameOver() {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
+  const captureRef = useRef(null);
+  const screenshotSent = useRef(false);
+
+  useEffect(() => {
+    if (!captureRef.current || screenshotSent.current) return;
+    screenshotSent.current = true;
+    html2canvas(captureRef.current, { backgroundColor: null, useCORS: true }).then(canvas => {
+      send('SCREENSHOT_GAME_OVER', { image: canvas.toDataURL('image/png') });
+    }).catch(() => {});
+  }, [send]);
 
   if (!game) return null;
   const { winner, players = [], winReason } = game;
@@ -71,27 +82,25 @@ export default function GameOver() {
         ? 'radial-gradient(ellipse at center top, #080f1a 0%, var(--ink-900) 70%)'
         : 'radial-gradient(ellipse at center top, #1a0608 0%, var(--ink-900) 70%)',
     }}>
-      <div style={{ maxWidth: 720, width: '100%' }}>
-        <div>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
-              {isGoodWin ? '✦' : '☠'}
-            </div>
-            <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
-              {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
-            </h1>
-            {winReason && (
-              <p style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-300)', fontStyle: 'italic' }}>
-                {winReason}
-              </p>
-            )}
-            <div className="flourish-divider" style={{ maxWidth: 200, margin: '4px auto 0' }}>✦</div>
+      <div ref={captureRef} style={{ maxWidth: 720, width: '100%' }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
+            {isGoodWin ? '✦' : '☠'}
           </div>
+          <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
+            {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
+          </h1>
+          {winReason && (
+            <p style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-300)', fontStyle: 'italic' }}>
+              {winReason}
+            </p>
+          )}
+          <div className="flourish-divider" style={{ maxWidth: 200, margin: '4px auto 0' }}>✦</div>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            {teamBlock(goodTeam, 'Aldeanos & Forasteros', true)}
-            {teamBlock(evilTeam, 'Esbirros & Demonio', false)}
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+          {teamBlock(goodTeam, 'Aldeanos & Forasteros', true)}
+          {teamBlock(evilTeam, 'Esbirros & Demonio', false)}
         </div>
 
         {isNarrator && (

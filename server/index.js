@@ -2066,6 +2066,16 @@ async function handleMessage(type, payload, session) {
       break;
     }
 
+    case 'SCREENSHOT_GAME_OVER': {
+      const { image } = payload;
+      if (image) {
+        sendGameOverImage(image, null).catch(err => {
+          console.error('[Discord] Error enviando screenshot game over:', err.message);
+        });
+      }
+      break;
+    }
+
     default:
       sendTo(ws, 'ERROR', { message: `Tipo desconocido: ${type}` });
   }

@@ -79,8 +79,81 @@ function ensureFonts() {
   return fontsReady;
 }
 
-// ── Role images ────────────────────────────────────────────────────
+// ── Logo Boct ──────────────────────────────────────────────────────
 const PUBLIC_DIR = path.join(__dirname, '..', 'client', 'public');
+const BOCT_LOGO_FILE = path.join(PUBLIC_DIR, 'assets', 'boct-logo.png');
+let logoImage = null;
+let logoLoading = null;
+async function getLogoImage() {
+  if (logoImage) return logoImage;
+  if (!logoLoading) {
+    logoLoading = (async () => {
+      try { logoImage = await loadImage(fs.readFileSync(BOCT_LOGO_FILE)); }
+      catch { logoImage = null; }
+    })();
+  }
+  await logoLoading;
+  return logoImage;
+}
+
+// Recolora una imagen cambiando el matiz (hue) de cada píxel opaco hacia
+// el color del bando ganador, preservando luminosidad y saturación.
+function hueRotate(image, targetHueDeg) {
+  const off = createCanvas(image.width, image.height);
+  const octx = off.getContext('2d');
+  octx.drawImage(image, 0, 0);
+  const imgData = octx.getImageData(0, 0, off.width, off.height);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    const [h, s, l] = rgbToHsl(d[i], d[i + 1], d[i + 2]);
+    const [r, g, b] = hslToRgb(targetHueDeg, s, l);
+    d[i] = r; d[i + 1] = g; d[i + 2] = b;
+  }
+  octx.putImageData(imgData, 0, 0);
+  return off;
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const dert = max - min;
+    s = l > 0.5 ? dert / (2 - max - min) : dert / (max + min);
+    switch (max) {
+      case r: h = (g - b) / dert + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / dert + 2; break;
+      default: h = (r - g) / dert + 4;
+    }
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+
+function hue2rgb(p, q, t) {
+  if (t < 0) t += 1; if (t > 1) t -= 1;
+  if (t < 1 / 6) return p + (q - p) * 6 * t;
+  if (t < 1 / 2) return q;
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+  return p;
+}
+
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  if (s === 0) return [Math.round(l * 255), Math.round(l * 255), Math.round(l * 255)];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const H = h / 360;
+  return [
+    Math.round(hue2rgb(p, q, H + 1 / 3) * 255),
+    Math.round(hue2rgb(p, q, H) * 255),
+    Math.round(hue2rgb(p, q, H - 1 / 3) * 255),
+  ];
+}
+
+// ── Role images ────────────────────────────────────────────────────
 
 function roleImageBuffer(role) {
   const map = roleImages();
@@ -138,7 +211,7 @@ async function generateGameOverImage(game) {
   // ── Dimensiones (ratio 2x para nitidez) ──
   const W = 720 * SCALE;
   const rowH = 34 * SCALE;
-  const gap = 10 * SCALE;
+  const gap = rowH * 0.1;
   const colPadY = 16 * SCALE;
   const colPadX = 18 * SCALE;
   const colTitleH = 26 * SCALE;
@@ -146,6 +219,10 @@ async function generateGameOverImage(game) {
   const maxRows = Math.max(goodTeam.length, evilTeam.length);
   const colContentH = colPadY * 2 + maxRows * rowH + (Math.max(0, maxRows - 1)) * gap;
   const colH = colTitleH + colContentH;
+
+  // Box (columna) realmente dibujada = contenido del propio equipo, como en
+  // el HTML (flex-column con altura al contenido). Lo usamos para el fondo.
+  const colContentHFor = n => colPadY * 2 + n * rowH + Math.max(0, n - 1) * gap;
 
   // Header
   const iconSize = 60 * SCALE;
@@ -178,12 +255,19 @@ async function generateGameOverImage(game) {
   let y = PAD;
 
   // ── Icon ✦ / ☠ ──
-  const iconColor = isGoodWin ? GOOD : BLOOD_HI;
-  ctx.fillStyle = iconColor;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `${iconSize}px serif`;
-  ctx.fillText(isGoodWin ? '✦' : '☠', W / 2, y + iconSize / 2);
+  const logo = await getLogoImage();
+  if (logo) {
+    const reps = Math.round(68 * SCALE * 1.5);
+    const lp = hueRotate(logo, isGoodWin ? 215 : 0);
+    ctx.drawImage(lp, W / 2 - reps / 2, y + (iconSize - reps) / 2, reps, reps);
+  } else {
+    const iconColor = isGoodWin ? GOOD : BLOOD_HI;
+    ctx.fillStyle = iconColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${iconSize}px serif`;
+    ctx.fillText(isGoodWin ? '✦' : '☠', W / 2, y + iconSize / 2);
+  }
   y += iconSize + headerGap;
 
   // ── Title ──
@@ -222,11 +306,14 @@ async function generateGameOverImage(game) {
     ctx.fillText(label.toUpperCase(), x, cy + colTitleH / 2);
     cy += colTitleH;
 
-    // Column background
+    // Column background (altura = contenido del equipo más grande, igual en
+// ambas columnas, como el grid 1fr 1fr del HTML)
+    const boxContentH = colContentHFor(maxRows);
     const colBorder = isGood ? 'rgba(109,140,184,0.3)' : 'rgba(168,58,45,0.3)';
+    const boxTop = cy;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
-    ctx.roundRect(x, cy, colW, colH - colTitleH, 6 * SCALE);
+    ctx.roundRect(x, boxTop, colW, boxContentH, 6 * SCALE);
     ctx.fill();
     ctx.strokeStyle = colBorder;
     ctx.lineWidth = 1;
@@ -269,7 +356,7 @@ async function generateGameOverImage(game) {
       // Role name (right aligned) + extras
       drawRoleName(ctx, p, role, isDrunk, drunkRole, x + colPadX, py, rowW, roleImgSize, isGood);
 
-      py += rh;
+      py += rowH + gap;
     }
     ctx.globalAlpha = 1;
   };

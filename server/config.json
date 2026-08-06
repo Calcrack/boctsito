@@ -39,9 +39,9 @@
       "SECTS_AND_VIOLETS": {
         "PLAZA": "Jardín Violeta",
         "MERCADO": "Observatorio",
-        "TABERNA": "Biblioteca Arcana",
+        "TABERNA": "Biblioteca",
         "CEMENTERIO": "Invernadero",
-        "BOSQUE": "Cripta del Culto",
+        "BOSQUE": "Cripta",
         "CONFESIONARIO": "Confesionario"
       },
       "CUSTOM_TROUBLEBREWING351_mqk6b2it": {
@@ -62,6 +62,6 @@
       }
     }
   },
-  "updatedAt": 1786056893988,
+  "updatedAt": 1786056910257,
   "updatedBy": null
 }

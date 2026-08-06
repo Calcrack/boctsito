@@ -1,5 +1,4 @@
-import React, { useRef, useEffect } from 'react';
-import { domToPng } from 'modern-screenshot';
+import React from 'react';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
@@ -8,34 +7,6 @@ import RoleIcon from './RoleIcon';
 export default function GameOver() {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
-
-  const captureRef = useRef(null);
-  const sentRef = useRef(false);
-
-  // Cuando acaba la partida, el narrador captura la pantalla de fin de partida
-  // (fondo con gradiente + título + jugadores) tal cual se ve y la envía al
-  // servidor para que el bot la publique en el canal configurado.
-  useEffect(() => {
-    if (!game?.winner || !isNarrator || sentRef.current) return;
-    const node = captureRef.current;
-    if (!node) return;
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        // Espera a que las fuentes (Cinzel, Cormorant…) estén listas para que la
-        // captura sea idéntica a lo que se ve en pantalla.
-        if (document.fonts?.ready) await document.fonts.ready;
-        if (cancelled) return;
-        const dataUrl = await domToPng(node, { backgroundColor: null, scale: 2 });
-        if (cancelled) return;
-        sentRef.current = true;
-        send('GAME_OVER_SHOT', { imageDataUrl: dataUrl });
-      } catch (err) {
-        console.error('[GameOver] captura falló:', err);
-      }
-    }, 350);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [game, isNarrator, send]);
 
   if (!game) return null;
   const { winner, players = [], winReason } = game;
@@ -96,16 +67,12 @@ export default function GameOver() {
       alignItems: 'center',
       justifyContent: 'center',
       padding: 32,
-      background: 'var(--ink-900)',
+      background: isGoodWin
+        ? 'radial-gradient(ellipse at center top, #080f1a 0%, var(--ink-900) 70%)'
+        : 'radial-gradient(ellipse at center top, #1a0608 0%, var(--ink-900) 70%)',
     }}>
       <div style={{ maxWidth: 720, width: '100%' }}>
-        <div ref={captureRef} style={{
-          background: isGoodWin
-            ? 'radial-gradient(ellipse at center top, #080f1a 0%, var(--ink-900) 70%)'
-            : 'radial-gradient(ellipse at center top, #1a0608 0%, var(--ink-900) 70%)',
-          borderRadius: 10,
-          padding: 32,
-        }}>
+        <div>
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
               {isGoodWin ? '✦' : '☠'}

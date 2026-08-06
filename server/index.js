@@ -21,6 +21,7 @@ const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionRe
 const { renderCampaignSheet } = require('./campaignSheet');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage, sendGameOverPost } = require('./discordBot');
 const { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
+const { captureGameOver } = require('./gameOverShot');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -171,6 +172,33 @@ function broadcastToAll(type, payload) {
   sessions.forEach(session => {
     if (session.gameId) sendTo(session.ws, type, payload);
   });
+}
+
+// Fin de partida: registra la victoria, avisa a los clientes y, en segundo
+// plano, genera la imagen de fin de partida (Puppeteer) y la publica en el
+// canal configurado en Admin. No bloquea el flujo del juego.
+function announceGameOver(game, winner) {
+  game.winner = winner;
+  game.phase = 'game_over';
+  if (!game.winReason) {
+    game.winReason = winner === 'good' ? 'El Bien declara victoria' : 'El Mal declara victoria';
+  }
+  recordGameWin(game, winner);
+  broadcastToAll('GAME_OVER', { winner });
+  broadcastGame();
+  if (!getConfig().gameOverChannelId) return;
+  captureGameOver(game)
+    .then(shot => {
+      if (!shot.ok) {
+        console.error(`[gameOverShot] ${shot.error}`);
+        return;
+      }
+      sendGameOverImage(shot.dataUrl, null).then(r => {
+        if (!r.ok) console.error(`[Discord] Imagen de fin de partida: ${r.error}`);
+        else console.log('[Discord] Imagen de fin de partida enviada ✓');
+      });
+    })
+    .catch(err => console.error('[gameOverShot]', err.message));
 }
 
 // Mensaje privado a un jugador concreto (todas sus pestañas abiertas).
@@ -584,8 +612,7 @@ async function handleMessage(type, payload, session) {
         mayorWin(game);
         broadcastGame();
         broadcastToAll('BROADCAST_EVENT', { title: '🏛️ Victoria del Alcalde', message: 'Quedan 3 jugadores vivos sin ejecución. ¡El bien gana!', type: 'info' });
-        recordGameWin(game, 'good');
-        broadcastToAll('GAME_OVER', { winner: 'good' });
+        announceGameOver(game, 'good');
         break;
       }
       const isFirstNight = game.nightNumber === 0;
@@ -595,8 +622,7 @@ async function handleMessage(type, payload, session) {
       if (game.phase === 'game_over' && game.winner) {
         broadcastGame();
         broadcastToAll('BROADCAST_EVENT', { title: '🏁 Fin de la partida', message: game.winReason || 'La partida ha terminado', type: 'info' });
-        recordGameWin(game, game.winner);
-        broadcastToAll('GAME_OVER', { winner: game.winner });
+        announceGameOver(game, game.winner);
         break;
       }
       teleportToNightRooms(game);
@@ -701,8 +727,7 @@ async function handleMessage(type, payload, session) {
         broadcastToAll('NOTIFICATION', { message: `⚖️ ${nom.nominatorName} nomina a ${nom.nomineeName}`, type: 'nomination' });
       }
       if (game.phase === 'game_over' && game.winner) {
-        recordGameWin(game, game.winner);
-        broadcastToAll('GAME_OVER', { winner: game.winner });
+        announceGameOver(game, game.winner);
       }
       break;
     }
@@ -818,8 +843,7 @@ async function handleMessage(type, payload, session) {
             message: 'El Ateo estaba en juego — el pueblo acertó. Gana el bando bueno.',
             type: 'execution',
           });
-          recordGameWin(game, result.winner);
-          broadcastToAll('GAME_OVER', { winner: result.winner });
+          announceGameOver(game, result.winner);
         } else {
           broadcastToAll('BROADCAST_EVENT', {
             title: '🎙 El pueblo ejecutó al Narrador',
@@ -833,7 +857,7 @@ async function handleMessage(type, payload, session) {
           message: `${result.executed.name} fue ejecutado con ${game.nominations.find(n => n.executed)?.tally || '?'} votos.`,
           type: 'execution',
         });
-        if (result.gameOver) { recordGameWin(game, result.winner); broadcastToAll('GAME_OVER', { winner: result.winner }); }
+        if (result.gameOver) { announceGameOver(game, result.winner); }
       } else {
         broadcastToAll('NOTIFICATION', { message: '🌙 Nominaciones cerradas sin ejecución', type: 'info' });
       }
@@ -909,7 +933,7 @@ async function handleMessage(type, payload, session) {
           message: `${slayer?.name} disparó a ${targetName}. ¡Era el Demonio! ${targetName} muere.`,
           type: 'execution',
         });
-        if (result.gameOver) { recordGameWin(game, 'good'); broadcastToAll('GAME_OVER', { winner: 'good' }); }
+        if (result.gameOver) { announceGameOver(game, 'good'); }
       } else {
         broadcastToAll('BROADCAST_EVENT', {
           title: '🏹 Exterminador falló',
@@ -974,25 +998,9 @@ async function handleMessage(type, payload, session) {
       const game = requireGame(session);
       killPlayer(game, payload.playerId, payload.reason || 'manual');
       if (game.phase === 'game_over' && game.winner) {
-        recordGameWin(game, game.winner);
-        broadcastToAll('GAME_OVER', { winner: game.winner });
+        announceGameOver(game, game.winner);
       }
       broadcastGame();
-      break;
-    }
-
-    case 'GAME_OVER_SHOT': {
-      // El cliente captura la pantalla de fin de partida (div del ganador) y el
-      // bot la publica en el canal configurado en el panel Admin.
-      if (!session.isNarrator) throw new Error('No autorizado');
-      const imageDataUrl = payload.imageDataUrl;
-      if (!imageDataUrl) throw new Error('Imagen vacía');
-      const result = await sendGameOverImage(imageDataUrl, payload.caption || null);
-      if (!result.ok) {
-        sendTo(ws, 'ERROR', { message: result.error });
-      } else {
-        sendTo(ws, 'NOTIFICATION', { message: '📸 Imagen de fin de partida enviada al canal de Discord' });
-      }
       break;
     }
 
@@ -1004,9 +1012,7 @@ async function handleMessage(type, payload, session) {
       game.winner = winner;
       game.phase = 'game_over';
       game.winReason = reason || (winner === 'good' ? 'El Bien declara victoria' : 'El Mal declara victoria');
-      recordGameWin(game, winner);
-      broadcastToAll('GAME_OVER', { winner });
-      broadcastGame();
+      announceGameOver(game, winner);
       break;
     }
 
@@ -1225,8 +1231,7 @@ async function handleMessage(type, payload, session) {
         broadcastToAll('NOTIFICATION', { message: `⚖️ ${nom.nominatorName} nomina a ${nom.nomineeName}`, type: 'nomination' });
       }
       if (game.phase === 'game_over' && game.winner) {
-        recordGameWin(game, game.winner);
-        broadcastToAll('GAME_OVER', { winner: game.winner });
+        announceGameOver(game, game.winner);
       }
       break;
     }
@@ -2102,8 +2107,7 @@ function triggerAutoDawn(game) {
   setPlazaChannelPermission(true).catch(() => {});
   broadcastGame();
   if (game.phase === 'game_over') {
-    recordGameWin(game, game.winner);
-    broadcastToAll('GAME_OVER', { winner: game.winner });
+    announceGameOver(game, game.winner);
     return;
   }
   const msg = deaths.length > 0
@@ -2158,9 +2162,7 @@ function scheduleAutoNight(game) {
   } else if (result.narratorExecuted) {
     if (result.gameOver) {
       broadcastToAll('BROADCAST_EVENT', { title: '🎙 ¡El Narrador ha sido ejecutado!', message: 'El Ateo estaba en juego — el pueblo acertó. Gana el bando bueno.', type: 'execution' });
-      broadcastGame();
-      recordGameWin(game, result.winner);
-      broadcastToAll('GAME_OVER', { winner: result.winner });
+      announceGameOver(game, result.winner);
       return;
     }
     broadcastToAll('BROADCAST_EVENT', { title: '🎙 El pueblo ejecutó al Narrador', message: 'Pero el Narrador no puede morir… la ejecución del día se ha gastado.', type: 'warning' });
@@ -2171,9 +2173,7 @@ function scheduleAutoNight(game) {
       type: 'execution',
     });
     if (result.gameOver) {
-      broadcastGame();
-      recordGameWin(game, result.winner);
-      broadcastToAll('GAME_OVER', { winner: result.winner });
+      announceGameOver(game, result.winner);
       return;
     }
   }
@@ -2187,8 +2187,7 @@ function scheduleAutoNight(game) {
     mayorWin(game);
     broadcastGame();
     broadcastToAll('BROADCAST_EVENT', { title: '🏛️ Victoria del Alcalde', message: 'Quedan 3 jugadores vivos sin ejecución. ¡El bien gana!', type: 'info' });
-    recordGameWin(game, 'good');
-    broadcastToAll('GAME_OVER', { winner: 'good' });
+    announceGameOver(game, 'good');
     return;
   }
 
@@ -2199,10 +2198,8 @@ function scheduleAutoNight(game) {
     startNight(game);
     // El anochecer puede terminar la partida (Vórtice, día extra de la Mente Maestra).
     if (game.phase === 'game_over' && game.winner) {
-      broadcastGame();
       broadcastToAll('BROADCAST_EVENT', { title: '🏁 Fin de la partida', message: game.winReason || 'La partida ha terminado', type: 'info' });
-      recordGameWin(game, game.winner);
-      broadcastToAll('GAME_OVER', { winner: game.winner });
+      announceGameOver(game, game.winner);
       return;
     }
     teleportToNightRooms(game);

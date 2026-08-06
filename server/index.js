@@ -20,7 +20,7 @@ const {
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
 const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels } = require('./discordBot');
-const { initConfigStore, getConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames } = require('./configStore');
+const { initConfigStore, getConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -1300,8 +1300,19 @@ function handleMessage(type, payload, session) {
       break;
     }
 
+    case 'AUTH_ADMIN': {
+      // Contraseña del panel Admin: SOLO quien la tenga puede leer y modificar
+      // la config del bot (GET_CONFIG / SET_CONFIG). Verificación por hash.
+      if (!session.isNarrator) throw new Error('No autorizado');
+      if (!verifyAdminPassword(payload.password)) throw new Error('Contraseña incorrecta');
+      session.isConfigAdmin = true;
+      sendTo(ws, 'ADMIN_AUTH_OK', { ok: true });
+      break;
+    }
+
     case 'GET_CONFIG': {
-      // Config completa del bot (solo narrador/admin).
+      // Config completa del bot (solo narrador que haya pasado la contraseña
+      // de admin, o un admin listado en adminUserIds).
       if (!isConfigAdmin(session)) throw new Error('No autorizado');
       sendTo(ws, 'CONFIG', { config: getBotConfig() });
       break;
@@ -1322,6 +1333,9 @@ function handleMessage(type, payload, session) {
           setNarratorIds(p.narratorUserIds).then(() => broadcastGame()).catch(() => {});
         }
         if (Array.isArray(p.adminUserIds)) setAdminUserIds(p.adminUserIds, actor);
+        if (typeof p.adminPassword === 'string' && p.adminPassword.trim()) {
+          setAdminPassword(p.adminPassword.trim(), actor);
+        }
         const cfg = getBotConfig();
         const game = getGame(MAIN_GAME_ID);
         game.narratorDiscordIds = cfg.narratorUserIds;
@@ -2145,10 +2159,11 @@ function requireGame(session) {
   return game;
 }
 
-// ¿Puede tocar la config del bot? Narrador con contraseña, o un jugador cuyo
-// Discord figure en adminUserIds (Q6: la lista blanca, no un rol genérico).
+// ¿Puede tocar la config del bot? Solo tras pasar la contraseña de admin
+// (session.isConfigAdmin), o un jugador cuyo Discord figure en adminUserIds
+// (Q6: la lista blanca, no un rol genérico). Ser narrador ya NO basta.
 function isConfigAdmin(session) {
-  if (session.isNarrator) return true;
+  if (session.isConfigAdmin) return true;
   const adminIds = (getConfig().adminUserIds || []);
   if (!adminIds.length) return false;
   const game = getGame(MAIN_GAME_ID);

@@ -1469,16 +1469,25 @@ function ChannelControl({ players, send }) {
 
 // ── Panel Admin (punto 9 / Q8) ─────────────────────────────────────
 // Los IDs de Discord ya no están hardcodeados: se editan aquí y se guardan en
-// server/config.json (persistente en Render). Solo narrador o admin.
+// server/config.json (persistente en Render). Bloqueado por la contraseña de
+// admin (el servidor valida el hash; la contraseña nunca viaja en claro).
 const ADMIN_CHANNEL_KEYS = ['PLAZA', 'MERCADO', 'TABERNA', 'CEMENTERIO', 'BOSQUE', 'CONFESIONARIO'];
 function AdminPanel({ send }) {
   const { state } = useGame();
   const cfg = state.adminConfig;
   const [form, setForm] = useState(null);
+  const [pw, setPw] = useState('');
+  const [failed, setFailed] = useState(false);
 
+  // Solo pide la config si ya pasamos la contraseña de admin.
   useEffect(() => {
-    send('GET_CONFIG', {});
-  }, [send]);
+    if (state.adminAuthed) send('GET_CONFIG', {});
+  }, [state.adminAuthed, send]);
+
+  const tryUnlock = () => {
+    setFailed(false);
+    send('AUTH_ADMIN', { password: pw });
+  };
 
   // Cuando llega la config del server, la volcamos al formulario local.
   useEffect(() => {
@@ -1493,6 +1502,11 @@ function AdminPanel({ send }) {
       });
     }
   }, [cfg, form]);
+
+  // La contraseña falla → el server responde ERROR; lo reflejamos aquí.
+  useEffect(() => {
+    if (state.error && state.error.includes('Contraseña')) setFailed(true);
+  }, [state.error]);
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
@@ -1513,6 +1527,27 @@ function AdminPanel({ send }) {
     borderRadius: 2, padding: '4px 8px', fontFamily: 'var(--mono)', fontSize: 11,
     color: 'var(--bone-100)', marginTop: 4,
   };
+
+  if (!state.adminAuthed) {
+    return (
+      <div className="nx-card">
+        <div className="nx-card-head"><p className="nx-head-title">🛡 Admin — acceso restringido</p></div>
+        <div className="nx-card-body">
+          <p className="nx-hint" style={{ marginBottom: 8 }}>
+            Esta sección permite modificar la configuración del bot (IDs de Discord, canales…). Necesitas la contraseña de administrador.
+          </p>
+          <input type="password" value={pw} onChange={e => setPw(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && tryUnlock()}
+            placeholder="Contraseña de admin"
+            style={{ ...field, marginTop: 0, fontFamily: 'var(--serif)', fontSize: 13 }} />
+          <button onClick={tryUnlock} className="btn-action primary" style={{ width: '100%', marginTop: 8, fontSize: 12, padding: '8px 0' }}>
+            Desbloquear
+          </button>
+          {failed && <p className="nx-hint" style={{ color: 'var(--blood-hi)', marginTop: 6, marginBottom: 0 }}>Contraseña incorrecta.</p>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="nx-card">

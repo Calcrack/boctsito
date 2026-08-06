@@ -6,8 +6,19 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
+
+// Contraseña de admin NO se guarda en claro: solo su SHA-256. El valor en
+// texto de este hash por defecto es "B0ct-Adm1n-0806!" (cámbialo con el env
+// ADMIN_PASSWORD o editando el hash de config.json). Nadie puede leerla del
+// repositorio y reutilizarla.
+const DEFAULT_ADMIN_PASSWORD_HASH = 'd2a2b755f3843a3c8afbf4b86cdb906d7e8d2d75420c1f2784e9e2ab0845585e';
+
+function hashAdminPassword(pw) {
+  return crypto.createHash('sha256').update(String(pw)).digest('hex');
+}
 
 const DEFAULTS = {
   guildId: '1462151561575928034',
@@ -35,6 +46,8 @@ const DEFAULTS = {
   // cuando esa campaña está activa). Custom y por defecto: cada campaña lleva
   // su propio nombre. Las 3 por defecto cogen estos valores si no se editan.
   campaignLocationNames: {},
+  // Hash SHA-256 de la contraseña de admin (nunca la contraseña en claro).
+  adminPasswordHash: DEFAULT_ADMIN_PASSWORD_HASH,
 };
 
 let store = null;
@@ -131,4 +144,21 @@ function setCampaignLocationNames(campaignId, names, actor) {
   return getCampaignLocationNames(campaignId);
 }
 
-module.exports = { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, DEFAULTS };
+// ── Contraseña de admin ────────────────────────────────────────────
+// Solo se almacena el hash SHA-256 (nunca el valor en claro). El env
+// ADMIN_PASSWORD tiene prioridad: permite cambiar la contraseña sin tocar
+// config.json. Sin env, se compara contra el hash persistido.
+function verifyAdminPassword(pw) {
+  if (process.env.ADMIN_PASSWORD) {
+    return hashAdminPassword(pw) === hashAdminPassword(process.env.ADMIN_PASSWORD);
+  }
+  return hashAdminPassword(pw) === ((store?.overrides?.adminPasswordHash) || DEFAULT_ADMIN_PASSWORD_HASH);
+}
+
+function setAdminPassword(newPw, actor) {
+  if (!newPw || !String(newPw).trim()) return false;
+  updateConfig({ adminPasswordHash: hashAdminPassword(String(newPw).trim()) }, actor);
+  return true;
+}
+
+module.exports = { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword, DEFAULTS };

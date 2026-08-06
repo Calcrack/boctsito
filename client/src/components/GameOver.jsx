@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import RoleIcon from './RoleIcon';
+import TintedLogo from './TintedLogo';
 
 export default function GameOver() {
   const { state, send } = useGame();
@@ -73,9 +74,7 @@ export default function GameOver() {
     }}>
       <div style={{ maxWidth: 720, width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
-            {isGoodWin ? '✦' : '☠'}
-          </div>
+          <TintedLogo size={96} isGoodWin={isGoodWin} style={{ margin: '0 auto 16px' }} />
           <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
             {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
           </h1>

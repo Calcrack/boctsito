@@ -160,7 +160,6 @@ function recordGameStart(game) {
     data[key].name = p.name;
     if (p.avatar) data[key].avatar = p.avatar;
     if (p.discordId) data[key].discordId = p.discordId;
-    data[key].total_games++;
   });
   saveRankings(data);
 }
@@ -175,6 +174,7 @@ function recordGameWin(game, winner) {
     data[key].name = p.name;
     if (p.avatar) data[key].avatar = p.avatar;
     if (p.discordId) data[key].discordId = p.discordId;
+    data[key].total_games++;
     const isWinner = (winner === 'good' && p.alignment === 'good') || (winner === 'evil' && p.alignment === 'evil');
     if (isWinner) {
       if (winner === 'evil') data[key].wins_as_demon++;

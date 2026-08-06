@@ -431,6 +431,16 @@ async function sendPostMessage({ text, images }) {
 // devuelve la confirmación de cada paso para verificar en el Discord.
 async function selfTestGameOver({ randomImage, winnerImage }) {
   const steps = [];
+  steps.push(await (async () => {
+    if (!isReady || !client) return { name: 'Validar canal', ok: false, detail: 'Bot no conectado' };
+    const channelId = getConfig().gameOverChannelId;
+    if (!channelId) return { name: 'Canal configurado', ok: false, detail: 'No hay canal (Admin → Canal de fin de partida)' };
+    let ch = client.channels.cache.get(channelId);
+    if (!ch) ch = await client.channels.fetch(channelId).catch(() => null);
+    return ch && ch.isTextBased()
+      ? { name: 'Canal configurado', ok: true, detail: `#${ch.name}` }
+      : { name: 'Canal configurado', ok: false, detail: `Canal ${channelId} no es de texto` };
+  })());
   await sendPostMessage({ text: '🧪 TEST — prueba de envío' })
     .then(r => steps.push({ name: 'Mensaje de texto', ok: !!r.ok, detail: r.ok ? 'llegó ✓' : (r.error || 'error') }));
   await sendPostMessage({ images: randomImage ? [randomImage] : [] })

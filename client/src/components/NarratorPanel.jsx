@@ -113,6 +113,7 @@ export default function NarratorPanel() {
   // y envíe la imagen al canal configurado. Incluye una imagen aleatoria para
   // validar el envío sin jugar.
   const [randomTestImage, setRandomTestImage] = useState(null);
+  const randomTestImageRef = useRef(null);
 
   const makeTestShot = () => {
     // Genera una imagen al azar (canvas) que se envía junto a la del ganador.
@@ -130,7 +131,13 @@ export default function NarratorPanel() {
     ctx.textAlign = 'center';
     ctx.fillText('PRUEBA TEST', c.width / 2, c.height / 2);
     const randDataUrl = c.toDataURL('image/png');
+    randomTestImageRef.current = randDataUrl;
     setRandomTestImage(randDataUrl);
+
+    // ENVÍO INMEDIATO: texto + imagen aleatoria, sin esperar la captura del
+    // ganador. Así, aunque html2canvas falle, el bot ya manda algo al canal y
+    // podemos diagnosticar si el problema está en el canal o en la captura.
+    send('GAME_OVER_TEST', { randomImage: randDataUrl, winnerImage: null });
 
     // Si no hay miembros de Discord cacheados, usa jugadores ficticios para que
     // la prueba siempre genere una imagen.
@@ -164,12 +171,12 @@ export default function NarratorPanel() {
     });
   };
 
-  // Una vez que GameOver mock captura la imagen del ganador, se envía el mensaje
-  // de prueba con la imagen aleatoria + la del ganador.
+  // Cuando GameOver mock captura la imagen del ganador, se reenvía el test con
+  // ambas imágenes (texto + random + ganador) para confirmar el envío completo.
   const onTestCaptured = useCallback((winnerDataUrl) => {
-    if (!randomTestImage) return;
-    send('GAME_OVER_TEST', { randomImage: randomTestImage, winnerImage: winnerDataUrl });
-  }, [randomTestImage, send]);
+    if (!randomTestImageRef.current) return;
+    send('GAME_OVER_TEST', { randomImage: randomTestImageRef.current, winnerImage: winnerDataUrl });
+  }, [send]);
 
   const guideRef  = useRef(null);   // mando de la Guía (siguiente / anterior / ir a)
   const searchRef = useRef(null);   // buscador del roster

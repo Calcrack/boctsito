@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, ChannelType, AttachmentBuilder } = require('discord.js');
 const { getConfig, updateConfig } = require('./configStore');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
@@ -381,6 +381,26 @@ async function sendDM(discordUserId, message) {
   }
 }
 
+// Publica una imagen (dataUrl PNG) de la pantalla de fin de partida en el canal
+// de Discord configurado. Devuelve { ok } o { ok: false, error }.
+async function sendGameOverImage(imageDataUrl) {
+  if (!isReady || !client) return { ok: false, error: 'Bot no conectado' };
+  const channelId = getConfig().gameOverChannelId;
+  if (!channelId) return { ok: false, error: 'No hay canal de fin de partida configurado' };
+  try {
+    const channel = client.channels.cache.get(channelId);
+    if (!channel || !channel.isTextBased()) return { ok: false, error: 'Canal no encontrado o no es de texto' };
+    const base64 = String(imageDataUrl || '').replace(/^data:image\/\w+;base64,/, '');
+    if (!base64) return { ok: false, error: 'Imagen vacía' };
+    const attachment = new AttachmentBuilder(Buffer.from(base64, 'base64'), { name: 'fin-de-partida.png' });
+    await channel.send({ files: [attachment] });
+    return { ok: true };
+  } catch (err) {
+    console.error('[Discord] sendGameOverImage error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 function getBotStatus() {
   return { connected: isReady, tag: client?.user?.tag || null };
 }
@@ -395,6 +415,7 @@ function getBotConfig() {
     narratorUserIds: narratorIds(),
     narratorRoleId: cfg.narratorRoleId || '',
     adminUserIds: cfg.adminUserIds || [],
+    gameOverChannelId: cfg.gameOverChannelId || '',
     channels: cfg.channels,
     locationNames: cfg.locationNames,
   };
@@ -404,6 +425,7 @@ module.exports = {
   initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
   deletePlayerRoom, deleteAllNightRooms, setReadyCallback,
   sendDM, getBotStatus, getBotConfig, renameLocationChannels,
+  sendGameOverImage,
   getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
   setChannelIds: (channels, actor) => updateConfig({ channels }, actor),
   setGuildId: (id, actor) => updateConfig({ guildId: String(id).trim() }, actor),

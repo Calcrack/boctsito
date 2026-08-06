@@ -51,6 +51,8 @@ const DEFAULTS = {
   campaignLocationNames: {},
   // Hash SHA-256 de la contraseña de admin (nunca la contraseña en claro).
   adminPasswordHash: DEFAULT_ADMIN_PASSWORD_HASH,
+  // Canal de Discord donde el bot publica la imagen del fin de partida.
+  gameOverChannelId: '',
 };
 
 let store = null;

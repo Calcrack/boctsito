@@ -19,8 +19,8 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole } = require('./discordBot');
-const { initConfigStore, getConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback, setNarratorRoleId, syncNarratorsFromRole, sendGameOverImage } = require('./discordBot');
+const { initConfigStore, getConfig, updateConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
 const { buildCampaign, healCampaign, loadCustomCampaigns, saveCustomCampaign, deleteCustomCampaign } = require('./campaignImport');
@@ -254,7 +254,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-function handleMessage(type, payload, session) {
+async function handleMessage(type, payload, session) {
   const { ws } = session;
 
   switch (type) {
@@ -978,6 +978,19 @@ function handleMessage(type, payload, session) {
       break;
     }
 
+    case 'GAME_OVER_SHOT': {
+      // El cliente captura la pantalla de fin de partida (div del ganador) y el
+      // bot la publica en el canal configurado en el panel Admin.
+      if (!session.isNarrator) throw new Error('No autorizado');
+      const imageDataUrl = payload.imageDataUrl;
+      if (!imageDataUrl) throw new Error('Imagen vacía');
+      const result = await sendGameOverImage(imageDataUrl);
+      if (!result.ok) {
+        sendTo(ws, 'ERROR', { message: result.error });
+      }
+      break;
+    }
+
     case 'DECLARE_WINNER': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = requireGame(session);
@@ -1375,6 +1388,9 @@ function handleMessage(type, payload, session) {
           }).catch(() => {});
         }
         if (Array.isArray(p.adminUserIds)) setAdminUserIds(p.adminUserIds, actor);
+        if (typeof p.gameOverChannelId === 'string') {
+          updateConfig({ gameOverChannelId: p.gameOverChannelId.trim() }, actor);
+        }
         if (typeof p.adminPassword === 'string' && p.adminPassword.trim()) {
           setAdminPassword(p.adminPassword.trim(), actor);
         }

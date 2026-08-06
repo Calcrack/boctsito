@@ -1509,6 +1509,7 @@ function AdminPanel({ send }) {
         narratorRoleId: cfg.narratorRoleId || '',
         narratorUserIds: Array.isArray(cfg.narratorUserIds) ? [...cfg.narratorUserIds] : [],
         adminUserIds: Array.isArray(cfg.adminUserIds) ? [...cfg.adminUserIds] : [],
+        gameOverChannelId: cfg.gameOverChannelId || '',
         channels: { ...(cfg.channels || {}) },
       });
     }
@@ -1530,6 +1531,7 @@ function AdminPanel({ send }) {
       narratorRoleId: form.narratorRoleId,
       narratorUserIds: form.narratorUserIds,
       adminUserIds: form.adminUserIds,
+      gameOverChannelId: form.gameOverChannelId,
       channels: form.channels,
     });
   };
@@ -1621,6 +1623,16 @@ function AdminPanel({ send }) {
                 onChange={e => set('adminUserIds', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
                 style={field} />
               <p className="nx-hint" style={{ marginTop: 4 }}>Solo estos IDs pueden cambiar la config del bot. Vacío = solo el narrador.</p>
+            </div>
+            <div>
+              <p className="panel-label" style={{ margin: 0 }}>Canal de fin de partida (ID del canal)</p>
+              <input
+                value={form.gameOverChannelId}
+                onChange={e => set('gameOverChannelId', e.target.value)}
+                style={field} />
+              <p className="nx-hint" style={{ marginTop: 4 }}>
+                ID de un canal de texto de Discord. Al terminar una partida, el bot publicará ahí la imagen de "El Bien/Mal ha ganado".
+              </p>
             </div>
 
             <button onClick={save} className="btn-action primary" style={{ fontSize: 12, padding: '8px 0' }}>

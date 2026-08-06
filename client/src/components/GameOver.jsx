@@ -19,7 +19,15 @@ export default function GameOver() {
     const node = captureRef.current;
     if (!node) return;
     const t = setTimeout(() => {
-      html2canvas(node, { backgroundColor: '#070709', scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
+      html2canvas(node, {
+        backgroundColor: '#070709', scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0,
+        // Ajuste solo para la captura: html2canvas dibuja la línea base del texto
+        // desplazada hacia abajo. Se sube el nombre dentro de su contenedor para
+        // que quede centrado en la imagen (sin alterar la página visible).
+        onclone: (doc) => {
+          doc.querySelectorAll('.pc-name').forEach(el => { el.style.position = 'relative'; el.style.top = '-2px'; });
+        },
+      })
         .then(canvas => {
           sentRef.current = true;
           send('GAME_OVER_SHOT', { imageDataUrl: canvas.toDataURL('image/png') });

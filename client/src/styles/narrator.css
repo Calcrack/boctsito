@@ -367,6 +367,8 @@
   gap: 14px;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .nx-menu-body::-webkit-scrollbar { width: 9px; }
 .nx-menu-body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); border-radius: 6px; }

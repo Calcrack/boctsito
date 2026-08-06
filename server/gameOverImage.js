@@ -163,6 +163,24 @@ function roleImageBuffer(role) {
   try { return fs.readFileSync(file); } catch { return null; }
 }
 
+// ── Icono de jugador muerto ────────────────────────────────────────
+const WRAITH_FILE = path.join(PUBLIC_DIR, 'assets', 'wraith.png');
+let wraithImage = null;
+let wraithLoading = null;
+async function getWraithImage() {
+  if (wraithImage) return wraithImage;
+  if (!wraithLoading) {
+    wraithLoading = (async () => {
+      try { wraithImage = await loadImage(fs.readFileSync(WRAITH_FILE)); }
+      catch { wraithImage = null; }
+    })();
+    const r = await wraithLoading;
+    return wraithImage;
+  }
+  await wraithLoading;
+  return wraithImage;
+}
+
 // ── Text helpers ───────────────────────────────────────────────────
 function truncate(ctx, text, maxW) {
   if (ctx.measureText(text).width <= maxW) return text;
@@ -354,7 +372,7 @@ async function generateGameOverImage(game) {
       drawPlayerChip(ctx, p, chipX, py, rh, isGood);
 
       // Role name (right aligned) + extras
-      drawRoleName(ctx, p, role, isDrunk, drunkRole, x + colPadX, py, rowW, roleImgSize, isGood);
+      await drawRoleName(ctx, p, role, isDrunk, drunkRole, x + colPadX, py, rowW, roleImgSize, isGood);
 
       py += rowH + gap;
     }
@@ -437,18 +455,29 @@ function drawAvatarFallback(ctx, letter, x, y, size) {
   ctx.fillText(letter, x + size / 2, y + size / 2 + 1);
 }
 
-function drawRoleName(ctx, p, role, isDrunk, drunkRole, x0, y0, rowW, roleImgSize, isGood) {
+async function drawRoleName(ctx, p, role, isDrunk, drunkRole, x0, y0, rowW, roleImgSize, isGood) {
   const roleName = role?.name || p.role || '?';
-  const rightX = x0 + rowW;
-  const leftLimit = x0 + 190 * SCALE;
 
+  // La imagen de muerto se dibuja en el borde derecho y EMPUJA el texto hacia
+  // la izquierda (como el flex del HTML). Se reserva su ancho.
+  let glyphW = 0;
+  const iconSize = Math.round(roleImgSize * 0.9);
   if (!p.alive) {
-    ctx.font = `${10 * SCALE}px serif`;
-    ctx.fillStyle = BLOOD_HI;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('☠', rightX, y0 + roleImgSize / 2);
+    const img = await getWraithImage();
+    glyphW = iconSize + 8 * SCALE;
+    if (img) {
+      ctx.drawImage(img, x0 + rowW - iconSize, y0 + (roleImgSize - iconSize) / 2, iconSize, iconSize);
+    } else {
+      ctx.font = `${10 * SCALE}px serif`;
+      ctx.fillStyle = BLOOD_HI;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('☠', x0 + rowW, y0 + roleImgSize / 2);
+    }
   }
+
+  const rightX = (x0 + rowW) - glyphW;
+  const leftLimit = x0 + 190 * SCALE;
 
   ctx.fillStyle = BONE400;
   ctx.font = `500 ${8 * SCALE}px "IBM Plex Mono"`;

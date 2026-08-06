@@ -43,9 +43,17 @@
         "CEMENTERIO": "Invernadero",
         "BOSQUE": "Cripta del Culto",
         "CONFESIONARIO": "Confesionario"
+      },
+      "CUSTOM_TROUBLEBREWING351_mqk6b2it": {
+        "PLAZA": "Plaza",
+        "MERCADO": "Mercado",
+        "TABERNA": "Taberna",
+        "CEMENTERIO": "Cementerio",
+        "BOSQUE": "Bosque",
+        "CONFESIONARIO": "Confesionario"
       }
     }
   },
-  "updatedAt": 1786056824489,
+  "updatedAt": 1786056868484,
   "updatedBy": null
 }

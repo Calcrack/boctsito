@@ -177,7 +177,9 @@ function initConfigStore() {
     if (!store || typeof store !== 'object') store = {};
     if (!store.overrides || typeof store.overrides !== 'object') store.overrides = {};
     // GitHub gana sobre el archivo local (rebuilds efímeros del servidor).
-    _loadFromGithub().then(() => resolve());
+    // _loadFromGithub puede devolver `false` (sin credenciales): conviértelo en
+    // Promise para no reventar el arranque.
+    Promise.resolve(_loadFromGithub()).then(() => resolve());
   });
 }
 

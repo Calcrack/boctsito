@@ -78,6 +78,14 @@ function listCampaigns() {
     .map(c => ({
       id: c.id, name: c.name, isCustom: !!c.isCustom, author: c.author || null,
       locationNames: getCampaignLocationNames(c.id),
+      // Guion real (lista de ids de rol) para que el editor muestre el JSON.
+      // Los roles desconocidos guardan su id crudo en `name`.
+      script: c.isCustom
+        ? Object.keys(c.roles || {}).map(id => {
+            const r = c.roles[id];
+            return (r && r.unknown && r.name) ? r.name : id;
+          })
+        : undefined,
     }));
 }
 

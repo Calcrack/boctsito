@@ -563,13 +563,11 @@ function StatusLog({ log }) {
 // El id se conserva en el servidor para no romper la partida activa.
 function EditCampaignModal({ campaign, send, onClose }) {
   const roles = campaign?.roles || {};
-  const seed = [
-    { id: '_meta', name: campaign?.name || '' },
-    ...Object.keys(roles).map(id => {
-      const r = roles[id];
-      return r?.unknown ? (r.name || id) : id;
-    }),
-  ];
+  // Prefill con el guion REAL que manda el servidor (campaign.script), no con
+  // una lista derivada. Fallback a los ids de roles si no llegara.
+  const source = campaign?.script ??
+    Object.keys(roles).map(id => roles[id]?.unknown ? (roles[id].name || id) : id);
+  const seed = [{ id: '_meta', name: campaign?.name || '' }, ...source];
   const [name, setName] = useState(campaign?.name || '');
   const [json, setJson] = useState(JSON.stringify(seed, null, 1));
   const [locationNames, setLocationNames] = useState({ ...LOCATION_DEFAULTS, ...(campaign?.locationNames || {}) });

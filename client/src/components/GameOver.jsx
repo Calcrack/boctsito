@@ -2,8 +2,25 @@ import React, { useRef, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import { useGame } from '../context/GameContext';
 import { ROLE_BY_ID } from '../data/roles';
-import PlayerChip from './PlayerChip';
 import RoleIcon from './RoleIcon';
+
+// Paleta literal (misma estética gótica de theme.css) — html2canvas no resuelve
+// correctamente variables CSS dentro de gradientes, así que aquí se usan los
+// valores exactos del tema para que la captura sea fiel al diseño.
+const LIT = {
+  good:    '#6d8cb8',
+  evil:    '#d4483a',
+  bone50:  '#f4efe4',
+  bone200: '#c9beaa',
+  bone300: '#b0a690',
+  bone400: '#8a8170',
+  gold:    '#c9a24a',
+  goldHot: '#e8c270',
+  ink900:  '#0a0a10',
+  ink700:  '#1a1a23',
+  goodBg:  '#080f1a',
+  evilBg:  '#1a0608',
+};
 
 export default function GameOver({ mock, onCaptured }) {
   const { state, send } = useGame();
@@ -19,15 +36,14 @@ export default function GameOver({ mock, onCaptured }) {
   const effWinReason = mock ? mock.winReason : (game?.winReason || null);
   const effIsNarrator = mock ? true : isNarrator;
 
-  // Cuando acaba la partida, el narrador captura la pantalla completa de fin de
-  // partida (título, roles, jugadores y fondo) y la envía al servidor para que
-  // el bot la publique en el canal configurado.
+  // Cuando acaba la partida, el narrador captura el panel (título + jugadores)
+  // y lo envía al servidor para que el bot lo publique en el canal configurado.
   useEffect(() => {
     if (!effWinner || !effIsNarrator || sentRef.current) return;
     const node = captureRef.current;
     if (!node) return;
     const t = setTimeout(() => {
-      html2canvas(node, { backgroundColor: '#0d0d14', scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
+      html2canvas(node, { backgroundColor: LIT.ink900, scale: 2, logging: false, useCORS: true, allowTaint: false, imageTimeout: 0 })
         .then(canvas => {
           sentRef.current = true;
           const dataUrl = canvas.toDataURL('image/png');
@@ -52,44 +68,64 @@ export default function GameOver({ mock, onCaptured }) {
   const goodTeam = players.filter(p => p.alignment === 'good');
   const evilTeam = players.filter(p => p.alignment === 'evil');
 
-  const teamBlock = (team, label, isGood) => (
+  const playerEntry = (p) => {
+    const isDrunk = p.role === 'DRUNK';
+    const drunkFakeRole = isDrunk && p.drunkAs ? ROLE_BY_ID[p.drunkAs] : null;
+    const role = p.role ? ROLE_BY_ID[p.role] : null;
+    return (
+      <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: p.alive ? 1 : 0.5, padding: '3px 0' }}>
+        <RoleIcon role={role} size={26} radius={4} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%',
+            background: LIT.ink700, border: `1px solid ${LIT.gold}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 10, fontWeight: 700, color: LIT.bone200,
+            flexShrink: 0,
+          }}>
+            {(p.name || '?')[0].toUpperCase()}
+          </span>
+          <span style={{
+            fontFamily: 'Cormorant Garamond, Georgia, serif',
+            fontSize: 15, fontWeight: 700, color: LIT.bone50, letterSpacing: '0.02em',
+          }}>
+            {p.name}
+          </span>
+        </div>
+        <span style={{
+          fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 12, fontStyle: 'italic',
+          color: LIT.bone400, marginLeft: 2, minWidth: 74, textAlign: 'left',
+        }}>
+          {role?.name}
+        </span>
+        {isDrunk && drunkFakeRole && (
+          <span style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 10, color: LIT.gold, fontStyle: 'italic' }}>
+            creía ser {drunkFakeRole.name}
+          </span>
+        )}
+        {p.isSmokeScreen && (
+          <span style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 10, color: LIT.evil, fontStyle: 'italic' }}>
+            Cortina de Humo
+          </span>
+        )}
+        {!p.alive && <span style={{ color: LIT.evil, fontSize: 13 }}>☠</span>}
+      </div>
+    );
+  };
+
+  const teamBlock = (team, label, accent) => (
     <div style={{
-      background: 'rgba(0,0,0,0.35)',
-      border: `1px solid ${isGood ? 'rgba(143,208,168,0.35)' : 'rgba(224,82,70,0.35)'}`,
+      background: 'rgba(0,0,0,0.32)',
+      border: `1px solid ${accent}`,
       borderRadius: 6,
       padding: '14px 16px',
+      textAlign: 'center',
     }}>
-      <p style={{ fontFamily: 'Consolas, monospace', fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: isGood ? '#8fd0a8' : '#e05246', margin: '0 0 10px' }}>
+      <p style={{ fontFamily: 'Cinzel Decorative, Cinzel, Georgia, serif', fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', color: accent, margin: '0 0 12px' }}>
         {label}
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        {team.map(p => {
-          const isDrunk = p.role === 'DRUNK';
-          const drunkFakeRole = isDrunk && p.drunkAs ? ROLE_BY_ID[p.drunkAs] : null;
-          const role = p.role ? ROLE_BY_ID[p.role] : null;
-          return (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 9, opacity: p.alive ? 1 : 0.55 }}>
-              <RoleIcon role={role} size={26} radius={4} />
-              <PlayerChip name={p.name} avatar={p.avatar} size="lg" />
-              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                <span style={{ fontFamily: 'Consolas, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#c9c2b4', display: 'block' }}>
-                  {role?.name}
-                </span>
-                {isDrunk && drunkFakeRole && (
-                  <span style={{ fontFamily: 'Georgia, serif', fontSize: 10, color: '#d8b45a', fontStyle: 'italic', display: 'block' }}>
-                    creía ser {drunkFakeRole.name}
-                  </span>
-                )}
-                {p.isSmokeScreen && (
-                  <span style={{ fontFamily: 'Georgia, serif', fontSize: 10, color: '#e05246', fontStyle: 'italic', display: 'block' }}>
-                    Cortina de Humo
-                  </span>
-                )}
-              </div>
-              {!p.alive && <span style={{ color: '#e05246', fontSize: 13 }}>☠</span>}
-            </div>
-          );
-        })}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {team.map(playerEntry)}
       </div>
     </div>
   );
@@ -107,24 +143,25 @@ export default function GameOver({ mock, onCaptured }) {
         : 'radial-gradient(ellipse at center top, #1a0608 0%, #0a0a10 70%)',
     }}>
       <div style={{ maxWidth: 720, width: '100%' }}>
-        <div ref={captureRef} style={{ background: '#0d0d14', borderRadius: 10, padding: '28px 32px' }}>
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 40, color: isGoodWin ? '#8fd0a8' : '#e05246', marginBottom: 8 }}>
+        <div ref={captureRef} style={{ background: '#0c0c13', borderRadius: 10, padding: '30px 34px', border: '1px solid rgba(201,162,74,0.35)', boxShadow: '0 20px 60px -20px rgba(0,0,0,0.8)' }}>
+          <div style={{ textAlign: 'center', marginBottom: 26 }}>
+            <div style={{ fontSize: 42, color: isGoodWin ? LIT.good : LIT.evil, marginBottom: 6, textShadow: `0 0 24px ${isGoodWin ? LIT.good : LIT.evil}` }}>
               {isGoodWin ? '✦' : '☠'}
             </div>
-            <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 400, color: '#f2eee6', margin: 0, letterSpacing: '0.04em' }}>
+            <h1 style={{ fontFamily: 'Cinzel Decorative, Cinzel, Georgia, serif', fontSize: 32, fontWeight: 400, color: '#f2efe6', margin: 0, letterSpacing: '0.06em', textShadow: `0 0 30px ${isGoodWin ? 'rgba(109,140,184,0.5)' : 'rgba(212,72,58,0.5)'}` }}>
               {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
             </h1>
             {winReason && (
-              <p style={{ fontFamily: 'Georgia, serif', fontSize: 17, color: '#c9c2b4', fontStyle: 'italic', margin: '8px 0 0' }}>
+              <p style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 18, color: '#c9c2b4', fontStyle: 'italic', margin: '8px 0 0' }}>
                 {winReason}
               </p>
             )}
+            <div style={{ color: LIT.gold, fontSize: 16, letterSpacing: '0.5em', marginTop: 6 }}>✦</div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {teamBlock(goodTeam, 'Aldeanos & Forasteros', true)}
-            {teamBlock(evilTeam, 'Esbirros & Demonio', false)}
+            {teamBlock(goodTeam, 'Aldeanos & Forasteros', LIT.good)}
+            {teamBlock(evilTeam, 'Esbirros & Demonio', LIT.evil)}
           </div>
         </div>
 

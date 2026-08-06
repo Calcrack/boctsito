@@ -104,6 +104,21 @@ function Celestials({ isNight }) {
 function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activeActor, voteTurn, seatSize, posX, posY, onClick }) {
   const role = player.role ? ROLE_BY_ID[player.role] : null;
   const isDead = !player.alive;
+
+  // Detecta cuándo el jugador ACABA de morir (transición vivo → muerto). Al
+  // cambiar `deathShroudKey`, la tumba se re-monta y su animación de caída se
+  // vuelve a ejecutar cada vez que alguien muere (p. ej. al salir el día).
+  const prevAlive = useRef(player.alive);
+  const [deathKey, setDeathKey] = useState(0);
+  useEffect(() => {
+    if (prevAlive.current === true && player.alive === false) {
+      setDeathKey(k => k + 1);
+    }
+    prevAlive.current = player.alive;
+  }, [player.alive]);
+
+  // Moneda: al usarse el voto de muerto pasa a estado "votado" y se desvanece.
+  const voteUsed = isDead && !!player.deadVoteNominationId;
   // El Espía (y la Viuda en su noche) leen el Grimorio: ven el personaje real
   // de cada asiento. El servidor solo manda `role` cuando lo permite.
   const canSeeRoles = isNarrator || isMe || seesGrimoire;
@@ -159,25 +174,26 @@ function Seat({ player, isMe, isNarrator, seesGrimoire, canAct, nominated, activ
           </div>
         </div>
 
-        {isDead && (
-          <img src="/assets/ficha-muerto.png" alt="" className="death-shroud"
-            onError={e => { e.target.style.display = 'none'; }} />
-        )}
-
         {/* Sospechas: contador pequeño */}
         {suspicionCount > 0 && (
           <div className="seat-counters">
             <span className="seat-counter suspicions" title={`${suspicionCount} sospecha(s) — clic para ver`}>👁 {suspicionCount}</span>
           </div>
         )}
+      </div>
 
-        {isDead && !player.deadVoteNominationId && (
-          <div className="dead-vote-token">
+      {/* Overlays de muerte: tumba y moneda superpuestas ENCIMA del medallón,
+          no recortadas por él (caen sobre el jugador al morir). */}
+      {isDead && (
+        <div className="seat-overlays">
+          <img key={deathKey} src="/assets/ficha-muerto.png" alt="" className="death-shroud"
+            onError={e => { e.target.style.display = 'none'; }} />
+          <div className={`dead-vote-token ${voteUsed ? 'voted' : ''}`}>
             <img src="/assets/token-ultimo-voto.png" alt="Voto disponible"
               onError={e => { e.target.style.display = 'none'; }} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Fichas de efecto: íconos superpuestos sobre la foto (solo narrador) */}
       {/* Chip con TEXTO: dos fichas "A salvo" ya no son indistinguibles.

@@ -20,11 +20,11 @@
     "gameOverChannelId": "1467694637190877234",
     "narratorRoleId": "1499987378755076218",
     "locationNames": {
-      "PLAZA": "Palacio",
-      "MERCADO": "Salón de Baile",
-      "TABERNA": "Jardin",
-      "CEMENTERIO": "Comedor",
-      "BOSQUE": "Sala del Trono",
+      "PLAZA": "Capilla",
+      "MERCADO": "Asilo",
+      "TABERNA": "Cementerio",
+      "CEMENTERIO": "Bosque Maldito",
+      "BOSQUE": "Mansión",
       "CONFESIONARIO": "Confesionario"
     },
     "campaignLocationNames": {
@@ -62,6 +62,6 @@
       }
     }
   },
-  "updatedAt": 1786058323118,
+  "updatedAt": 1786058330921,
   "updatedBy": null
 }

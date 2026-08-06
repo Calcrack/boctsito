@@ -20,11 +20,11 @@
     "gameOverChannelId": "1467694637190877234",
     "narratorRoleId": "1499987378755076218",
     "locationNames": {
-      "PLAZA": "Plaza",
-      "MERCADO": "Mercado",
-      "TABERNA": "Taberna",
-      "CEMENTERIO": "Cementerio",
-      "BOSQUE": "Bosque",
+      "PLAZA": "Jardín Violeta",
+      "MERCADO": "Observatorio",
+      "TABERNA": "Biblioteca",
+      "CEMENTERIO": "Invernadero",
+      "BOSQUE": "Cripta",
       "CONFESIONARIO": "Confesionario"
     },
     "campaignLocationNames": {
@@ -62,6 +62,6 @@
       }
     }
   },
-  "updatedAt": 1786058176693,
+  "updatedAt": 1786058179116,
   "updatedBy": null
 }

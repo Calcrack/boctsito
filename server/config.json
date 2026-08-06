@@ -14,9 +14,12 @@
       "BOSQUE": "1467694546665214085",
       "CONFESIONARIO": "1499969856160792676"
     },
-    "adminUserIds": [],
-    "gameOverChannelId": "1467694637190877234"
+    "adminUserIds": [
+      "723204863873384469"
+    ],
+    "gameOverChannelId": "1467694637190877234",
+    "narratorRoleId": "1499987378755076218"
   },
-  "updatedAt": 1786029558625,
+  "updatedAt": 1786029597468,
   "updatedBy": null
 }

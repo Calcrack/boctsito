@@ -2,8 +2,13 @@
   "overrides": {
     "narratorUserIds": [
       "723204863873384469"
-    ]
+    ],
+    "campaignLocationNames": {
+      "TEST": {
+        "PLAZA": "La Plaza Grande"
+      }
+    }
   },
-  "updatedAt": 1786026167414,
-  "updatedBy": "setNarratorIds"
+  "updatedAt": 1786057510880,
+  "updatedBy": "test"
 }

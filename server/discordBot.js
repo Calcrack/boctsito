@@ -348,24 +348,47 @@ async function setPlazaChannelPermission(allow) {
 // Renombra los canales de voz REALES de Discord según los nombres de la
 // campaña activa (por configuración). Se reutilizan los canales ya existentes,
 // solo se les cambia el nombre. `names` = mapa key → nombre (PLAZA, MERCADO…).
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function renameLocationChannels(names = {}) {
   if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
   const out = [];
-  for (const [key, name] of Object.entries(names)) {
-    if (!name) continue;
-    const cid = effectiveChannels()[key];
-    if (!cid) continue;
-    const channel = guild.channels.cache.get(cid);
-    if (!channel) continue;
-    if (channel.name === name) continue;
-    try {
-      await channel.setName(name);
-      out.push(key);
-    } catch (err) {
-      console.error(`[Discord] renameLocationChannel ${key}:`, err.message);
+  // Discord aplica rate limit muy estricto a los cambios de nombre de canal
+  // (429) y, si se disparan varios seguidos, bloquea durante ~10 min. Se
+  // espacian los renames y se reintenta con backoff ante 429/ESRChGatee.
+  const keep = Object.entries(names).map(([key, name]) => ({ key, name }))
+    .filter(e => {
+      if (!e.name) return false;
+      const cid = effectiveChannels()[e.key];
+      if (!cid) return false;
+      const channel = guild.channels.cache.get(cid);
+      if (!channel) return false;
+      e.channel = channel;
+      return channel.name !== e.name;
+    });
+  for (const { key, name, channel } of keep) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await channel.setName(name);
+        out.push(key);
+        break;
+      } catch (err) {
+        const throttled = err && (err.status === 429 || /rate ?limit|Too Many Requests/i.test(err.message || ''));
+        if (throttled) {
+          // Discord manda en retryAfter el tiempo a esperar (ms).
+          const wa = err.retryAfter ? err.retryAfter * 1000 : 1000 * (attempt + 1) * 2;
+          console.log(`[Discord] Rate limit renombrando ${key} — reintento en ${(wa / 1000).toFixed(1)}s`);
+          await sleep(wa);
+          continue;
+        }
+        console.error(`[Discord] renameLocationChannel ${key}:`, err.message);
+        break;
+      }
     }
+    await sleep(600); // respiro entre canales para no saturar el bucket
   }
   if (out.length) console.log('[Discord] Canales renombrados:', out.join(', '));
+  else console.log('[Discord] No hubo canales que renombrar (nombres ya correctos o sin cambios).');
   return { ok: true, renamed: out };
 }
 

@@ -7,8 +7,17 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
+
+// Persistencia de la config en GitHub (igual que rankings/campañas): Render es
+// efímero, así que los overrides se guardan en la branch config-data para que
+// sobrevivan a los reinicios. Si no hay credenciales, cae al archivo local.
+const GITHUB_TOKEN     = process.env.GITHUB_TOKEN;
+const GITHUB_REPO      = process.env.GITHUB_REPO;
+const GITHUB_FILE_PATH = process.env.GITHUB_CONFIG_PATH || 'server/config.json';
+const GITHUB_BRANCH    = process.env.GITHUB_BRANCH    || 'config-data';
 
 // Contraseña de admin NO se guarda en claro: solo su SHA-256. El valor en
 // texto de este hash por defecto es "B0ct-Adm1n-0806!" (cámbialo con el env
@@ -56,6 +65,85 @@ const DEFAULTS = {
 };
 
 let store = null;
+let _ghSha = null;
+
+function _ghRequest(method, apiPath, body) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const req = https.request({
+      hostname: 'api.github.com',
+      path: apiPath,
+      method,
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'boct-config',
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+      },
+    }, res => {
+      let raw = '';
+      res.on('data', c => raw += c);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(raw) }); }
+        catch { resolve({ status: res.statusCode, body: raw }); }
+      });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function _pushToGithub(config) {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) return;
+  const content = Buffer.from(JSON.stringify(config, null, 2), 'utf8').toString('base64');
+  const apiPath = `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+  if (!_ghSha) {
+    const get = await _ghRequest('GET', `${apiPath}?ref=${GITHUB_BRANCH}`, null);
+    if (get.status === 200) _ghSha = get.body.sha;
+    else if (get.status !== 404) { console.error('[Config] GET sha falló:', get.status); return; }
+  }
+  const body = { message: 'chore: update config', content, branch: GITHUB_BRANCH };
+  if (_ghSha) body.sha = _ghSha;
+  const put = await _ghRequest('PUT', apiPath, body);
+  if (put.status === 200 || put.status === 201) {
+    _ghSha = put.body.content?.sha;
+    console.log('[Config] Sincronizado en GitHub');
+  } else if (put.status === 409) {
+    _ghSha = null;
+    const get2 = await _ghRequest('GET', `${apiPath}?ref=${GITHUB_BRANCH}`, null);
+    if (get2.status === 200) {
+      _ghSha = get2.body.sha;
+      const body2 = { ...body, sha: _ghSha };
+      const put2 = await _ghRequest('PUT', apiPath, body2);
+      if (put2.status === 200 || put2.status === 201) _ghSha = put2.body.content?.sha;
+      else { console.error('[Config] Push falló (reintento):', put2.status); _ghSha = null; }
+    }
+  } else {
+    console.error('[Config] Push falló:', put.status, JSON.stringify(put.body).slice(0, 200));
+    _ghSha = null;
+  }
+}
+
+// Load config from GitHub (branch config-data); falls back to local file.
+function _loadFromGithub() {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) return false;
+  return _ghRequest('GET', `/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, null)
+    .then(res => {
+      if (res.status === 200 && res.body.content) {
+        _ghSha = res.body.sha;
+        const remote = JSON.parse(Buffer.from(res.body.content, 'base64').toString('utf8'));
+        store = { ...(remote && typeof remote === 'object' ? remote : {}), overrides: (remote?.overrides && typeof remote.overrides === 'object') ? remote.overrides : {} };
+        try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(store, null, 2), 'utf8'); } catch {}
+        console.log('[Config] Cargado desde GitHub');
+        return true;
+      }
+      if (res.status === 404) console.log('[Config] No hay config remota, empezando de cero');
+      return false;
+    })
+    .catch(() => false);
+}
 
 function initConfigStore() {
   return new Promise((resolve) => {
@@ -68,7 +156,8 @@ function initConfigStore() {
     }
     if (!store || typeof store !== 'object') store = {};
     if (!store.overrides || typeof store.overrides !== 'object') store.overrides = {};
-    resolve();
+    // GitHub gana sobre el archivo local (rebuilds efímeros del servidor).
+    _loadFromGithub().then(() => resolve());
   });
 }
 
@@ -90,11 +179,17 @@ function getConfig() {
 function persist() {
   try {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(store, null, 2));
-    return true;
   } catch (e) {
     console.error('[Config] save error:', e.message);
     return false;
   }
+  // Sincroniza en GitHub (forma podada: solo overrides + metadatos relevantes).
+  _pushToGithub({
+    overrides: store.overrides || {},
+    updatedAt: store.updatedAt || null,
+    updatedBy: store.updatedBy || null,
+  }).catch(e => console.error('[Config] GitHub push error:', e.message));
+  return true;
 }
 
 // Aplica un patch parcial sobre la config. `actor` = id del usuario admin que

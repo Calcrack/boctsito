@@ -9,17 +9,18 @@ export default function GameOver() {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
 
-  const winnerBlockRef = useRef(null);
+  const gameOverRef = useRef(null);
   const sentRef = useRef(false);
 
-  // Cuando acaba la partida, el narrador captura el bloque del ganador y lo
-  // envía al servidor para que el bot lo publique en el canal configurado.
+  // Cuando acaba la partida, el narrador captura la pantalla completa de fin de
+  // partida (título, roles, jugadores y fondo) y la envía al servidor para que
+  // el bot la publique en el canal configurado.
   useEffect(() => {
     if (!game?.winner || !isNarrator || sentRef.current) return;
-    const node = winnerBlockRef.current;
+    const node = gameOverRef.current;
     if (!node) return;
     const t = setTimeout(() => {
-      html2canvas(node, { backgroundColor: null, scale: 2 })
+      html2canvas(node, { backgroundColor: null, scale: 2, logging: false })
         .then(canvas => {
           sentRef.current = true;
           send('GAME_OVER_SHOT', { imageDataUrl: canvas.toDataURL('image/png') });
@@ -91,9 +92,9 @@ export default function GameOver() {
       background: isGoodWin
         ? 'radial-gradient(ellipse at center top, #080f1a 0%, var(--ink-900) 70%)'
         : 'radial-gradient(ellipse at center top, #1a0608 0%, var(--ink-900) 70%)',
-    }}>
+    }} ref={gameOverRef}>
       <div style={{ maxWidth: 720, width: '100%' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }} ref={winnerBlockRef}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
             {isGoodWin ? '✦' : '☠'}
           </div>

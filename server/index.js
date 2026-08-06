@@ -240,7 +240,10 @@ wss.on('connection', (ws) => {
     session.lastSeen = Date.now();
     session.markedAway = false;
     try {
-      handleMessage(type, payload, session);
+      handleMessage(type, payload, session).catch(err => {
+        const s = sessions.get(socketId);
+        sendTo(ws, 'ERROR', { message: err.message });
+      });
     } catch (err) {
       sendTo(ws, 'ERROR', { message: err.message });
     }

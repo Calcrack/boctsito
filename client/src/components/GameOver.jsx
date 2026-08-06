@@ -25,12 +25,12 @@ export default function GameOver() {
   const screenshotSent = useRef(false);
 
   useEffect(() => {
-    if (!captureRef.current || screenshotSent.current) return;
+    if (!captureRef.current || screenshotSent.current || !game?.winner) return;
     screenshotSent.current = true;
     html2canvas(captureRef.current, { backgroundColor: null, useCORS: true }).then(canvas => {
       send('SCREENSHOT_GAME_OVER', { image: canvas.toDataURL('image/png') });
-    }).catch(() => {});
-  }, [send]);
+    }).catch(err => console.error('[GameOver] html2canvas error:', err));
+  }, [send, game?.winner]);
 
   if (!game) return null;
   const { winner, players = [], winReason } = game;

@@ -20,11 +20,11 @@
     "gameOverChannelId": "1467694637190877234",
     "narratorRoleId": "1499987378755076218",
     "locationNames": {
-      "PLAZA": "Plaza",
-      "MERCADO": "Mercado",
-      "TABERNA": "Taberna",
-      "CEMENTERIO": "Cementerio",
-      "BOSQUE": "Bosque",
+      "PLAZA": "Capilla",
+      "MERCADO": "Asilo",
+      "TABERNA": "Cementerio",
+      "CEMENTERIO": "Bosque Maldito",
+      "BOSQUE": "Mansión",
       "CONFESIONARIO": "Confesionario"
     },
     "campaignLocationNames": {
@@ -62,6 +62,6 @@
       }
     }
   },
-  "updatedAt": 1786057037760,
+  "updatedAt": 1786057040767,
   "updatedBy": null
 }

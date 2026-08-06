@@ -5,6 +5,19 @@ import { ROLE_BY_ID } from '../data/roles';
 import PlayerChip from './PlayerChip';
 import RoleIcon from './RoleIcon';
 
+const COLORS = {
+  ink900: '#07070a',
+  good: '#6d8cb8',
+  bloodHi: '#d4483a',
+  bone50: '#f4efe4',
+  bone300: '#b0a690',
+  bone400: '#8a8170',
+  gold: '#c9a24a',
+  mono: "'IBM Plex Mono', ui-monospace, 'SF Mono', monospace",
+  serif: "'Cormorant Garamond', 'Cormorant', Georgia, serif",
+  title: "'Cinzel Decorative', 'Cinzel', 'Cormorant Garamond', Georgia, serif",
+};
+
 export default function GameOver() {
   const { state, send } = useGame();
   const { game, isNarrator } = state;
@@ -35,7 +48,7 @@ export default function GameOver() {
       borderRadius: 6,
       padding: '16px 18px',
     }}>
-      <p style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: isGood ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 12 }}>
+      <p style={{ fontFamily: COLORS.mono, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: isGood ? COLORS.good : COLORS.bloodHi, marginBottom: 12 }}>
         {label}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -48,21 +61,21 @@ export default function GameOver() {
               <RoleIcon role={role} size={30} radius={4} />
               <PlayerChip name={p.name} avatar={p.avatar} size="lg" />
               <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone-400)', display: 'block' }}>
+                <span style={{ fontFamily: COLORS.mono, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: COLORS.bone400, display: 'block' }}>
                   {role?.name}
                 </span>
                 {isDrunk && drunkFakeRole && (
-                  <span style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--gold)', fontStyle: 'italic', display: 'block' }}>
+                  <span style={{ fontFamily: COLORS.serif, fontSize: 10, color: COLORS.gold, fontStyle: 'italic', display: 'block' }}>
                     creía ser {drunkFakeRole.name}
                   </span>
                 )}
                 {p.isSmokeScreen && (
-                  <span style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--blood-hi)', fontStyle: 'italic', display: 'block' }}>
+                  <span style={{ fontFamily: COLORS.serif, fontSize: 10, color: COLORS.bloodHi, fontStyle: 'italic', display: 'block' }}>
                     Cortina de Humo
                   </span>
                 )}
               </div>
-              {!p.alive && <span style={{ color: 'var(--blood-hi)', fontSize: 14 }}>☠</span>}
+              {!p.alive && <span style={{ color: COLORS.bloodHi, fontSize: 14 }}>☠</span>}
             </div>
           );
         })}
@@ -79,19 +92,19 @@ export default function GameOver() {
       justifyContent: 'center',
       padding: 32,
       background: isGoodWin
-        ? 'radial-gradient(ellipse at center top, #080f1a 0%, var(--ink-900) 70%)'
-        : 'radial-gradient(ellipse at center top, #1a0608 0%, var(--ink-900) 70%)',
+        ? 'radial-gradient(ellipse at center top, #080f1a 0%, #07070a 70%)'
+        : 'radial-gradient(ellipse at center top, #1a0608 0%, #07070a 70%)',
     }}>
       <div ref={captureRef} style={{ maxWidth: 720, width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 60, color: isGoodWin ? 'var(--good)' : 'var(--blood-hi)', marginBottom: 16 }}>
+          <div style={{ fontSize: 60, color: isGoodWin ? COLORS.good : COLORS.bloodHi, marginBottom: 16 }}>
             {isGoodWin ? '✦' : '☠'}
           </div>
-          <h1 style={{ fontFamily: 'var(--title)', fontSize: 34, fontWeight: 400, color: 'var(--bone-50)', margin: '0 0 8px', letterSpacing: '0.04em' }}>
+          <h1 style={{ fontFamily: COLORS.title, fontSize: 34, fontWeight: 400, color: COLORS.bone50, margin: '0 0 8px', letterSpacing: '0.04em' }}>
             {isGoodWin ? 'El Bien ha ganado' : 'El Mal ha ganado'}
           </h1>
           {winReason && (
-            <p style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--bone-300)', fontStyle: 'italic' }}>
+            <p style={{ fontFamily: COLORS.serif, fontSize: 20, color: COLORS.bone300, fontStyle: 'italic' }}>
               {winReason}
             </p>
           )}

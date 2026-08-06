@@ -82,6 +82,7 @@ function initBot() {
     guild = client.guilds.cache.get(gid);
     if (!guild) guild = await client.guilds.fetch(gid).catch(() => null);
     _fetchAndCacheMembers().catch(() => {});
+    if (readyCallback) readyCallback().catch(() => {});
   });
 
   client.on('voiceStateUpdate', (oldState, newState) => {
@@ -225,6 +226,57 @@ async function ensurePlayerRoom(playerName, ownerId) {
   }
 }
 
+// Borra la habitación de UN jugador (al quitarlo de la partida).
+async function deletePlayerRoom(playerName) {
+  if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
+  const key = sanitizeRoomName(playerName).toLowerCase();
+  try {
+    const channel = guild.channels.cache.find(c =>
+      c.parentId === nightCategory() &&
+      c.type === ChannelType.GuildVoice &&
+      c.name.toLowerCase() === key
+    );
+    if (!channel) return { ok: true, deleted: 0 };
+    await channel.delete();
+    nightRoomCache.delete(key);
+    roomOwners.delete(key);
+    return { ok: true, deleted: 1 };
+  } catch (err) {
+    console.error('[Discord] deletePlayerRoom error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+// Limpia TODAS las habitaciones de noche sobrantes que no sean los canales
+// fijos de juego (PLAZA, MERCADO…). Se usa al arrancar si no hay jugadores,
+// para no arrastrar canales huérfanos de partidas anteriores.
+async function deleteAllNightRooms() {
+  if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
+  const reserved = new Set(Object.values(effectiveChannels()));
+  const rooms = guild.channels.cache.filter(c =>
+    c.parentId === nightCategory() &&
+    c.type === ChannelType.GuildVoice &&
+    !reserved.has(c.id)
+  );
+  let deleted = 0;
+  for (const channel of rooms.values()) {
+    try {
+      await channel.delete();
+      nightRoomCache.delete(channel.name.toLowerCase());
+      roomOwners.delete(channel.name.toLowerCase());
+      deleted++;
+    } catch (err) {
+      console.error('[Discord] deleteAllNightRooms:', err.message);
+    }
+  }
+  if (deleted) console.log(`[Discord] Limpieza: ${deleted} habitación(es) previa(s) eliminada(s)`);
+  return { ok: true, deleted };
+}
+
+// Cuando el bot termina de conectar y ya hay guild cargado.
+let readyCallback = null;
+function setReadyCallback(cb) { readyCallback = cb; }
+
 // Teletransporta a un usuario a su propia habitación de noche (la crea si falta).
 async function moveUserToOwnRoom(discordUserId, playerName) {
   if (!isReady || !guild) return { ok: false, error: 'Bot no conectado' };
@@ -319,6 +371,7 @@ function getBotConfig() {
 
 module.exports = {
   initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, ensurePlayerRoom,
+  deletePlayerRoom, deleteAllNightRooms, setReadyCallback,
   sendDM, getBotStatus, getBotConfig, renameLocationChannels,
   getNarratorIds, setNarratorIds, setVoiceStateCallback, setPlazaChannelPermission,
   setChannelIds: (channels, actor) => updateConfig({ channels }, actor),

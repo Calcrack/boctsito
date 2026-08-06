@@ -19,7 +19,7 @@ const {
 } = require('./gameLogic');
 const { computeRequiredDecisions, suggestDecision, isSetupComplete, isDecisionResolved } = require('./setup');
 const { renderCampaignSheet } = require('./campaignSheet');
-const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels } = require('./discordBot');
+const { initBot, getGuildMembers, moveUserToChannel, moveUserToOwnRoom, getNarratorIds, setNarratorIds, sendDM, getBotStatus, getBotConfig, setVoiceStateCallback, setPlazaChannelPermission, setChannelIds, setGuildId, setNightCategoryId, setBoctRoleId, setAdminUserIds, renameLocationChannels, ensurePlayerRoom, deletePlayerRoom, deleteAllNightRooms, setReadyCallback } = require('./discordBot');
 const { initConfigStore, getConfig, setLocationNames, getCampaignLocationNames, setCampaignLocationNames, verifyAdminPassword, setAdminPassword } = require('./configStore');
 const { ROLES, BASE_DISTRIBUTION, getRolesByType, getCampaign, CAMPAIGNS, DEFAULT_CAMPAIGN } = require('./roles');
 const { registerCampaign, listCampaigns } = require('./campaigns');
@@ -365,18 +365,24 @@ function handleMessage(type, payload, session) {
       sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
         players: game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
       }));
+      // Crear su habitación de noche ya, en vez de todas juntas al empezar
+      // la partida. Así solo hay canales para los jugadores actuales.
+      ensurePlayerRoom(name, discordId || null).catch(() => {});
       break;
     }
 
     case 'REMOVE_PLAYER': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
+      const removed = game.players.find(p => p.id === payload.playerId);
       removePlayer(game, payload.playerId);
       ensureSetup(game);
       broadcastGame();
       sessions.forEach(s => sendTo(s.ws, 'PLAYER_LIST', {
         players: game.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
       }));
+      // Al quitar al jugador se elimina su habitación (no se acumulan canales).
+      if (removed?.name) deletePlayerRoom(removed.name).catch(() => {});
       break;
     }
 
@@ -2282,6 +2288,20 @@ async function startup() {
     console.log(`[Server] WebSocket: ws://localhost:${PORT}`);
     initRankings();
     initBot();
+
+    // Al reconectar, si no hay jugadores en la partida se limpian las
+    // habitaciones de noche sobrantes (evita canales huérfanos de partidas
+    // anteriores tras reinicios). Si hay jugadores, se recrean las suyas.
+    setReadyCallback(async () => {
+      const game = getGame(MAIN_GAME_ID);
+      if (!game || game.players.length === 0) {
+        await deleteAllNightRooms();
+        return;
+      }
+      for (const p of game.players) {
+        if (p.name) ensurePlayerRoom(p.name, p.discordId || null).catch(() => {});
+      }
+    });
 
     // Sync Discord voice state → game state
     setVoiceStateCallback((discordUserId, channelKey) => {

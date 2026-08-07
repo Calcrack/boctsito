@@ -224,16 +224,19 @@
   z-index: 8;
 }
 
-/* Death shroud overlay — cae sobre el jugador cuando muere (sin recortar) */
+/* Death shroud overlay — cae sobre el jugador cuando muere (sin recortar).
+   La tumba es retrato (138x166): con contain se ve completa y a un 125%
+   del tamaño del asiento, centrada en la caja. */
 .death-shroud {
   position: absolute;
-  inset: 0;
-  width: 100%; height: 100%;
-  object-fit: cover;
+  top: -12.5%; left: -12.5%;
+  width: 125%; height: 125%;
+  object-fit: contain;
   opacity: 0.7;
   animation: tomb-fall 0.55s cubic-bezier(0.2, 0.7, 0.3, 1.2) both;
   transform-origin: center;
   z-index: 1;
+  pointer-events: none;
 }
 
 @keyframes tomb-fall {
@@ -566,9 +569,9 @@
 
 .dead-vote-token {
   position: absolute;
-  bottom: -6px;
-  right: -6px;
-  width: 26px; height: 26px;
+  bottom: -10px;
+  right: -10px;
+  width: 32px; height: 32px; /* ~25% mayor para que la moneda no se recorte */
   animation: coin-fall 0.55s cubic-bezier(0.2, 0.7, 0.3, 1.2) both;
   transform-origin: center;
   transition: opacity 0.45s ease;
@@ -577,7 +580,7 @@
 
 .dead-vote-token img {
   width: 100%; height: 100%;
-  object-fit: cover;
+  object-fit: contain; /* la moneda es panorámica (152x91): no la recorta */
   filter: drop-shadow(0 0 4px rgba(109,140,184,0.9));
 }
 

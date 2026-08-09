@@ -289,7 +289,13 @@ async function handleMessage(type, payload, session) {
 
     case 'NARRATOR_LOGIN': {
       const { password } = payload;
-      if (password !== '0806') throw new Error('Contraseña incorrecta');
+      // Contraseña de narrador: primero NARRATOR_PASSWORD (env), si no está
+      // configurada se cae a la contraseña de admin (ADMIN_PASSWORD o hash de
+      // config). Nunca queda una clave fija en el código.
+      const expected = process.env.NARRATOR_PASSWORD;
+      if (expected ? (password !== expected) : !verifyAdminPassword(password)) {
+        throw new Error('Contraseña incorrecta');
+      }
       session.isNarrator = true;
       session.gameId = MAIN_GAME_ID;
       session.playerId = null;

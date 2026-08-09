@@ -74,7 +74,7 @@ export const roles = [
     ability: 'Los Esbirros empiezan conociendo 3 faroles.' },
 
   // ── ESBIRROS ────────────────────────────────────────────────────────
-  { id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'evil', type: 'minion', img: null,
+  { id: 'BOFFIN', name: 'Rata de Laboratorio', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/boffin.png',
     ability: 'El Demonio (incluso borracho o envenenado) tiene la habilidad de un bueno que no esté en juego. Ambos sabéis cuál.', night: { passive: true, evil: true } },
   { id: 'BOOMDANDY', name: 'Boomdandy', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/boomdandy.png',
     ability: 'Si eres ejecutado, todos los jugadores menos 3 mueren. Después de una cuenta atrás de 10 a 1, el jugador con más jugadores apuntándole muere.', night: { evil: true } },
@@ -100,7 +100,7 @@ export const roles = [
   { id: 'WIDOW', name: 'Viuda', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/widow.png',
     ability: 'En tu primera noche ves el Grimorio y eliges 1 jugador: está envenenado. 1 jugador bueno sabe que el Viuda está en juego.', night: { action: 'WIDOW', targets: 1, evil: true } },
   // Espejo del servidor: el Hechicero es Esbirro malvado.
-  { id: 'WIZARD', name: 'Hechicero', alignment: 'evil', type: 'minion', img: null,
+  { id: 'WIZARD', name: 'Hechicero', alignment: 'evil', type: 'minion', img: '/assets/roles/carousel/wizard.png',
     ability: 'Una vez por partida pídele en privado un deseo al Narrador: si se concede, tu deseo puede tener un precio y deja pistas de su naturaleza.', night: { passive: true } },
 
   // ── DEMONIOS ────────────────────────────────────────────────────────

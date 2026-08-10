@@ -188,8 +188,7 @@ function announceGameOver(game, winner) {
   // Generar y enviar imagen al canal de fin de partida
   generateGameOverImage(game).then(buffer => {
     if (buffer) {
-      const caption = winner === 'good' ? '✦ El Bien ha ganado' : '☠ El Mal ha ganado';
-      sendGameOverImage('data:image/png;base64,' + buffer.toString('base64'), caption).catch(err => {
+      sendGameOverImage('data:image/png;base64,' + buffer.toString('base64')).catch(err => {
         console.error('[Discord] Error enviando imagen de fin de partida:', err.message);
       });
     }
@@ -447,11 +446,10 @@ async function handleMessage(type, payload, session) {
       if (!CAMPAIGNS[cid]) throw new Error('Campaña desconocida');
       game.campaignId = cid;
       // Ya no hay editor global de emplazamientos: cada campaña lleva su propio
-      // nombre. Al elegirla aplicamos sus nombres a la config (para la web) y
-      // renombramos los canales de voz REALES de Discord.
+      // nombre. Al elegirla aplicamos sus nombres a la config (para la web). Los
+      // canales de voz REALES de Discord se renombran al arrancar la partida.
       const campaignNames = getCampaignLocationNames(cid);
       setLocationNames(campaignNames, currentActorId(session));
-      renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
       // Los roles de la campaña anterior ya no aplican: limpia el montaje.
       game.setup = { locked: false, seatOrder: game.players.map(p => p.id), assignments: {}, decisions: [] };
       game.setupResolved = null;
@@ -520,11 +518,7 @@ async function handleMessage(type, payload, session) {
       // personalizada). Si es la campaña activa, se reaplican en caliente.
       if (payload.locationNames && typeof payload.locationNames === 'object') {
         setCampaignLocationNames(eid, payload.locationNames, currentActorId(session));
-        if (getGame(MAIN_GAME_ID).campaignId === eid) {
-          const activeNames = getCampaignLocationNames(eid);
-          setLocationNames(activeNames, currentActorId(session));
-          renameLocationChannels(activeNames).catch(e => console.error('[Discord] rename error:', e.message));
-        }
+        // Los canales de voz reales se renombran cuando la partida arranca.
       }
       if (!existing.isCustom) {
         sendTo(ws, 'IMPORT_RESULT', { ok: true, id: eid, name: existing.name });
@@ -574,6 +568,11 @@ async function handleMessage(type, payload, session) {
       const { selectedRoles } = payload;
       distributeRoles(game, selectedRoles);
       game.phase = 'role_reveal';
+      // La partida arranca: aplica los nombres de la campaña a los canales de
+      // voz reales de Discord (no al elegir el guion en el lobby).
+      const campaignNames = getCampaignLocationNames(game.campaignId);
+      setLocationNames(campaignNames, currentActorId(session));
+      renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
       broadcastGame();
       break;
     }
@@ -645,6 +644,11 @@ async function handleMessage(type, payload, session) {
       const roles = autoSelectRoles(game.players.length, game.campaignId);
       distributeRoles(game, roles);
       game.autoMode = true;
+      // La partida arranca en modo automático: aplica los nombres de campaña a
+      // los canales de voz reales de Discord.
+      const campaignNames = getCampaignLocationNames(game.campaignId);
+      setLocationNames(campaignNames, currentActorId(session));
+      renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
       startNight(game);
       recordGameStart(game);
       teleportToNightRooms(game);

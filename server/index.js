@@ -568,11 +568,6 @@ async function handleMessage(type, payload, session) {
       const { selectedRoles } = payload;
       distributeRoles(game, selectedRoles);
       game.phase = 'role_reveal';
-      // La partida arranca: aplica los nombres de la campaña a los canales de
-      // voz reales de Discord (no al elegir el guion en el lobby).
-      const campaignNames = getCampaignLocationNames(game.campaignId);
-      setLocationNames(campaignNames, currentActorId(session));
-      renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
       broadcastGame();
       break;
     }
@@ -620,6 +615,13 @@ async function handleMessage(type, payload, session) {
       const isFirstNight = game.nightNumber === 0;
       startNight(game);
       if (isFirstNight) recordGameStart(game);
+      // Al iniciar la primera noche se aplican los nombres de la campaña a los
+      // canales de voz reales de Discord (no al elegir el guion en el lobby).
+      if (isFirstNight) {
+        const campaignNames = getCampaignLocationNames(game.campaignId);
+        setLocationNames(campaignNames, currentActorId(session));
+        renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
+      }
       // El anochecer puede terminar la partida (Vórtice, día extra de la Mente Maestra).
       if (game.phase === 'game_over' && game.winner) {
         broadcastGame();
@@ -644,11 +646,6 @@ async function handleMessage(type, payload, session) {
       const roles = autoSelectRoles(game.players.length, game.campaignId);
       distributeRoles(game, roles);
       game.autoMode = true;
-      // La partida arranca en modo automático: aplica los nombres de campaña a
-      // los canales de voz reales de Discord.
-      const campaignNames = getCampaignLocationNames(game.campaignId);
-      setLocationNames(campaignNames, currentActorId(session));
-      renameLocationChannels(campaignNames).catch(e => console.error('[Discord] rename error:', e.message));
       startNight(game);
       recordGameStart(game);
       teleportToNightRooms(game);

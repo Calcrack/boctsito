@@ -160,9 +160,7 @@ export default function Login() {
 
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.42em', textTransform: 'uppercase', color: 'var(--scene-accent)', marginBottom: 14, transition: 'color 1.4s ease' }}>
-            Los Campanarios
-          </div>
+          <img src="/assets/boct-logo.png" alt="BoCT" style={{ width: 120, height: 120, margin: '0 auto 14px', display: 'block', filter: 'drop-shadow(0 0 24px color-mix(in srgb, var(--scene-accent) 35%, transparent))', opacity: 0.92 }} />
           <h1 style={{ fontFamily: 'var(--title)', fontSize: 28, fontWeight: 400, color: 'var(--bone-50)', margin: 0, lineHeight: 1.3, letterSpacing: '0.04em', textShadow: '0 0 40px color-mix(in srgb, var(--scene-accent) 40%, transparent)' }}>
             Blood on the<br />Clock Tower
           </h1>

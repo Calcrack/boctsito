@@ -1,8 +1,6 @@
 {
   "overrides": {
-    "narratorUserIds": [
-      "668502963962118175"
-    ],
+    "narratorUserIds": [],
     "guildId": "1462151561575928034",
     "nightCategoryId": "1515577274248859648",
     "boctRoleId": "1499987378755076218",
@@ -62,6 +60,6 @@
       }
     }
   },
-  "updatedAt": 1786557223066,
+  "updatedAt": 1786558628294,
   "updatedBy": "setNarratorIds"
 }

@@ -684,6 +684,10 @@ async function handleMessage(type, payload, session) {
       startDay(game);
       teleportAllToPlaza(game);
       setPlazaChannelPermission(true).catch(() => {});
+      if (game.phase === 'game_over' && game.winner) {
+        announceGameOver(game, game.winner);
+        break;
+      }
       broadcastGame();
       const deaths = payload.nightDeaths || [];
       const msg = deaths.length > 0
@@ -696,9 +700,11 @@ async function handleMessage(type, payload, session) {
     case 'OPEN_NOMINATIONS': {
       if (!session.isNarrator) throw new Error('No autorizado');
       const game = getGame(MAIN_GAME_ID);
+      // Al abrir nominaciones todos vuelven a la Plaza (jugadores + narradores).
+      teleportAllToPlaza(game);
       openNominations(game);
       broadcastGame();
-      broadcastToAll('NOTIFICATION', { message: '⚖️ Las nominaciones están abiertas', type: 'info' });
+      broadcastToAll('NOTIFICATION', { message: '🏛️ Todos a la Plaza — las nominaciones están abiertas', type: 'info' });
       break;
     }
 
@@ -878,6 +884,9 @@ async function handleMessage(type, payload, session) {
         applyNightAction(game, payload.actionType, payload.actorId, payload.targetIds || []);
       }
       broadcastGame();
+      if (game.phase === 'game_over' && game.winner) {
+        announceGameOver(game, game.winner);
+      }
       break;
     }
 
@@ -903,6 +912,9 @@ async function handleMessage(type, payload, session) {
 
       const result = advanceNightQueue(game, session.playerId, action, targetIds || []);
       broadcastGame();
+      if (game.phase === 'game_over' && game.winner) {
+        announceGameOver(game, game.winner);
+      }
 
       if (result.done) {
         if (!tryAutoAdvanceDawn(game)) {

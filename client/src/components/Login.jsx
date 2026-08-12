@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 
-function TopOneCard({ emoji, label, color, entry, value }) {
+function TopOneCard({ img, label, color, entry, value }) {
   if (!entry || !value) return null;
   return (
     <div style={{
@@ -9,7 +9,7 @@ function TopOneCard({ emoji, label, color, entry, value }) {
       background: 'rgba(201,162,74,0.06)', border: `1px solid ${color}`,
       borderRadius: 4, padding: '14px 16px',
     }}>
-      <span style={{ fontSize: 26 }}>{emoji}</span>
+      {img && <img src={img} alt={label} style={{ width: 26, height: 26, objectFit: 'contain' }} />}
       <div style={{
         width: 46, height: 46, borderRadius: '50%',
         background: 'var(--ink-700)', border: `2px solid ${color}`,
@@ -66,9 +66,9 @@ function RankingsPanel({ onBack }) {
         </p>
       ) : showTop ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <TopOneCard emoji="😈" label="Top 1 · Demonio"  color="var(--blood-hi)" entry={topDemon} value={winsDemon(topDemon || {})} />
-          <TopOneCard emoji="🏡" label="Top 1 · Aldeano"  color="var(--good)"     entry={topGood}  value={winsGood(topGood || {})} />
-          <TopOneCard emoji="👑" label="Top 1 · Total"    color="var(--gold)"     entry={topAll}   value={winsTotal(topAll || {})} />
+          <TopOneCard img="/assets/logo_demon.png"     label="Top 1 · Demonio" color="var(--blood-hi)" entry={topDemon} value={winsDemon(topDemon || {})} />
+          <TopOneCard img="/assets/logo_townsfolk.png"  label="Top 1 · Aldeano" color="var(--good)"     entry={topGood}  value={winsGood(topGood || {})} />
+          <TopOneCard img="/assets/logo_fabled.png"     label="Top 1 · Total"   color="var(--gold)"     entry={topAll}   value={winsTotal(topAll || {})} />
           {!topDemon && !topGood && !topAll && (
             <p style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--bone-400)', textAlign: 'center', fontStyle: 'italic', padding: '12px 0' }}>
               Aún no hay victorias registradas.

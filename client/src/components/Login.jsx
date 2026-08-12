@@ -46,7 +46,13 @@ function RankingsPanel({ onBack }) {
   const rows = data ? Object.values(data).sort((a, b) => (b.wins_as_good + b.wins_as_demon) - (a.wins_as_good + a.wins_as_demon)) : [];
   const medals = ['🥇', '🥈', '🥉'];
 
-  const topBy = (fn) => rows.reduce((best, r) => (fn(r) > fn(best || {}) ? r : best), null);
+  const topBy = (fn) => rows.reduce((best, r) => {
+    if (!best) return r;
+    const vb = fn(best) || 0, vr = fn(r) || 0;
+    if (vr > vb) return r;
+    if (vr === vb && (r.total_games || 0) < (best.total_games || 0)) return r;
+    return best;
+  }, null);
   const winsGood  = r => r.wins_as_good  || 0;
   const winsDemon = r => r.wins_as_demon || 0;
   const winsTotal = r => (r.wins_as_good || 0) + (r.wins_as_demon || 0);

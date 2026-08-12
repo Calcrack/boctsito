@@ -35,7 +35,7 @@ export default function RoleReveal({ player }) {
         boxShadow: 'var(--shadow-deep)',
       }}>
         {role.img ? (
-          <RoleIcon role={role} size={140} radius={8}
+          <RoleIcon role={role} size={140} radius={8} forma
             style={{ objectFit: 'contain', margin: '0 auto 24px', display: 'block' }} />
         ) : (
           <div style={{ fontSize: 72, marginBottom: 24 }}>

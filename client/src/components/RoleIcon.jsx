@@ -15,7 +15,8 @@ const TYPE_COLOR = {
 };
 
 // `size` en píxeles; pásalo a null si el tamaño lo pone el CSS del padre.
-export default function RoleIcon({ role, size = 24, radius, className, style = {}, alt }) {
+// `forma` = usar el arte grande (rolesnotoken) en vez de la ficha circular.
+export default function RoleIcon({ role, size = 24, radius, className, style = {}, alt, forma }) {
   const [failed, setFailed] = useState(false);
   if (!role) return null;
 
@@ -31,7 +32,7 @@ export default function RoleIcon({ role, size = 24, radius, className, style = {
 
   // `img` es la clave del catálogo del cliente; `image` la que manda el
   // servidor para los roles homebrew de guiones importados.
-  const src = role.img || role.image || null;
+  const src = (forma && (role.forma || role.img)) || role.img || role.image || null;
 
   if (src && !failed) {
     return (

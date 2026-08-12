@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { ALL_ROLES, scriptRoles } from '../data/roles';
 import RoleIcon from './RoleIcon';
+import FormaIcon from './FormaIcon';
 
 const TYPE_LABEL = {
   townfolk: 'Aldeano', outsider: 'Forastero', minion: 'Esbirro',
@@ -54,7 +55,10 @@ function RoleInfoPanel() {
         onClick={() => setOpen(v => !v)}
         className="btn-action"
         style={{ width: '100%', fontSize: 14, padding: '10px 0', opacity: 0.8 }}>
-        📖 {open ? 'Cerrar Guía de Roles' : 'Información de los Roles'}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+          <FormaIcon roleId="LIBRARIAN" size={17} />
+          {open ? 'Cerrar Guía de Roles' : 'Información de los Roles'}
+        </span>
       </button>
       {open && (
         <div style={{ background: 'rgba(0,0,0,0.35)', border: 'var(--hairline)', borderRadius: 4, padding: '12px 14px', marginTop: 6, maxHeight: 380, overflowY: 'auto' }}>

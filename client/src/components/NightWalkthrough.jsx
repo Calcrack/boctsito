@@ -5,6 +5,7 @@ import { typeLabel, MASK } from '../utils/identity';
 import StatusChips from './StatusChips';
 import { AbilityTab } from './NarratorTools';
 import RoleIcon from './RoleIcon';
+import FormaIcon from './FormaIcon';
 
 const INFO_MARKERS = new Set(['EVIL_INFO', 'MINION_INFO', 'DEMON_INFO']);
 
@@ -524,7 +525,10 @@ export default function NightWalkthrough({ onActiveActor, onProgress, controlsRe
   return (
     <div className="nx-card accent" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="nx-card-head">
-        <p className="nx-head-title">🌙 Guía de la noche {game.nightNumber}</p>
+        <p className="nx-head-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <FormaIcon roleId="HIGH_PRIESTESS" size={20} />
+          Guía de la noche {game.nightNumber}
+        </p>
         <span className="nx-mono">paso {total ? current + 1 : 0}/{total}</span>
       </div>
 
@@ -534,14 +538,17 @@ export default function NightWalkthrough({ onActiveActor, onProgress, controlsRe
           {steps.map((s, i) => {
             const done = stepDone(s, game);
             const evil = s.type === 'role' && s.role.alignment === 'evil';
-            const emoji = s.type === 'info' ? '😈' : (NIGHT_ROLE_PATTERN[s.role.id]?.emoji || '·');
             const title = s.type === 'info'
               ? 'Info de Esbirros y Demonio'
               : `${s.role.name} — ${s.actor.name}`;
             return (
               <button key={i} title={title} onClick={() => setIdx(i)}
                 className={`nx-step${i === current ? ' now' : ''}${done ? ' done' : ''}${evil ? ' evil' : ''}`}>
-                {i + 1}{emoji !== '·' ? ` ${emoji}` : ''}{done && i !== current ? ' ✓' : ''}
+                <span style={{ opacity: 0.55 }}>{i + 1}</span>
+                {s.type === 'info'
+                  ? <FormaIcon roleId="GOBLIN" size={16} style={{ opacity: 0.9 }} />
+                  : <FormaIcon role={s.role} size={18} />}
+                {done && i !== current ? ' ✓' : ''}
               </button>
             );
           })}
@@ -676,7 +683,7 @@ function RoleStepView({ step, game, send }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        <RoleIcon role={shown} size={68} radius="50%" />
+        <RoleIcon role={shown} size={68} radius="50%" forma />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: 'var(--serif)', fontSize: 26, lineHeight: 1.15, color: evil ? 'var(--blood-hi)' : 'var(--bone-50)' }}>{shown.name}</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--bone-200)' }}>

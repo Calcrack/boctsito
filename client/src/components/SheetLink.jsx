@@ -1,4 +1,5 @@
 import React from 'react';
+import FormaIcon from './FormaIcon';
 
 // Hoja de campaña: la genera el servidor con el guion activo (también los
 // guiones importados, porque lee la campaña del servidor y no el catálogo
@@ -13,9 +14,10 @@ export default function SheetLink({ game, compact = false }) {
         padding: compact ? '3px 8px' : '4px 10px', fontFamily: 'var(--mono)',
         fontSize: compact ? 10 : 11, letterSpacing: '0.1em', textTransform: 'uppercase',
         color: 'var(--gold)', cursor: 'pointer', whiteSpace: 'nowrap',
-        display: 'inline-flex', alignItems: 'center',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-      📜 Hoja de campaña
+      <FormaIcon roleId="STEWARD" size={compact ? 14 : 16} />
+      Hoja de campaña
     </a>
   );
 }

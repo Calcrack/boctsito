@@ -39,7 +39,7 @@ function RichNightInfo({ text, players = [] }) {
         parts.push(
           <span key={key++} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, verticalAlign: 'middle', margin: '0 5px' }}>
             <span>{bestRole.name}</span>
-            <RoleIcon role={bestRole} size={38} radius={4} alt="" />
+            <RoleIcon role={bestRole} size={38} radius={4} alt="" forma />
           </span>
         );
         remaining = remaining.slice(bestRoleIdx + bestRole.name.length);

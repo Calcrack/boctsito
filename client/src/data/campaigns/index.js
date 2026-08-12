@@ -5,6 +5,7 @@ import sectsViolets from './sectsViolets';
 import carousel from './carousel';
 import { roles as travelerRoles } from './travelers';
 import { extraRoles } from './extras';
+import ROLE_FORMA from '../roleForma';
 
 export const CAMPAIGNS = {
   [troubleBrewing.id]: troubleBrewing,
@@ -37,18 +38,24 @@ export const ALL_ROLES = (() => {
   const out = [];
   for (const c of CAMPAIGN_LIST) {
     for (const r of c.roles) {
-      if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
+      if (!seen[r.id]) { seen[r.id] = true; out.push(withForma(r)); }
     }
   }
   for (const r of travelerRoles) {
-    if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
+    if (!seen[r.id]) { seen[r.id] = true; out.push(withForma(r)); }
   }
   // Roles extra: fuera de las campañas base, pero usados en guiones propios.
   for (const r of extraRoles) {
-    if (!seen[r.id]) { seen[r.id] = true; out.push(r); }
+    if (!seen[r.id]) { seen[r.id] = true; out.push(withForma(r)); }
   }
   return out;
 })();
+
+// Arte "forma" (rolesnotoken) para la vista grande del rol en la noche.
+// No muta el rol original: devuelve una copia con `.forma` añadido.
+function withForma(r) {
+  return ROLE_FORMA[r.id] ? { ...r, forma: ROLE_FORMA[r.id] } : r;
+}
 
 // Personajes del GUION en curso: los de la campaña activa, más los que el
 // Narrador haya repartido desde otra campaña en el montaje (esos extras solo
@@ -75,6 +82,7 @@ export function scriptRoles(game) {
       alignment: srv?.alignment || local?.alignment,
       ability:   srv?.ability   || local?.ability,
       img:       local?.img     || srv?.image || null,
+      forma:     local?.forma   || ROLE_FORMA[id] || null,
       homebrew:  !!srv?.homebrew,
     });
   };

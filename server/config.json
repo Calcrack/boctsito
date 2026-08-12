@@ -20,11 +20,11 @@
     "gameOverChannelId": "1467694637190877234",
     "narratorRoleId": "1499987378755076218",
     "locationNames": {
-      "PLAZA": "Jardín Violeta",
-      "MERCADO": "Observatorio",
-      "TABERNA": "Biblioteca",
-      "CEMENTERIO": "Invernadero",
-      "BOSQUE": "Cripta",
+      "PLAZA": "Palacio",
+      "MERCADO": "Salón de Baile",
+      "TABERNA": "Jardin",
+      "CEMENTERIO": "Comedor",
+      "BOSQUE": "Sala del Trono",
       "CONFESIONARIO": "Confesionario"
     },
     "campaignLocationNames": {
@@ -62,6 +62,6 @@
       }
     }
   },
-  "updatedAt": 1786493311792,
+  "updatedAt": 1786493314632,
   "updatedBy": null
 }

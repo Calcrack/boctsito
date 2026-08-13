@@ -584,10 +584,35 @@
   filter: drop-shadow(0 0 4px rgba(109,140,184,0.9));
 }
 
-/* La moneda se desvanece cuando el jugador usa su voto de muerto */
+/* Cuando el fantasma usa su voto: la moneda salta, gira en el aire,
+   vuelve a caer y se desvanece. La clase .voted se añade al gastar el voto. */
 .dead-vote-token.voted {
+  animation: coin-throw 0.95s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
   opacity: 0;
   pointer-events: none;
+}
+
+@keyframes coin-throw {
+  0% {
+    transform: translateY(0) rotateX(0) rotateZ(0);
+    opacity: 1;
+  }
+  28% {
+    transform: translateY(-220%) rotateX(180deg) rotateZ(6deg);
+    opacity: 1;
+  }
+  52% {
+    transform: translateY(0) rotateX(360deg) rotateZ(0);
+    opacity: 1;
+  }
+  78% {
+    transform: translateY(-40%) rotateX(480deg) rotateZ(-4deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-120%) rotateX(540deg) rotateZ(-6deg);
+    opacity: 0;
+  }
 }
 
 @keyframes coin-fall {

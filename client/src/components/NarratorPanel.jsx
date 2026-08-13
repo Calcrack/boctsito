@@ -13,6 +13,7 @@ import StatusChips from './StatusChips';
 import GameTable from './GameTable';
 import ActionModal from './ActionModal';
 import RoleIcon from './RoleIcon';
+import FormaIcon from './FormaIcon';
 import SheetLink from './SheetLink';
 
 function MiniAvatar({ player, size = 20 }) {
@@ -65,14 +66,14 @@ function PuzzlemasterDayPanel({ pm, alreadyUsed, send }) {
 
   if (alreadyUsed) return (
     <div style={s}>
-      <p style={lbl}>🧩 Maestro de Acertijos</p>
+      <p style={lbl}><FormaIcon roleId="PUZZLEMASTER" size={14} /> Maestro de Acertijos</p>
       <p style={{ fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--bone-400)', margin: 0, fontStyle: 'italic' }}>Habilidad ya usada.</p>
     </div>
   );
 
   return (
     <div style={s}>
-      <p style={lbl}>🧩 Maestro de Acertijos — Acción de día</p>
+      <p style={lbl}><FormaIcon roleId="PUZZLEMASTER" size={14} /> Maestro de Acertijos — Acción de día</p>
       {!moved ? (
         <button className="btn-action primary" style={{ width: '100%', fontSize: 13, padding: '7px 0' }}
           onClick={() => { send('MOVE_NARRATOR_TO_ROOM', { playerId: pm.id }); setMoved(true); }}>
@@ -1006,7 +1007,7 @@ function DayCounters({ game, send }) {
   return (
     <div className="nx-card">
       <div className="nx-card-head">
-        <p className="nx-head-title">🗣 Yaggababble — {owners.map(p => p.name).join(', ')}</p>
+        <p className="nx-head-title"><FormaIcon roleId="YAGGABABBLE" size={16} /> Yaggababble — {owners.map(p => p.name).join(', ')}</p>
       </div>
       <div className="nx-card-body">
         <NarratorCounter cfg={cfg} game={game} send={send} compact />

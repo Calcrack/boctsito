@@ -821,7 +821,7 @@ function P2Panel({ actor, pattern, game, send, roleName }) {
   const trueName  = game.players.find(p => p.id === trueSeat)?.name;
   const decoyName = game.players.find(p => p.id === decoySeat)?.name;
   const can = trueSeat && decoySeat && trueSeat !== decoySeat && shownRole;
-  const info = can ? `${pattern.emoji} ${roleName || ROLE_BY_ID[actor.role]?.name || ''}\nEntre ${trueName} y ${decoyName} hay un/una ${shownRole}.` : null;
+  const info = can ? `${roleName || ROLE_BY_ID[actor.role]?.name || ''}\nEntre ${trueName} y ${decoyName} hay un/una ${shownRole}.` : null;
 
   const confirm = () => {
     if (!info) return;
@@ -860,7 +860,7 @@ function P1Panel({ actor, pattern, game, send, roleName }) {
     const exec = game.players.find(p => p.id === game.executedToday);
     if (!exec) return null;
     const execRoleName = ROLE_BY_ID[exec.role]?.name || '?';
-    const info = `${pattern.emoji} ${name}\nEl ejecutado (${exec.name}) era: ${execRoleName}.`;
+    const info = `${name}\nEl ejecutado (${exec.name}) era: ${execRoleName}.`;
     return (
       <div style={panelStyle}>
         <p style={labelStyle}>{ok ? '✓ Confirmado' : name}</p>
@@ -874,7 +874,7 @@ function P1Panel({ actor, pattern, game, send, roleName }) {
   if (pattern.what === 'opinion') {
     const options = [['good', '✅ Va ganando el Bien'], ['neutral', '⚖ Empate'], ['evil', '🔴 Va ganando el Mal']];
     const label = options.find(([v]) => v === val)?.[1] || '';
-    const infoStr = val ? `${pattern.emoji} ${name}\nOpinión: ${label}.` : null;
+    const infoStr = val ? `${name}\nOpinión: ${label}.` : null;
     return (
       <div style={panelStyle}>
         <p style={labelStyle}>{ok ? '✓ Info confirmada' : 'General — opinión del Narrador'}</p>
@@ -894,7 +894,7 @@ function P1Panel({ actor, pattern, game, send, roleName }) {
 
   if (pattern.what === 'yesno') {
     const answer = val === 'yes' ? 'SÍ' : val === 'no' ? 'NO' : null;
-    const infoStr = answer ? `${pattern.emoji} ${name}\n${pattern.label} ${answer}.` : null;
+    const infoStr = answer ? `${name}\n${pattern.label} ${answer}.` : null;
     return (
       <div style={panelStyle}>
         <p style={labelStyle}>{ok ? '✓ Info confirmada' : pattern.label}</p>
@@ -924,7 +924,7 @@ function P1Panel({ actor, pattern, game, send, roleName }) {
   const maxV = pattern.what === 'evilNeighbors' ? 2
              : pattern.what === 'distance'       ? Math.max(8, game.players.filter(p => p.alive).length - 1)
              : Math.min(6, Math.floor(game.players.length / 2) + 1);
-  const infoStr = val !== '' ? `${pattern.emoji} ${name}\nTienes ${val} ${pattern.label}.` : null;
+  const infoStr = val !== '' ? `${name}\nTienes ${val} ${pattern.label}.` : null;
 
   return (
     <div style={panelStyle}>
@@ -972,55 +972,55 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
       );
 
   const infoLabels = {
-    POISONER_ACTION:          n => `🧪 Envenenador\nEnvenenaste a ${n} esta noche.`,
-    MONK_PROTECT:             n => `🛡️ Monje\nProtegiste a ${n} esta noche.`,
-    IMP_KILL:                 n => `👹 Diablillo\nAtacaste a ${n} esta noche.`,
-    BUTLER_MASTER:            n => `🤵 Mayordomo\nTu Amo esta noche es ${n}.`,
+    POISONER_ACTION:          n => `Envenenador\nEnvenenaste a ${n} esta noche.`,
+    MONK_PROTECT:             n => `Monje\nProtegiste a ${n} esta noche.`,
+    IMP_KILL:                 n => `Diablillo\nAtacaste a ${n} esta noche.`,
+    BUTLER_MASTER:            n => `Mayordomo\nTu Amo esta noche es ${n}.`,
     GRANDMOTHER_INFO:         n => {
       const gp = game.players.find(p => p.id === targetId);
       const rn = ROLE_BY_ID[gp?.role]?.name || '?';
-      return `👵 Abuela\nTu nieto es ${n} (${rn}).`;
+      return `Abuela\nTu nieto es ${n} (${rn}).`;
     },
-    SAILOR_DRUNK:             n => `⚓ Marinero\nEmborrachaste a ${n} (o a ti mismo — Narrador decide cuál de los 2).`,
-    EXORCIST_CHOOSE:          n => `✝️ Exorcista\nElegiste a ${n} esta noche.`,
-    GAMBLER_GUESS:            n => `🎲 Tahúr\nApuesta de ${actor.name} por ${n}.`,
-    PROFESSOR_REVIVE:         n => `🎓 Profesor\nIntentó revivir a ${n}.`,
-    GODFATHER_KILL:           n => `🎩 Padrino\nAtacó a ${n} esta noche.`,
-    DEVILS_ADVOCATE_PROTECT:  n => `⚖️ Abogado del Diablo\nProtegido de ejecución mañana: ${n}.`,
-    ASSASSIN_KILL:            n => `🗡️ Asesino\nMató a ${n} (ignorando todas las protecciones).`,
-    SNAKE_CHARMER:            n => `🐍 Encantador de Serpientes\nEligió a ${n} esta noche.`,
-    WITCH_CURSE:              n => `🧙‍♀️ Bruja\nMaldijo a ${n} (si nomina mañana, muere).`,
-    HUNTSMAN:                 n => `🏹 Cazador\nEligió a ${n} esta noche.`,
-    LYCANTHROPE_KILL:         n => `🐺 Licántropo\nEligió a ${n} esta noche.`,
-    ACROBAT_CHECK:            n => `🤸 Acróbata\nEligió a ${n} esta noche.`,
-    FEARMONGER:               n => `😨 Fearmonger\nObjetivo: ${n}.`,
-    WIDOW_POISON:             n => `🕷️ Viuda\nEnvenenó permanentemente a ${n}.`,
-    PREACHER:                 n => `⛪ Predicador\nEligió a ${n} esta noche.`,
-    NIGHTWATCHMAN:            n => `🔦 Sereno\nInformó a ${n} de su identidad.`,
-    HIGH_PRIESTESS:           n => `🌙 Suma Sacerdotisa\nJugador a mostrar al Rey esta noche: ${n}.`,
-    BOUNTY_HUNTER_REVEAL:     n => `💰 Cazarrecompensas\nRevela a ${n} como jugador malvado.`,
-    LORD_OF_TYPHON_KILL:      n => `🐍 Señor de Typhon\nAtacó a ${n} esta noche.`,
-    FIDDLER_DUEL:             n => `🎻 Violinista\nDuelo contra ${n}: mañana todos votan cuál de los 2 gana la partida.`,
-    GNOME_KNOWN:              n => `🧙‍♂️ Gnomo\nAnuncia en público: ${n} es de la alineación del Gnomo.`,
-    OGRE_ALIGN:               n => `👹 Ogro\nCopió la alineación de ${n} — NO se lo digas.`,
-    BUREAUCRAT_VOTE:          n => `📋 Burócrata\nMañana el voto de ${n} cuenta por 3.`,
-    THIEF_VOTE:               n => `🕵️‍♂️ Ladrón\nMañana el voto de ${n} cuenta en negativo.`,
+    SAILOR_DRUNK:             n => `Marinero\nEmborrachaste a ${n} (o a ti mismo — Narrador decide cuál de los 2).`,
+    EXORCIST_CHOOSE:          n => `Exorcista\nElegiste a ${n} esta noche.`,
+    GAMBLER_GUESS:            n => `Tahúr\nApuesta de ${actor.name} por ${n}.`,
+    PROFESSOR_REVIVE:         n => `Profesor\nIntentó revivir a ${n}.`,
+    GODFATHER_KILL:           n => `Padrino\nAtacó a ${n} esta noche.`,
+    DEVILS_ADVOCATE_PROTECT:  n => `Abogado del Diablo\nProtegido de ejecución mañana: ${n}.`,
+    ASSASSIN_KILL:            n => `Asesino\nMató a ${n} (ignorando todas las protecciones).`,
+    SNAKE_CHARMER:            n => `Encantador de Serpientes\nEligió a ${n} esta noche.`,
+    WITCH_CURSE:              n => `Bruja\nMaldijo a ${n} (si nomina mañana, muere).`,
+    HUNTSMAN:                 n => `Cazador\nEligió a ${n} esta noche.`,
+    LYCANTHROPE_KILL:         n => `Licántropo\nEligió a ${n} esta noche.`,
+    ACROBAT_CHECK:            n => `Acróbata\nEligió a ${n} esta noche.`,
+    FEARMONGER:               n => `Fearmonger\nObjetivo: ${n}.`,
+    WIDOW_POISON:             n => `Viuda\nEnvenenó permanentemente a ${n}.`,
+    PREACHER:                 n => `Predicador\nEligió a ${n} esta noche.`,
+    NIGHTWATCHMAN:            n => `Sereno\nInformó a ${n} de su identidad.`,
+    HIGH_PRIESTESS:           n => `Suma Sacerdotisa\nJugador a mostrar al Rey esta noche: ${n}.`,
+    BOUNTY_HUNTER_REVEAL:     n => `Cazarrecompensas\nRevela a ${n} como jugador malvado.`,
+    LORD_OF_TYPHON_KILL:      n => `Señor de Typhon\nAtacó a ${n} esta noche.`,
+    FIDDLER_DUEL:             n => `Violinista\nDuelo contra ${n}: mañana todos votan cuál de los 2 gana la partida.`,
+    GNOME_KNOWN:              n => `Gnomo\nAnuncia en público: ${n} es de la alineación del Gnomo.`,
+    OGRE_ALIGN:               n => `Ogro\nCopió la alineación de ${n} — NO se lo digas.`,
+    BUREAUCRAT_VOTE:          n => `Burócrata\nMañana el voto de ${n} cuenta por 3.`,
+    THIEF_VOTE:               n => `Ladrón\nMañana el voto de ${n} cuenta en negativo.`,
     VILLAGE_IDIOT_INFO:       n => {
       const t = game.players.find(p => p.id === targetId);
       const real = t?.alignment === 'evil' ? 'MALVADO' : 'BUENO';
       const shown = actor.poisoned ? (real === 'MALVADO' ? 'BUENO' : 'MALVADO') : real;
-      return `🤪 Tonto del Pueblo\n${n} es ${shown}.`;
+      return `Tonto del Pueblo\n${n} es ${shown}.`;
     },
     PIXIE_INFO:               n => {
       const t = game.players.find(p => p.id === targetId);
-      return `🧚 Duendecillo\nEl Aldeano que conoces es: ${ROLE_BY_ID[t?.role]?.name || '?'}.`;
+      return `Duendecillo\nEl Aldeano que conoces es: ${ROLE_BY_ID[t?.role]?.name || '?'}.`;
     },
   };
 
   const confirm = () => {
     if (!targetId) return;
     const tname = game.players.find(p => p.id === targetId)?.name;
-    const fallback = n => `${pattern.emoji} ${roleName || ''}\n${pattern.label} ${n} esta noche.`;
+    const fallback = n => `${roleName || ''}\n${pattern.label} ${n} esta noche.`;
     const nightInfo = (infoLabels[pattern.effect] || fallback)(tname);
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: pattern.effect, targetIds: [targetId], nightInfo });
 
@@ -1039,7 +1039,11 @@ function P3Panel({ actor, pattern, game, send, roleName }) {
         {pool.map(p => <option key={p.id} value={p.id}>{p.name}{pattern.deadOnly ? ' ☠' : p.diedThisNight ? ' ☠ (murió esta noche)' : ''}</option>)}
       </select>
       <button onClick={confirm} disabled={!targetId} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: targetId ? 1 : 0.4 }}>{pattern.emoji} Aplicar</button>
+        style={{ ...btnPrimary, opacity: targetId ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId={actor.role} size={16} /> Aplicar
+        </span>
+      </button>
     </div>
   );
 }
@@ -1054,9 +1058,9 @@ function P3x2Panel({ actor, pattern, game, send, roleName }) {
   const can = t1 && t2 && t1 !== t2;
 
   const buildInfo = (n1, n2) => {
-    if (pattern.effect === 'INNKEEPER_PROTECT') return `🏨 Posadero\nProtegidos: ${n1} y ${n2}. Decide cuál de los 2 queda borracho.`;
+    if (pattern.effect === 'INNKEEPER_PROTECT') return `Posadero\nProtegidos: ${n1} y ${n2}. Decide cuál de los 2 queda borracho.`;
     if (pattern.effect === 'HARPY')             return `🦅 Arpía\nMañana ${n1} cree que ${n2} es malvado.`;
-    return `${pattern.emoji} ${roleName}\nAtacaste a ${n1} y ${n2} esta noche.`;
+    return `${roleName}\nAtacaste a ${n1} y ${n2} esta noche.`;
   };
 
   const confirm = () => {
@@ -1084,7 +1088,11 @@ function P3x2Panel({ actor, pattern, game, send, roleName }) {
         {living.filter(p => p.id !== t1).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
       <button onClick={confirm} disabled={!can} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: can ? 1 : 0.4 }}>{pattern.emoji} Aplicar</button>
+        style={{ ...btnPrimary, opacity: can ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId={actor.role} size={16} /> Aplicar
+        </span>
+      </button>
     </div>
   );
 }
@@ -1118,8 +1126,8 @@ function P4Panel({ actor, pattern, game, send, roleName }) {
     const n1 = p1d?.name, n2 = p2d?.name;
     const res = actor.poisoned ? '(info FALSA — decide tú)' : (result || '…');
     return isSameAlign
-      ? `${pattern.emoji} ${label}\n¿${n1} y ${n2} son del mismo bando? ${res}.`
-      : `🔮 ${label}\nEntre ${n1} y ${n2}: ${res}.`;
+      ? `${label}\n¿${n1} y ${n2} son del mismo bando? ${res}.`
+      : `${label}\nEntre ${n1} y ${n2}: ${res}.`;
   };
 
   const confirm = () => {
@@ -1181,7 +1189,7 @@ function GenericStepPanel({ actor, role, game, send, note }) {
   const hint = (game.roleHints || []).find(h => h.roleId === role.id && h.playerId === actor.id)
             || (game.roleHints || []).find(h => h.roleId === role.id);
   const confirm = () => {
-    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🎙 ${role.name}\n[Narrador gestionó manualmente]` });
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `${role.name}\n[Narrador gestionó manualmente]` });
     setOk(true);
   };
   return (
@@ -1221,10 +1229,10 @@ function EvilTwinPanel({ actor, game, send }) {
   const goodRole = good?.role ? ROLE_BY_ID[good.role] : null;
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
-      nightInfo: `👯 Gemela Malvada\nTu gemelo bueno es ${good?.name || '?'}${goodRole ? ` (${goodRole.name})` : ''}.` });
+      nightInfo: `Gemela Malvada\nTu gemelo bueno es ${good?.name || '?'}${goodRole ? ` (${goodRole.name})` : ''}.` });
     if (good) {
       send('NIGHT_NARRATOR_ACTION', { actorId: good.id,
-        nightInfo: `👯 Gemelo bueno\nTu gemela malvada es ${evil?.name || '?'} (Gemela Malvada).` });
+        nightInfo: `Gemelo bueno\nTu gemela malvada es ${evil?.name || '?'} (Gemela Malvada).` });
     }
     setOk(true);
   };
@@ -1260,7 +1268,7 @@ function EvilTwinPanel({ actor, game, send }) {
 function P_InfoPanel({ actor, pattern, send, roleName }) {
   const [ok, setOk] = useState(actor.nightInfo != null);
   const confirm = () => {
-    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `${pattern.emoji} ${roleName}\n[Narrador gestionó manualmente]` });
+    send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `${roleName}\n[Narrador gestionó manualmente]` });
     setOk(true);
   };
   return (
@@ -1292,7 +1300,7 @@ function DreamerPanel({ actor, pattern, game, send, roleName }) {
 
   const buildInfo = () => {
     const decoyDef = ROLE_BY_ID[decoyId];
-    return `💭 Soñador\n${target?.name} eligió a un jugador. Muéstrale: [${targetDef?.name}] y [${decoyDef?.name}].`;
+    return `Soñador\n${target?.name} eligió a un jugador. Muéstrale: [${targetDef?.name}] y [${decoyDef?.name}].`;
   };
   return (
     <div style={panelStyle}>
@@ -1362,7 +1370,7 @@ function ChambermaidPanel({ actor, pattern, game, send, roleName }) {
         if (!can) return;
         const n1 = game.players.find(p => p.id === t1)?.name;
         const n2 = game.players.find(p => p.id === t2)?.name;
-        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🛎️ Doncella\n${n1} y ${n2}: despertaron ${count} de 2 por su habilidad.` });
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `Doncella\n${n1} y ${n2}: despertaron ${count} de 2 por su habilidad.` });
         setOk(true);
       }} disabled={!can || ok} className="btn-action primary" style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
     </div>
@@ -1386,7 +1394,7 @@ function POPanel({ actor, pattern, game, send }) {
     const n = id => game.players.find(p => p.id === id)?.name;
     return (
       <div style={{ ...panelStyle, borderColor: 'rgba(168,58,45,0.5)' }}>
-        <p style={{ ...labelStyle, color: 'var(--blood-hi)' }}>⚠ PO — Ataque ×3 (saltó anoche)</p>
+        <p style={{ ...labelStyle, color: 'var(--blood-hi)' }}>PO — Ataque ×3 (saltó anoche)</p>
         <select style={selStyle} value={t1} onChange={e => { setT1(e.target.value); setOk(false); }}>
           <option value="">Objetivo 1…</option>
           {living.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1401,17 +1409,21 @@ function POPanel({ actor, pattern, game, send }) {
         </select>
         <button onClick={() => {
           if (!can) return;
-          send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'PO_KILL', targetIds: [t1, t2, t3], nightInfo: `💀 PO atacó ×3: ${n(t1)}, ${n(t2)}, ${n(t3)}.` });
+          send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'PO_KILL', targetIds: [t1, t2, t3], nightInfo: `PO atacó ×3: ${n(t1)}, ${n(t2)}, ${n(t3)}.` });
           setOk(true);
         }} disabled={!can || ok} className="btn-action primary"
-          style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>{ok ? '✓ Aplicado' : '💀 Atacar ×3'}</button>
+          style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+            <FormaIcon roleId="PO" size={16} /> Atacar ×3
+          </span>
+        </button>
       </div>
     );
   }
 
   return (
     <div style={panelStyle}>
-      <p style={labelStyle}>{ok || skipped ? '✓ Acción aplicada' : '💀 PO — Atacar o Saltar'}</p>
+      <p style={labelStyle}>{ok || skipped ? '✓ Acción aplicada' : 'PO — Atacar o Saltar'}</p>
       <select style={selStyle} value={targetId} onChange={e => { setTargetId(e.target.value); setOk(false); }}>
         <option value="">Elegir objetivo…</option>
         {living.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1419,18 +1431,21 @@ function POPanel({ actor, pattern, game, send }) {
       <button onClick={() => {
         if (!targetId) return;
         const tname = game.players.find(p => p.id === targetId)?.name;
-        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'PO_KILL', targetIds: [targetId], nightInfo: `💀 PO atacó a ${tname} esta noche.` });
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'PO_KILL', targetIds: [targetId], nightInfo: `PO atacó a ${tname} esta noche.` });
         setOk(true);
       }} disabled={!targetId || ok || skipped} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (targetId && !ok && !skipped) ? 1 : 0.4 }}>💀 Atacar</button>
+        style={{ ...btnPrimary, opacity: (targetId && !ok && !skipped) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="PO" size={16} /> Atacar
+        </span>
+      </button>
       <button onClick={() => {
         localStorage.setItem('botc_po_skip_night', String(game.nightNumber));
-        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: '⏭ PO saltó el ataque esta noche — próxima noche atacará ×3.' });
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: 'PO saltó el ataque esta noche — próxima noche atacará ×3.' });
         setSkipped(true);
       }} disabled={ok || skipped} className="btn-night"
         style={{ width: '100%', fontSize: 11, marginTop: 4, opacity: (ok || skipped) ? 0.4 : 1 }}>
-        {skipped ? '⏭ Saltó el ataque (×3 próxima noche)' : '⏭ Saltar ataque (próxima noche ×3)'}
-      </button>
+        {skipped ? '⏭ Saltó el ataque (×3 próxima noche)' : '⏭ Saltar ataque (próxima noche ×3)'}      </button>
     </div>
   );
 }
@@ -1459,7 +1474,7 @@ function PhilosopherPanel({ actor, pattern, game, send, roleName }) {
       <button onClick={() => {
         if (!chosenDef) return;
         const note = playerWithRole ? `Marcar a ${playerWithRole.name} como borracho.` : 'El personaje no está en juego.';
-        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `📜 Filósofo\nEligió: ${chosenDef.name}. ${note}` });
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `Filósofo\nEligió: ${chosenDef.name}. ${note}` });
         setOk(true);
       }} disabled={!roleId || ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: (roleId && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
@@ -1472,7 +1487,7 @@ function YesNoPanel({ actor, pattern, send, roleName }) {
   const [val, setVal] = useState('');
   const [ok, setOk] = useState(actor.nightInfo != null);
   const chosen = val === 'yes' ? (pattern.yesLabel || 'SÍ') : val === 'no' ? (pattern.noLabel || 'NO') : null;
-  const info = chosen ? `${pattern.emoji} ${roleName}\n${pattern.label}: ${chosen}.` : null;
+  const info = chosen ? `${roleName}\n${pattern.label}: ${chosen}.` : null;
   // Cada respuesta puede disparar su propia acción en el motor
   // (Juguetero: "no ataca" → bloquea al Demonio esta noche).
   const effect = val === 'yes' ? pattern.effect : val === 'no' ? pattern.noEffect : null;
@@ -1512,7 +1527,7 @@ function XaanPanel({ actor, pattern, game, send, roleName }) {
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', {
       actorId: actor.id, actionType: 'XAAN_POISON', targetIds: [],
-      nightInfo: `${pattern.emoji} ${roleName}\nNoche X: ${townfolk.length} Aldeano(s) envenenados hasta el anochecer.`,
+      nightInfo: `${roleName}\nNoche X: ${townfolk.length} Aldeano(s) envenenados hasta el anochecer.`,
     });
     setOk(true);
   };
@@ -1529,7 +1544,9 @@ function XaanPanel({ actor, pattern, game, send, roleName }) {
           : 'Todavía no es la noche X: el Xaan no hace nada esta noche.'}
       </p>
       <button onClick={confirm} className="btn-action primary" style={{ ...btnPrimary, opacity: ok ? 0.5 : 1 }}>
-        🌑 Envenenar a todos los Aldeanos
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="XAAN" size={16} /> Envenenar a todos los Aldeanos
+        </span>
       </button>
     </div>
   );
@@ -1562,7 +1579,7 @@ function GamblerPanel({ actor, pattern, game, send, roleName }) {
 
   const buildInfo = () => {
     const rname = ROLE_BY_ID[guessRoleId]?.name || guessRoleId;
-    return `🎲 Tahúr\n${actor.name} apostó: ${target?.name} es ${rname}. ${guessCorrect ? 'CORRECTO — no muere.' : 'INCORRECTO — ¡muere esta noche!'}`;
+    return `Tahúr\n${actor.name} apostó: ${target?.name} es ${rname}. ${guessCorrect ? 'CORRECTO — no muere.' : 'INCORRECTO — ¡muere esta noche!'}`;
   };
   return (
     <div style={panelStyle}>
@@ -1604,9 +1621,9 @@ function GossipPanel({ actor, pattern, game, send, roleName }) {
 
   const buildInfo = () => {
     if (!triggered) return null;
-    if (triggered === 'no') return `💬 Chismoso\nDeclaración pública no verdadera (o Chismoso envenenada). No hay muerte.`;
+    if (triggered === 'no') return `Chismoso\nDeclaración pública no verdadera (o Chismoso envenenada). No hay muerte.`;
     const tname = game.players.find(p => p.id === targetId)?.name;
-    return `💬 Chismoso\nDeclaración verdadera — muere ${tname} esta noche.`;
+    return `Chismoso\nDeclaración verdadera — muere ${tname} esta noche.`;
   };
   const can = triggered === 'no' || (triggered === 'yes' && targetId);
   const info = buildInfo();
@@ -1671,7 +1688,7 @@ function CourtierPanel({ actor, pattern, game, send, roleName }) {
       <button onClick={() => {
         if (!guessRoleId || !chosenDef) return;
         const tp = targetPlayer?.name || '(desconocido)';
-        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🎴 Cortesano\nEligió: ${chosenDef.name} (${tp}). Borracho 3 noches + 3 días.` });
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `Cortesano\nEligió: ${chosenDef.name} (${tp}). Borracho 3 noches + 3 días.` });
         setOk(true);
       }} disabled={!guessRoleId || ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: (guessRoleId && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
@@ -1689,9 +1706,9 @@ function MoonchildPanel({ actor, pattern, game, send, roleName }) {
   const can = died === false || (died === true && targetId);
 
   const buildInfo = () => {
-    if (!died) return `🌙 Lunático\nNo murió esta noche — sin efecto.`;
+    if (!died) return `Lunático\nNo murió esta noche — sin efecto.`;
     const tname = game.players.find(p => p.id === targetId)?.name;
-    return `🌙 Lunático\nMurió esta noche. Al amanecer muere: ${tname}.`;
+    return `Lunático\nMurió esta noche. Al amanecer muere: ${tname}.`;
   };
   return (
     <div style={panelStyle}>
@@ -1751,7 +1768,7 @@ function NoblePanel({ actor, pattern, game, send, roleName }) {
       )}
       <button onClick={() => {
         if (!can || !validCombo) return;
-        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `🎭 Noble\nMostrados: ${n(t1)}, ${n(t2)}, ${n(t3)}. Exactamente 1 es malvado real.` });
+        send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `Noble\nMostrados: ${n(t1)}, ${n(t2)}, ${n(t3)}. Exactamente 1 es malvado real.` });
         setOk(true);
       }} disabled={!can || !validCombo || ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: (can && validCombo && !ok) ? 1 : 0.4 }}>✓ Confirmar</button>
@@ -1773,7 +1790,7 @@ function PukkaPanel({ actor, pattern, game, send, roleName }) {
     if (!targetId) return;
     const tname = game.players.find(p => p.id === targetId)?.name;
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'PUKKA_POISON',
-      targetIds: [targetId], nightInfo: `🕸️ Pukka\nEnvenenado esta noche: ${tname}.` });
+      targetIds: [targetId], nightInfo: `Pukka\nEnvenenado esta noche: ${tname}.` });
     const role = ROLE_BY_ID['PUKKA'];
     send('ADD_TOKEN', { playerId: targetId, token: {
       tokenId: 'POISONED',
@@ -1808,7 +1825,11 @@ function PukkaPanel({ actor, pattern, game, send, roleName }) {
             {pool.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button onClick={confirm} disabled={!targetId || ok} className="btn-action primary"
-            style={{ ...btnPrimary, opacity: (targetId && !ok) ? 1 : 0.4 }}>🕸️ Envenenar</button>
+            style={{ ...btnPrimary, opacity: (targetId && !ok) ? 1 : 0.4 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+              <FormaIcon roleId="PUKKA" size={16} /> Envenenar
+            </span>
+          </button>
         </>
       )}
     </div>
@@ -1833,7 +1854,7 @@ function InnkeeperPanel({ actor, game, send }) {
     const n1 = game.players.find(p => p.id === t1)?.name;
     const n2 = game.players.find(p => p.id === t2)?.name;
     const dn = game.players.find(p => p.id === drunk)?.name;
-    const nightInfo = `🏨 Posadero\nProtegidos: ${n1} y ${n2}. ${dn} queda borracho.`;
+    const nightInfo = `Posadero\nProtegidos: ${n1} y ${n2}. ${dn} queda borracho.`;
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'INNKEEPER_PROTECT', targetIds: [t1, t2, drunk], nightInfo });
     setOk(true);
   };
@@ -1861,7 +1882,11 @@ function InnkeeperPanel({ actor, game, send }) {
         Ambos A salvo esta noche. Tú eliges cuál queda borracho hasta el crepúsculo.
       </p>
       <button onClick={confirm} disabled={!canConfirm || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (canConfirm && !ok) ? 1 : 0.4 }}>🏨 Aplicar</button>
+        style={{ ...btnPrimary, opacity: (canConfirm && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="INNKEEPER" size={16} /> Aplicar
+        </span>
+      </button>
     </div>
   );
 }
@@ -1886,7 +1911,7 @@ function PuzzlemasterPanel({ actor, pattern, game, send, roleName }) {
       <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
         De día: si adivina correctamente quién es el borracho (y está sano), revelarle quién es el Demonio.
       </p>
-      <button onClick={() => { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: '🧩 Maestro de Acertijos: revisado.' }); setOk(true); }}
+      <button onClick={() => { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: 'Maestro de Acertijos: revisado.' }); setOk(true); }}
         disabled={ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: ok ? 0.4 : 1 }}>✓ Revisado</button>
     </div>
@@ -1918,7 +1943,7 @@ function AlchemistPanel({ actor, pattern, game, send, roleName }) {
       <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--gold)', margin: '0 0 8px', borderLeft: '2px solid var(--gold)', paddingLeft: 6 }}>
         El Alquimista actúa como este Esbirro esta noche. El narrador puede pedirle que elija diferente.
       </p>
-      <button onClick={() => { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `⚗️ Alquimista: actúa como ${minionRole?.name || '?'}.` }); setOk(true); }}
+      <button onClick={() => { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, nightInfo: `Alquimista: actúa como ${minionRole?.name || '?'}.` }); setOk(true); }}
         disabled={ok} className="btn-action primary"
         style={{ ...btnPrimary, opacity: ok ? 0.4 : 1 }}>✓ Revisado</button>
     </div>
@@ -1931,7 +1956,7 @@ function ShugenjaPanel({ actor, game, send }) {
   const [ok, setOk] = useState(actor.nightInfo != null);
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
-      nightInfo: `🔮 Shugenja\nEl jugador malo más cercano está en dirección ${dir === 'cw' ? '↻ Horario' : '↺ Anti-horario'}.` });
+      nightInfo: `Shugenja\nEl jugador malo más cercano está en dirección ${dir === 'cw' ? '↻ Horario' : '↺ Anti-horario'}.` });
     setOk(true);
   };
   return (
@@ -1948,7 +1973,11 @@ function ShugenjaPanel({ actor, game, send }) {
         ))}
       </div>
       <button onClick={confirm} disabled={!dir || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (dir && !ok) ? 1 : 0.4 }}>🔮 Confirmar dirección</button>
+        style={{ ...btnPrimary, opacity: (dir && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="SHUGENJA" size={16} /> Confirmar dirección
+        </span>
+      </button>
     </div>
   );
 }
@@ -1969,7 +1998,7 @@ function StewardPanel({ actor, game, send }) {
             ⚠ Marca un jugador bueno con token SABE en el Grimorio antes de la noche.
           </p>}
       <button onClick={() => { send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
-        nightInfo: `🤵 Administrador\nJugador bueno señalado: ${knownPlayer?.name || '(sin marcar)'}.` }); setOk(true); }}
+        nightInfo: `Administrador\nJugador bueno señalado: ${knownPlayer?.name || '(sin marcar)'}.` }); setOk(true); }}
         className="btn-action primary" style={{ ...btnPrimary, opacity: ok ? 0.4 : 1 }} disabled={ok}>
         ✓ Confirmar
       </button>
@@ -1988,7 +2017,7 @@ function CerenovusPanel({ actor, game, send }) {
   const rname = goodRoles.find(r => r.id === charId)?.name;
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId],
-      nightInfo: `🧠 Cerenovus\nMañana, ${tname} está loco de ser ${rname}. Si no actúa como tal, puede ser ejecutado.` });
+      nightInfo: `Cerenovus\nMañana, ${tname} está loco de ser ${rname}. Si no actúa como tal, puede ser ejecutado.` });
     send('ADD_TOKEN', { playerId: targetId, token: {
       tokenId: 'LOCO', roleId: 'CERENOVUS',
       roleName: 'Cerenovus', label: `Loco: cree ser ${rname}`, duration: 'night' } });
@@ -2009,7 +2038,11 @@ function CerenovusPanel({ actor, game, send }) {
         {goodRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
       </select>
       <button onClick={confirm} disabled={!targetId || !charId || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (targetId && charId && !ok) ? 1 : 0.4 }}>🧠 Confirmar locura</button>
+        style={{ ...btnPrimary, opacity: (targetId && charId && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="CERENOVUS" size={16} /> Confirmar locura
+        </span>
+      </button>
     </div>
   );
 }
@@ -2026,7 +2059,7 @@ function PitHagPanel({ actor, game, send }) {
   const isDemon = chosen?.type === 'demon';
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId],
-      nightInfo: `🪄 Pit-Hag\n${tname} se convierte en ${chosen?.name}.${isDemon ? '\n⚠ ¡Nuevo Demonio creado! Puede que alguien muera.' : ''}` });
+      nightInfo: `Pit-Hag\n${tname} se convierte en ${chosen?.name}.${isDemon ? '\n⚠ ¡Nuevo Demonio creado! Puede que alguien muera.' : ''}` });
     setOk(true);
   };
   return (
@@ -2049,7 +2082,11 @@ function PitHagPanel({ actor, game, send }) {
       </select>
       {isDemon && <p style={{ fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--blood-hi)', margin: '2px 0' }}>⚠ Crea un 2º Demonio. Puede causar muertes o cambiar alineación.</p>}
       <button onClick={confirm} disabled={!targetId || !charId || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (targetId && charId && !ok) ? 1 : 0.4 }}>🪄 Confirmar transformación</button>
+        style={{ ...btnPrimary, opacity: (targetId && charId && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="PIT_HAG" size={16} /> Confirmar transformación
+        </span>
+      </button>
     </div>
   );
 }
@@ -2068,7 +2105,7 @@ function EngineerPanel({ actor, game, send }) {
   const confirm = () => {
     const names = selectedRoles.map(id => allRoles.find(r => r.id === id)?.name).join(', ');
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
-      nightInfo: `⚙️ Ingeniero\nCambia ${choice === 'minions' ? 'los Esbirros' : 'el Demonio'} por: ${names}.\nAvisar a cada jugador afectado en privado de su nuevo personaje.` });
+      nightInfo: `Ingeniero\nCambia ${choice === 'minions' ? 'los Esbirros' : 'el Demonio'} por: ${names}.\nAvisar a cada jugador afectado en privado de su nuevo personaje.` });
     send('ADD_TOKEN', { playerId: actor.id, token: {
       tokenId: 'SIN_HABILIDAD',
       roleId: 'ENGINEER', roleName: 'Ingeniero', label: 'Sin habilidad (usada)', duration: 'permanent' } });
@@ -2112,7 +2149,11 @@ function EngineerPanel({ actor, game, send }) {
         </div>
       )}
       <button onClick={confirm} disabled={!selectedRoles.length || ok} className="btn-action primary"
-        style={{ ...btnPrimary, marginTop: 6, opacity: (selectedRoles.length && !ok) ? 1 : 0.4 }}>⚙️ Confirmar cambio</button>
+        style={{ ...btnPrimary, marginTop: 6, opacity: (selectedRoles.length && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="ENGINEER" size={16} /> Confirmar cambio
+        </span>
+      </button>
     </div>
   );
 }
@@ -2128,7 +2169,7 @@ function AlHadikhiaPanel({ actor, game, send }) {
   const can = t1 && t2 && t3 && new Set([t1, t2, t3]).size === 3;
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [t1, t2, t3],
-      nightInfo: `🏛️ Al-Hadikhia\nElegidos: ${n(t1)}, ${n(t2)}, ${n(t3)}.\n⚠ SILENCIO: preguntar uno por uno "¿quieres vivir?" (asiente/niega). Si todos eligen vivir → todos mueren.` });
+      nightInfo: `Al-Hadikhia\nElegidos: ${n(t1)}, ${n(t2)}, ${n(t3)}.\n⚠ SILENCIO: preguntar uno por uno "¿quieres vivir?" (asiente/niega). Si todos eligen vivir → todos mueren.` });
     setOk(true);
   };
   return (
@@ -2144,7 +2185,11 @@ function AlHadikhiaPanel({ actor, game, send }) {
         </select>
       ))}
       <button onClick={confirm} disabled={!can || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>🏛️ Iniciar fase de silencio</button>
+        style={{ ...btnPrimary, opacity: (can && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="AL_HADIKHIA" size={16} /> Iniciar fase de silencio
+        </span>
+      </button>
     </div>
   );
 }
@@ -2169,7 +2214,7 @@ function SummonerPanel({ actor, game, send }) {
   const dname = demons.find(r => r.id === demonId)?.name;
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId],
-      nightInfo: `🌟 Invocador\n${tname} se convierte en ${dname} (malo). Despertar en privado: ficha TÚ ERES → ficha ${dname} → pulgar abajo.` });
+      nightInfo: `Invocador\n${tname} se convierte en ${dname} (malo). Despertar en privado: ficha TÚ ERES → ficha ${dname} → pulgar abajo.` });
     setOk(true);
   };
   return (
@@ -2187,7 +2232,11 @@ function SummonerPanel({ actor, game, send }) {
         {demons.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
       </select>
       <button onClick={confirm} disabled={!targetId || !demonId || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (targetId && demonId && !ok) ? 1 : 0.4 }}>🌟 Invocar Demonio</button>
+        style={{ ...btnPrimary, opacity: (targetId && demonId && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="SUMMONER" size={16} /> Invocar Demonio
+        </span>
+      </button>
     </div>
   );
 }
@@ -2202,7 +2251,7 @@ function LilMonstaPanel({ actor, game, send }) {
     // El motor coloca la ficha LIL_MONSTA_KEEPER, que es la que hace que el
     // canguro cuente como Demonio vivo.
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, actionType: 'LIL_MONSTA_ASSIGN', targetIds: [chosen],
-      nightInfo: `👶 Lil' Monsta\n${nm} es el canguro esta noche — "es el Demonio".` });
+      nightInfo: `Lil' Monsta\n${nm} es el canguro esta noche — "es el Demonio".` });
     setOk(true);
   };
   return (
@@ -2216,7 +2265,11 @@ function LilMonstaPanel({ actor, game, send }) {
         {minions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
       <button onClick={confirm} disabled={!chosen || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (chosen && !ok) ? 1 : 0.4 }}>👶 Confirmar canguro</button>
+        style={{ ...btnPrimary, opacity: (chosen && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="LIL_MONSTA" size={16} /> Confirmar canguro
+        </span>
+      </button>
     </div>
   );
 }
@@ -2231,7 +2284,7 @@ function BaristaPanel({ actor, game, send }) {
   const confirm = () => {
     const label = effect === 'sober' ? 'Sobrio y sano' : 'Actúa dos veces';
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId],
-      nightInfo: `☕ Barista\n${tname}: ${label} hasta el crepúsculo. Despertar y mostrar: 1 dedo (sobrio) o 2 dedos (dos veces).` });
+      nightInfo: `Barista\n${tname}: ${label} hasta el crepúsculo. Despertar y mostrar: 1 dedo (sobrio) o 2 dedos (dos veces).` });
     send('ADD_TOKEN', { playerId: targetId, token: {
       tokenId: effect === 'sober' ? 'SOBRIO_Y_SANO' : 'ACTUA_DOS_VECES',
       roleId: 'BARISTA', roleName: 'Barista', label, duration: 'night' } });
@@ -2251,7 +2304,11 @@ function BaristaPanel({ actor, game, send }) {
             border: `1px solid ${effect === v ? 'var(--gold)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 4 }}>{l}</button>
       ))}
       <button onClick={confirm} disabled={!targetId || !effect || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (targetId && effect && !ok) ? 1 : 0.4 }}>☕ Confirmar</button>
+        style={{ ...btnPrimary, opacity: (targetId && effect && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="BARISTA" size={16} /> Confirmar
+        </span>
+      </button>
     </div>
   );
 }
@@ -2265,8 +2322,8 @@ function HarlotPanel({ actor, game, send }) {
   const tname = game.players.find(p => p.id === targetId)?.name;
   const confirm = () => {
     const infoText = consent
-      ? `🎀 Meretriz\n${tname} elige mostrarse → la Meretriz aprende su personaje. El Narrador PUEDE matar a ambos.`
-      : `🎀 Meretriz\n${tname} rechaza → la Meretriz no aprende nada.`;
+      ? `Meretriz\n${tname} elige mostrarse → la Meretriz aprende su personaje. El Narrador PUEDE matar a ambos.`
+      : `Meretriz\n${tname} rechaza → la Meretriz no aprende nada.`;
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id, targetIds: [targetId], nightInfo: infoText });
     setOk(true);
   };
@@ -2298,7 +2355,11 @@ function HarlotPanel({ actor, game, send }) {
         </>
       )}
       <button onClick={confirm} disabled={!targetId || consent === null || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (targetId && consent !== null && !ok) ? 1 : 0.4 }}>🎀 Confirmar</button>
+        style={{ ...btnPrimary, opacity: (targetId && consent !== null && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="HARLOT" size={16} /> Confirmar
+        </span>
+      </button>
     </div>
   );
 }
@@ -2312,7 +2373,7 @@ function ApprenticePanel({ actor, game, send }) {
   const chosen = pool.find(r => r.id === chosenId);
   const confirm = () => {
     send('NIGHT_NARRATOR_ACTION', { actorId: actor.id,
-      nightInfo: `🎓 Aprendiz\nGana habilidad de: ${chosen?.name}.\nMostrar: ficha TÚ ERES → ficha ${chosen?.name}. Reemplazar su ficha; marcar ES_EL_APRENDIZ.` });
+      nightInfo: `Aprendiz\nGana habilidad de: ${chosen?.name}.\nMostrar: ficha TÚ ERES → ficha ${chosen?.name}. Reemplazar su ficha; marcar ES_EL_APRENDIZ.` });
     setOk(true);
   };
   return (
@@ -2327,7 +2388,11 @@ function ApprenticePanel({ actor, game, send }) {
       </select>
       {chosen && <p style={{ fontFamily: 'var(--serif)', fontSize: 10, color: 'var(--bone-400)', margin: '2px 0', fontStyle: 'italic' }}>{chosen.ability}</p>}
       <button onClick={confirm} disabled={!chosenId || ok} className="btn-action primary"
-        style={{ ...btnPrimary, opacity: (chosenId && !ok) ? 1 : 0.4 }}>🎓 Confirmar habilidad</button>
+        style={{ ...btnPrimary, opacity: (chosenId && !ok) ? 1 : 0.4 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          <FormaIcon roleId="APPRENTICE" size={16} /> Confirmar habilidad
+        </span>
+      </button>
     </div>
   );
 }
